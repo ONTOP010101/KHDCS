@@ -1,0 +1,50 @@
+-- 样品资料表字段补全（49列标准）
+-- 执行前请备份数据：mysqldump -u root -p photo_management samples > samples_backup.sql
+
+ALTER TABLE `samples`
+    ADD COLUMN `manufacturer_code` VARCHAR(50) DEFAULT NULL COMMENT '厂商编号' AFTER `sample_code`,
+    ADD COLUMN `english_name` VARCHAR(200) DEFAULT NULL COMMENT '英文名称' AFTER `sample_name`,
+    ADD COLUMN `factory_code` VARCHAR(50) DEFAULT NULL COMMENT '出厂货号' AFTER `english_name`,
+    ADD COLUMN `sample_unit` VARCHAR(20) DEFAULT NULL COMMENT '样品单位' AFTER `factory_code`,
+    ADD COLUMN `sample_unit_en` VARCHAR(50) DEFAULT NULL COMMENT '样品英文单位' AFTER `sample_unit`,
+    ADD COLUMN `packaging_cn` VARCHAR(100) DEFAULT NULL COMMENT '中文包装' AFTER `sample_unit_en`,
+    ADD COLUMN `packaging_en` VARCHAR(100) DEFAULT NULL COMMENT '英文包装' AFTER `packaging_cn`,
+    ADD COLUMN `factory_price` DECIMAL(12,2) DEFAULT NULL COMMENT '出厂价' AFTER `packaging_en`,
+    ADD COLUMN `tax_price` DECIMAL(12,2) DEFAULT NULL COMMENT '税点价' AFTER `factory_price`,
+    ADD COLUMN `sample_length` DECIMAL(10,2) DEFAULT NULL COMMENT '样品长度' AFTER `tax_price`,
+    ADD COLUMN `sample_width` DECIMAL(10,2) DEFAULT NULL COMMENT '样品宽度' AFTER `sample_length`,
+    ADD COLUMN `sample_height` DECIMAL(10,2) DEFAULT NULL COMMENT '样品高度' AFTER `sample_width`,
+    ADD COLUMN `sample_gross_weight` DECIMAL(10,2) DEFAULT NULL COMMENT '样品毛重' AFTER `sample_height`,
+    ADD COLUMN `sample_net_weight` DECIMAL(10,2) DEFAULT NULL COMMENT '样品净重' AFTER `sample_gross_weight`,
+    ADD COLUMN `carton_length` DECIMAL(10,2) DEFAULT NULL COMMENT '外箱长度' AFTER `sample_net_weight`,
+    ADD COLUMN `carton_width` DECIMAL(10,2) DEFAULT NULL COMMENT '外箱宽度' AFTER `carton_length`,
+    ADD COLUMN `carton_height` DECIMAL(10,2) DEFAULT NULL COMMENT '外箱高度' AFTER `carton_width`,
+    ADD COLUMN `carton_material_volume` DECIMAL(12,4) DEFAULT NULL COMMENT '外箱材积' AFTER `carton_height`,
+    ADD COLUMN `carton_volume` DECIMAL(12,4) DEFAULT NULL COMMENT '外箱体积' AFTER `carton_material_volume`,
+    ADD COLUMN `inner_box_count` INT DEFAULT NULL COMMENT '内盒个数' AFTER `carton_volume`,
+    ADD COLUMN `carton_capacity` INT DEFAULT NULL COMMENT '外箱装量' AFTER `inner_box_count`,
+    ADD COLUMN `packing_unit` VARCHAR(20) DEFAULT NULL COMMENT '装箱单位' AFTER `carton_capacity`,
+    ADD COLUMN `carton_gross_weight` DECIMAL(10,2) DEFAULT NULL COMMENT '外箱毛重' AFTER `packing_unit`,
+    ADD COLUMN `carton_net_weight` DECIMAL(10,2) DEFAULT NULL COMMENT '外箱净重' AFTER `carton_gross_weight`,
+    ADD COLUMN `package_length` DECIMAL(10,2) DEFAULT NULL COMMENT '包装长度' AFTER `carton_net_weight`,
+    ADD COLUMN `package_width` DECIMAL(10,2) DEFAULT NULL COMMENT '包装宽度' AFTER `package_length`,
+    ADD COLUMN `package_height` DECIMAL(10,2) DEFAULT NULL COMMENT '包装高度' AFTER `package_width`,
+    ADD COLUMN `certification` VARCHAR(200) DEFAULT NULL COMMENT '产品认证' AFTER `package_height`,
+    ADD COLUMN `certification_count` INT DEFAULT NULL COMMENT '认证总数' AFTER `certification`,
+    ADD COLUMN `color_en` VARCHAR(100) DEFAULT NULL COMMENT '英文颜色' AFTER `color`,
+    ADD COLUMN `remark_en` TEXT DEFAULT NULL COMMENT '英文备注' AFTER `remark`,
+    ADD COLUMN `booth_no` VARCHAR(50) DEFAULT NULL COMMENT '摊位号' AFTER `supplier`,
+    ADD COLUMN `mobile` VARCHAR(20) DEFAULT NULL COMMENT '手机' AFTER `contact_phone`,
+    ADD COLUMN `fax` VARCHAR(20) DEFAULT NULL COMMENT '传真' AFTER `mobile`,
+    ADD COLUMN `qq` VARCHAR(20) DEFAULT NULL COMMENT 'QQ' AFTER `fax`,
+    ADD COLUMN `registrant` VARCHAR(50) DEFAULT NULL COMMENT '登记人' AFTER `qq`,
+    ADD COLUMN `modifier` VARCHAR(50) DEFAULT NULL COMMENT '修改人' AFTER `registrant`,
+    ADD COLUMN `infringement` VARCHAR(100) DEFAULT NULL COMMENT '侵权' AFTER `modifier`,
+    ADD COLUMN `battery_info` VARCHAR(200) DEFAULT NULL COMMENT '电池信息' AFTER `infringement`;
+
+-- 添加常用查询索引
+ALTER TABLE `samples`
+    ADD INDEX `idx_manufacturer_code` (`manufacturer_code`),
+    ADD INDEX `idx_factory_code` (`factory_code`),
+    ADD INDEX `idx_registrant` (`registrant`),
+    ADD INDEX `idx_update_time` (`update_time`);
