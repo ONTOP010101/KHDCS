@@ -1,5 +1,6 @@
 package com.app.entity;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.math.BigDecimal;
 
@@ -16,6 +17,7 @@ public class Sample extends BaseEntity {
     private String sampleUnitEn;
     private String packagingCn;
     private String packagingEn;
+    private String packageCode;
     private String material;
     private String color;
     private String colorEn;
@@ -62,6 +64,17 @@ public class Sample extends BaseEntity {
     private Long createBy;
     private Long updateBy;
 
+    @TableField(exist = false)
+    private String thumbnail;
+
+    @TableField(exist = false)
+    private Long firstImageId;
+
+    public String getThumbnail() { return thumbnail; }
+    public void setThumbnail(String thumbnail) { this.thumbnail = thumbnail; }
+    public Long getFirstImageId() { return firstImageId; }
+    public void setFirstImageId(Long firstImageId) { this.firstImageId = firstImageId; }
+
     public String getSampleCode() { return sampleCode; }
     public void setSampleCode(String sampleCode) { this.sampleCode = sampleCode; }
     public String getManufacturerCode() { return manufacturerCode; }
@@ -82,6 +95,8 @@ public class Sample extends BaseEntity {
     public void setPackagingCn(String packagingCn) { this.packagingCn = packagingCn; }
     public String getPackagingEn() { return packagingEn; }
     public void setPackagingEn(String packagingEn) { this.packagingEn = packagingEn; }
+    public String getPackageCode() { return packageCode; }
+    public void setPackageCode(String packageCode) { this.packageCode = packageCode; }
     public String getMaterial() { return material; }
     public void setMaterial(String material) { this.material = material; }
     public String getColor() { return color; }

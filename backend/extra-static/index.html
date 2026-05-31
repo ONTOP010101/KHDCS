@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>拍照管理系统</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@32.0.2/styles/ag-grid.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@32.0.2/styles/ag-theme-alpine.min.css" />
+  <link rel="stylesheet" href="./assets/css/base-layout.css" />
+  <link rel="stylesheet" href="./assets/css/common.css" />
+  <link rel="stylesheet" href="./assets/css/pages/sample.css" />
+  <link rel="stylesheet" href="./assets/css/pages/gallery.css" />
+  <link rel="stylesheet" href="./assets/css/pages/friends.css" />
+  <link rel="stylesheet" href="./assets/css/pages/roles.css" />
+  <link rel="stylesheet" href="./assets/css/pages/users.css" />
+  <link rel="stylesheet" href="./assets/css/pages/login.css" />
+</head>
+<body>
+  <!-- 登录页 -->
+  <div class="login-page" id="page-login">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+    <div class="background-grid"></div>
+    <div class="noise"></div>
+
+    <main class="login-shell">
+      <section class="hero-panel">
+        <div class="hero-top">
+          <div class="brand-row">
+            <div class="login-logo-box">
+              <img src="LOGO(1).png" alt="LOGO">
+            </div>
+            <div class="login-brand-text">
+              <strong>拍照管理系统</strong>
+              <span>ON TOP</span>
+            </div>
+          </div>
+
+          <h1 class="hero-title">
+            Capture.
+            <span>Manage.</span>
+            Deliver.
+          </h1>
+
+          <p class="hero-desc">
+            以更高级、更智能、更便捷的方式管理拍摄任务
+          </p>
+        </div>
+
+        <div class="visual-stage">
+          <div class="photo-chip one"><div class="chip-inner"></div></div>
+          <div class="photo-chip two"><div class="chip-inner"></div></div>
+          <div class="photo-chip three"><div class="chip-inner"></div></div>
+          <div class="phone-card">
+            <div class="phone-screen">
+              <div class="camera-circle"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-bottom">
+          <span class="login-status-dot"></span>
+          <span>System Online · Secure Capture</span>
+        </div>
+      </section>
+
+      <section class="form-panel">
+        <div class="form-card">
+          <div class="mobile-logo">
+            <img src="LOGO(1).png" alt="LOGO">
+          </div>
+
+          <div class="form-eyebrow">
+            <i data-lucide="sparkles"></i>
+            <span>Glowly</span>
+          </div>
+
+          <h2 class="form-title">欢迎回来</h2>
+          <p class="form-subtitle">登录后继续管理拍摄任务、照片数据和业务流程。</p>
+
+          <div class="login-error" id="login-error">
+            <i data-lucide="alert-circle"></i>
+            <span id="login-error-msg">用户名或密码错误</span>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="login-username">用户名</label>
+            <div class="input-wrap">
+              <input type="text" id="login-username" class="login-input" placeholder="请输入用户名" autocomplete="username" />
+              <i data-lucide="user" class="login-input-icon"></i>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="login-password">密码</label>
+            <div class="input-wrap">
+              <input type="password" id="login-password" class="login-input" placeholder="请输入密码" autocomplete="current-password" />
+              <i data-lucide="lock" class="login-input-icon"></i>
+              <button type="button" class="password-toggle" id="password-toggle" aria-label="显示或隐藏密码">
+                <i data-lucide="eye" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-options">
+            <label class="login-remember">
+              <input type="checkbox" id="login-remember" />
+              <span>记住我</span>
+            </label>
+            <a href="javascript:void(0)" class="forgot-link" id="login-forgot-pwd">忘记密码？</a>
+          </div>
+
+          <button class="login-btn" id="login-submit-btn">
+            <span class="btn-spinner"></span>
+            <span class="btn-text">登录系统</span>
+            <i data-lucide="arrow-right" class="w-4 h-4 btn-arrow"></i>
+          </button>
+
+          <div class="secure-row">
+            <i data-lucide="shield-check"></i>
+            <span>加密连接 · 安全登录</span>
+          </div>
+
+          <div class="form-footer">
+            <p>请联系管理员获取登录账号</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <template id="app-template">
+    <div class="app" id="app-main" style="display:none;">
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="orb orb-3"></div>
+      <div class="background-grid"></div>
+      <div class="noise"></div>
+
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-shell">
+          <div class="brand-area">
+            <div class="brand-card">
+              <div class="logo-box">
+                <img src="LOGO(1).png" alt="LOGO">
+              </div>
+
+              <div class="brand-info">
+                <h1>拍照管理系统</h1>
+                <p>ON TOP</p>
+              </div>
+            </div>
+
+            <div class="system-pill">
+              <span class="online-dot"></span>
+              <span>System Online</span>
+            </div>
+          </div>
+
+          <nav class="sidebar-nav">
+            <div class="nav-section">
+              <div class="section-title">Overview</div>
+
+              <div class="sidebar-item active" data-page="home" data-title="首页" data-icon="home">
+                <i data-lucide="home" class="w-5 h-5"></i>
+                <span>首页</span>
+                <span class="item-badge">NEW</span>
+              </div>
+            </div>
+
+            <div class="nav-section">
+              <div class="section-title">Data</div>
+
+              <button class="sidebar-item" id="nav-data-parent">
+                <i data-lucide="folder" class="w-5 h-5"></i>
+                <span class="flex-1 text-left">资料管理</span>
+                <i data-lucide="chevron-down" class="chevron" id="chevron-data"></i>
+              </button>
+
+              <div class="sub-menu sidebar-sub" id="sub-data">
+                <div class="sidebar-item" data-page="sample" data-title="样品资料" data-icon="package">
+                  <i data-lucide="database" class="w-[18px] h-[18px]"></i>
+                  <span>样品资料</span>
+                  <span class="item-badge">128</span>
+                </div>
+
+                <div class="sidebar-item" data-page="gallery" data-title="择样图库" data-icon="image">
+                  <i data-lucide="image" class="w-[18px] h-[18px]"></i>
+                  <span>择样图库</span>
+                  <span class="item-badge">3.6k</span>
+                </div>
+
+                <div class="sidebar-item" data-page="manufacturer" data-title="厂商资料" data-icon="store">
+                  <i data-lucide="store" class="w-[18px] h-[18px]"></i>
+                  <span>厂商资料</span>
+                  <span class="item-badge">56</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="nav-section">
+              <div class="section-title">Social</div>
+
+              <div class="sidebar-item" data-page="friends" data-title="好友列表" data-icon="message-circle">
+                <i data-lucide="users" class="w-5 h-5"></i>
+                <span>好友列表</span>
+
+                <div class="avatar-stack">
+                  <div class="avatar-mini avatar-a">A</div>
+                  <div class="avatar-mini avatar-b">B</div>
+                  <div class="avatar-mini avatar-more">+22</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="nav-section">
+              <div class="section-title">System</div>
+
+              <button class="sidebar-item" id="nav-system-parent">
+                <i data-lucide="settings" class="w-5 h-5"></i>
+                <span class="flex-1 text-left">系统管理</span>
+                <i data-lucide="chevron-down" class="chevron" id="chevron-system"></i>
+              </button>
+
+              <div class="sub-menu sidebar-sub" id="sub-system">
+                <div class="sidebar-item" data-page="users" data-title="用户管理" data-icon="users-round">
+                  <i data-lucide="users-round" class="w-[18px] h-[18px]"></i>
+                  <span>用户管理</span>
+                </div>
+
+                <div class="sidebar-item" data-page="roles" data-title="角色管理" data-icon="shield-check">
+                  <i data-lucide="shield-check" class="w-[18px] h-[18px]"></i>
+                  <span>角色管理</span>
+                </div>
+
+                <div class="sidebar-item" data-page="logs" data-title="系统日志" data-icon="file-clock">
+                  <i data-lucide="file-clock" class="w-[18px] h-[18px]"></i>
+                  <span>系统日志</span>
+                  <span class="pulse-dot"></span>
+                </div>
+              </div>
+            </div>
+          </nav>
+
+          <div class="sidebar-footer">
+            <div class="user-card">
+              <div class="user-avatar">
+                <div class="user-avatar-inner">AD</div>
+                <div class="user-online"></div>
+              </div>
+
+              <div class="user-info">
+                <div class="user-name">Admin</div>
+                <div class="user-role">系统管理员</div>
+              </div>
+
+              <button class="logout-btn" title="退出登录" onclick="doLogout()">
+                <i data-lucide="log-out" class="w-[17px] h-[17px]"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main class="main">
+        <div class="main-shell">
+          <header class="top-bar">
+            <div class="page-heading">
+              <h2 id="page-title">首页概览</h2>
+              <p id="page-subtitle">拍摄任务、照片资产与系统状态总览</p>
+            </div>
+
+            <div class="top-actions">
+              <div class="search-box">
+                <i data-lucide="search" class="w-4 h-4"></i>
+                <span>搜索样品、图库、厂商...</span>
+              </div>
+
+              <button class="top-btn" title="通知">
+                <i data-lucide="bell" class="w-[18px] h-[18px]"></i>
+                <span class="notif-dot"></span>
+              </button>
+
+              <button class="top-btn" title="新建">
+                <i data-lucide="plus" class="w-[18px] h-[18px]"></i>
+              </button>
+
+              <div class="top-avatar" title="Admin">
+                <div class="top-avatar-inner">AD</div>
+              </div>
+            </div>
+          </header>
+
+          <div class="tab-bar-wrap">
+            <div class="tab-bar" id="tab-bar">
+              <div class="tab-item active" data-page="home" data-title="首页" data-icon="home" id="tab-home">
+                <i data-lucide="home" class="w-3.5 h-3.5"></i>
+                <span>首页</span>
+              </div>
+            </div>
+          </div>
+
+          <section class="content-area" id="content-area"></section>
+        </div>
+      </main>
+    </div>
+  </template>
+
+
+  <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@32.0.2/dist/ag-grid-community.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.min.js"></script>
+  <script src="./assets/js/app.js" defer></script>
+  <script src="./assets/js/utils/dom.js" defer></script>
+  <script src="./assets/js/utils/modal.js" defer></script>
+  <script src="./assets/js/utils/message.js" defer></script>
+  <script src="./assets/js/pages/friends.js" defer></script>
+  <script src="./assets/js/pages/roles.js" defer></script>
+  <script src="./assets/js/pages/users.js" defer></script>
+  <script src="./assets/js/pages/logs.js" defer></script>
+  <script src="./assets/js/pages/gallery.js" defer></script>
+  <script src="./assets/js/pages/sample.js" defer></script>
+  <script>
+    lucide.createIcons();
+
+    var submitBtn = document.getElementById('login-submit-btn');
+    var usernameInput = document.getElementById('login-username');
+    var passwordInput = document.getElementById('login-password');
+    var errorEl = document.getElementById('login-error');
+    var errorMsg = document.getElementById('login-error-msg');
+    var passwordToggle = document.getElementById('password-toggle');
+    var loginPage = document.getElementById('page-login');
+
+    function showError(message) {
+      errorMsg.textContent = message;
+      errorEl.classList.remove('show');
+      void errorEl.offsetWidth;
+      errorEl.classList.add('show');
+    }
+
+    function hideError() { errorEl.classList.remove('show'); }
+
+    function setLoading(isLoading) {
+      submitBtn.disabled = isLoading;
+      if (isLoading) {
+        submitBtn.classList.add('loading');
+        submitBtn.querySelector('.btn-text').textContent = '登录中...';
+      } else {
+        submitBtn.classList.remove('loading');
+        submitBtn.querySelector('.btn-text').textContent = '登录系统';
+      }
+    }
+
+    function doLogout() {
+      sessionStorage.removeItem('token');
+      localStorage.removeItem('token');
+      var appMain = document.getElementById('app-main');
+      if (appMain) appMain.remove();
+      document.body.insertBefore(loginPage, document.querySelector('script'));
+      usernameInput.value = '';
+      passwordInput.value = '';
+      lucide.createIcons();
+    }
+
+    function enterApp() {
+      loginPage.remove();
+      var appContent = document.getElementById('app-template').content.cloneNode(true);
+      document.body.appendChild(appContent);
+      var appMain = document.getElementById('app-main');
+      appMain.style.display = 'flex';
+      initApp();
+    }
+
+    var API_BASE = '';
+
+    submitBtn.addEventListener('click', function() {
+      var username = usernameInput.value.trim();
+      var password = passwordInput.value;
+
+      if (!username || !password) { showError('请输入用户名和密码'); return; }
+
+      hideError();
+      setLoading(true);
+
+      fetch(API_BASE + '/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username, password: password })
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(json) {
+        setLoading(false);
+        if (json.code === 200) {
+          var storage = document.getElementById('login-remember').checked ? localStorage : sessionStorage;
+          storage.setItem('token', json.data.token);
+          storage.setItem('userInfo', JSON.stringify({
+            userId: json.data.userId,
+            username: json.data.username,
+            realName: json.data.realName,
+            roleId: json.data.roleId,
+            roleName: json.data.roleName,
+            permissions: json.data.permissions
+          }));
+          enterApp();
+        } else {
+          showError(json.message || '登录失败');
+        }
+      })
+      .catch(function() {
+        setLoading(false);
+        showError('网络错误，请检查后端服务是否启动');
+      });
+    });
+
+    usernameInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') passwordInput.focus();
+    });
+
+    passwordInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') submitBtn.click();
+    });
+
+    document.getElementById('login-forgot-pwd').addEventListener('click', function() {
+      alert('请联系管理员重置密码');
+    });
+
+    passwordToggle.addEventListener('click', function() {
+      var isPassword = passwordInput.type === 'password';
+      passwordInput.type = isPassword ? 'text' : 'password';
+      passwordToggle.innerHTML = isPassword
+        ? '<i data-lucide="eye-off" class="w-4 h-4"></i>'
+        : '<i data-lucide="eye" class="w-4 h-4"></i>';
+      lucide.createIcons();
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+      var token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      if (token) {
+        enterApp();
+      }
+    });
+  </script>
+</body>
+</html>

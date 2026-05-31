@@ -104,6 +104,48 @@ CREATE TABLE IF NOT EXISTS `operation_logs` (
     KEY `idx_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='操作日志';
 
+CREATE TABLE IF NOT EXISTS `manufacturers` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `manufacturer_code` VARCHAR(50) DEFAULT NULL COMMENT '厂商编号',
+    `name` VARCHAR(200) DEFAULT NULL COMMENT '厂商名称',
+    `booth_no` VARCHAR(50) DEFAULT NULL COMMENT '摊位号',
+    `phone1` VARCHAR(20) DEFAULT NULL COMMENT '电话1',
+    `mobile1` VARCHAR(20) DEFAULT NULL COMMENT '手机1',
+    `contact1` VARCHAR(50) DEFAULT NULL COMMENT '联系人1',
+    `visitor_mobile` VARCHAR(20) DEFAULT NULL COMMENT '见客手机',
+    `phone2` VARCHAR(20) DEFAULT NULL COMMENT '电话2',
+    `mobile2` VARCHAR(20) DEFAULT NULL COMMENT '手机2',
+    `contact2` VARCHAR(50) DEFAULT NULL COMMENT '联系人2',
+    `address` VARCHAR(500) DEFAULT NULL COMMENT '地址',
+    `phone3` VARCHAR(20) DEFAULT NULL COMMENT '电话3',
+    `mobile3` VARCHAR(20) DEFAULT NULL COMMENT '手机3',
+    `qq` VARCHAR(20) DEFAULT NULL COMMENT 'QQ',
+    `other_remark` VARCHAR(500) DEFAULT NULL COMMENT '其他备注',
+    `certificate` VARCHAR(200) DEFAULT NULL COMMENT '厂商证书',
+    `sms_number` VARCHAR(300) DEFAULT NULL COMMENT '短信号码',
+    `booth_meters` VARCHAR(50) DEFAULT NULL COMMENT '摊位米数',
+    `booth_type` VARCHAR(50) DEFAULT NULL COMMENT '摊位类型',
+    `floor_area` VARCHAR(50) DEFAULT NULL COMMENT '楼层区位',
+    `booth_area` VARCHAR(50) DEFAULT NULL COMMENT '摊位区位',
+    `last_expiry` VARCHAR(50) DEFAULT NULL COMMENT '上次到期',
+    `expiry_date` VARCHAR(50) DEFAULT NULL COMMENT '到期日期',
+    `main_card` VARCHAR(50) DEFAULT NULL COMMENT '主卡',
+    `sub_card` VARCHAR(50) DEFAULT NULL COMMENT '副卡',
+    `registrant` VARCHAR(50) DEFAULT NULL COMMENT '登记人',
+    `modifier` VARCHAR(50) DEFAULT NULL COMMENT '修改人',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_by` BIGINT DEFAULT NULL COMMENT '创建人ID',
+    `update_by` BIGINT DEFAULT NULL COMMENT '更新人ID',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted` TINYINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_manufacturer_code` (`manufacturer_code`),
+    KEY `idx_name` (`name`),
+    KEY `idx_booth_no` (`booth_no`),
+    KEY `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='厂商资料表';
+
 CREATE TABLE IF NOT EXISTS `samples` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `sample_code` VARCHAR(50) NOT NULL COMMENT '样品编号',

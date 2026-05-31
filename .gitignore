@@ -20,5 +20,36 @@ Thumbs.db
 backend/uploads/
 D:/photo-management/
 
-# Node (if any)
+# Node
 node_modules/
+
+# Frontend build artifacts
+backend/src/main/resources/static/assets/
+backend/src/main/resources/static/logo.png
+backend/src/main/resources/static/index.html
+
+# Local maven distribution
+apache-maven-3.9.6/
+maven.zip
+
+# Business data
+*.xlsx
+*.xls
+
+# Temp test images
+123.png
+*.png
+!frontend/public/logo.png
+!backend/extra-static/LOGO(1).png
+!LOGO(1).png
+
+# Temp js files
+toysbear_*.js
+
+# Build artifacts
+photo-management/
+BOOT-INF/
+
+# Electron dist
+electron/dist/
+electron/jre/

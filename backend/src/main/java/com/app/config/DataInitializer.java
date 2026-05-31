@@ -3,6 +3,7 @@ package com.app.config;
 import com.app.entity.User;
 import com.app.mapper.UserMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,8 +26,10 @@ public class DataInitializer implements CommandLineRunner {
 
         if (admin != null) {
             String newPassword = passwordEncoder.encode("admin123");
-            admin.setPassword(newPassword);
-            userMapper.updateById(admin);
+            LambdaUpdateWrapper<User> updateWrapper = new LambdaUpdateWrapper<>();
+            updateWrapper.eq(User::getUsername, "admin")
+                    .set(User::getPassword, newPassword);
+            userMapper.update(null, updateWrapper);
         }
     }
 }

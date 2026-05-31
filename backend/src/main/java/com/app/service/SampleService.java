@@ -4,7 +4,9 @@ import com.app.common.BusinessException;
 import com.app.common.PageResult;
 import com.app.dto.ImportResult;
 import com.app.entity.Sample;
+import com.app.entity.SampleThumbnail;
 import com.app.mapper.SampleMapper;
+import com.app.mapper.SampleThumbnailMapper;
 import com.app.util.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -25,14 +27,22 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Service
 public class SampleService {
 
     private static final Logger log = LoggerFactory.getLogger(SampleService.class);
 
+    private static final ConcurrentHashMap<String, Boolean> CACHED_EXISTING_CODES = new ConcurrentHashMap<>();
+    private static volatile boolean codesLoaded = false;
+
     @Autowired
     private SampleMapper sampleMapper;
+
+    @Autowired
+    private SampleThumbnailMapper sampleThumbnailMapper;
 
     private static final Map<String, SFunction<Sample, ?>> SORT_FIELD_MAP = new LinkedHashMap<>();
     static {
@@ -154,7 +164,7 @@ public class SampleService {
     ));
 
     public PageResult<Sample> list(long current, long size, String keyword, String category, String supplier,
-                                   String sortField, String sortOrder) {
+                                   String manufacturerCode, String sortField, String sortOrder) {
         LambdaQueryWrapper<Sample> wrapper = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(keyword)) {
             wrapper.and(w -> w
@@ -162,7 +172,9 @@ public class SampleService {
                     .or()
                     .like(Sample::getSampleName, keyword)
                     .or()
-                    .like(Sample::getMaterial, keyword));
+                    .like(Sample::getMaterial, keyword)
+                    .or()
+                    .like(Sample::getManufacturerCode, keyword));
         }
         if (StringUtils.hasText(category) && !"all".equals(category)) {
             wrapper.eq(Sample::getCategory, category);
@@ -170,16 +182,46 @@ public class SampleService {
         if (StringUtils.hasText(supplier)) {
             wrapper.like(Sample::getSupplier, supplier);
         }
+        if (StringUtils.hasText(manufacturerCode)) {
+            wrapper.eq(Sample::getManufacturerCode, manufacturerCode);
+        }
 
         boolean asc = !"desc".equalsIgnoreCase(sortOrder);
-        if (StringUtils.hasText(sortField) && SORT_FIELD_MAP.containsKey(sortField)) {
+        if ("hasThumbnail".equals(sortField)) {
+            wrapper.last("ORDER BY (SELECT COUNT(1) FROM sample_thumbnail WHERE sample_id = samples.id) " + (asc ? "ASC" : "DESC"));
+        } else if (StringUtils.hasText(sortField) && SORT_FIELD_MAP.containsKey(sortField)) {
             wrapper.orderBy(true, asc, SORT_FIELD_MAP.get(sortField));
         } else {
             wrapper.orderByDesc(Sample::getCreateTime);
         }
 
+        wrapper.select(
+            Sample::getId, Sample::getCreateTime, Sample::getSampleCode,
+            Sample::getManufacturerCode, Sample::getSampleName,
+            Sample::getEnglishName, Sample::getCategory, Sample::getFactoryCode,
+            Sample::getSampleUnit, Sample::getSampleUnitEn, Sample::getPackagingCn, Sample::getPackagingEn, Sample::getPackageCode,
+            Sample::getMaterial, Sample::getColor,
+            Sample::getColorEn, Sample::getSize, Sample::getWeight,
+            Sample::getOrigin, Sample::getSupplier, Sample::getBoothNo,
+            Sample::getContactPerson, Sample::getContactPhone,
+            Sample::getMobile, Sample::getFax, Sample::getQq,
+            Sample::getFactoryPrice, Sample::getTaxPrice,
+            Sample::getSampleLength, Sample::getSampleWidth, Sample::getSampleHeight,
+            Sample::getSampleGrossWeight, Sample::getSampleNetWeight,
+            Sample::getCartonLength, Sample::getCartonWidth, Sample::getCartonHeight,
+            Sample::getCartonMaterialVolume, Sample::getCartonVolume,
+            Sample::getInnerBoxCount, Sample::getCartonCapacity, Sample::getPackingUnit,
+            Sample::getPackageLength, Sample::getPackageWidth, Sample::getPackageHeight,
+            Sample::getCartonGrossWeight, Sample::getCartonNetWeight,
+            Sample::getCertification, Sample::getCertificationCount,
+            Sample::getDescription, Sample::getRemark, Sample::getRemarkEn,
+            Sample::getRegistrant, Sample::getInfringement, Sample::getBatteryInfo
+        );
+
         IPage<Sample> page = sampleMapper.selectPage(new Page<>(current, size), wrapper);
-        return new PageResult<>(page.getRecords(), page.getTotal(), current, size);
+        PageResult<Sample> result = new PageResult<>(page.getRecords(), page.getTotal(), current, size);
+        fillThumbnails(result.getRecords());
+        return result;
     }
 
     public PageResult<Sample> advancedSearch(long current, long size, Map<String, String> params, String sortField, String sortOrder) {
@@ -194,14 +236,42 @@ public class SampleService {
         }
 
         boolean asc = !"desc".equalsIgnoreCase(sortOrder);
-        if (StringUtils.hasText(sortField) && SORT_FIELD_MAP.containsKey(sortField)) {
+        if ("hasThumbnail".equals(sortField)) {
+            wrapper.last("ORDER BY (SELECT COUNT(1) FROM sample_thumbnail WHERE sample_id = samples.id) " + (asc ? "ASC" : "DESC"));
+        } else if (StringUtils.hasText(sortField) && SORT_FIELD_MAP.containsKey(sortField)) {
             wrapper.orderBy(true, asc, SORT_FIELD_MAP.get(sortField));
         } else {
             wrapper.orderByDesc(Sample::getCreateTime);
         }
 
+        wrapper.select(
+            Sample::getId, Sample::getCreateTime, Sample::getUpdateTime, Sample::getDeleted,
+            Sample::getSampleCode, Sample::getManufacturerCode, Sample::getSampleName,
+            Sample::getEnglishName, Sample::getCategory, Sample::getFactoryCode,
+            Sample::getSampleUnit, Sample::getSampleUnitEn, Sample::getPackagingCn,
+            Sample::getPackagingEn, Sample::getMaterial, Sample::getColor, Sample::getColorEn,
+            Sample::getSize, Sample::getWeight, Sample::getOrigin, Sample::getSupplier,
+            Sample::getBoothNo, Sample::getContactPerson, Sample::getContactPhone,
+            Sample::getMobile, Sample::getFax, Sample::getQq,
+            Sample::getFactoryPrice, Sample::getTaxPrice,
+            Sample::getSampleLength, Sample::getSampleWidth, Sample::getSampleHeight,
+            Sample::getSampleGrossWeight, Sample::getSampleNetWeight,
+            Sample::getCartonLength, Sample::getCartonWidth, Sample::getCartonHeight,
+            Sample::getCartonMaterialVolume, Sample::getCartonVolume,
+            Sample::getInnerBoxCount, Sample::getCartonCapacity,
+            Sample::getPackingUnit, Sample::getCartonGrossWeight, Sample::getCartonNetWeight,
+            Sample::getPackageLength, Sample::getPackageWidth, Sample::getPackageHeight,
+            Sample::getCertification, Sample::getCertificationCount,
+            Sample::getRemark,
+            Sample::getRegistrant, Sample::getModifier, Sample::getStatus,
+            Sample::getInfringement, Sample::getBatteryInfo,
+            Sample::getCreateBy, Sample::getUpdateBy
+        );
+
         IPage<Sample> page = sampleMapper.selectPage(new Page<>(current, size), wrapper);
-        return new PageResult<>(page.getRecords(), page.getTotal(), current, size);
+        PageResult<Sample> result = new PageResult<>(page.getRecords(), page.getTotal(), current, size);
+        fillThumbnails(result.getRecords());
+        return result;
     }
 
     public Sample getById(Long id) {
@@ -246,6 +316,20 @@ public class SampleService {
         for (Long id : ids) {
             sampleMapper.deleteById(id);
         }
+    }
+
+    public java.util.List<Sample> matchByCodes(String type, java.util.List<String> codes) {
+        if (codes == null || codes.isEmpty()) {
+            return new java.util.ArrayList<>();
+        }
+        LambdaQueryWrapper<Sample> wrapper = new LambdaQueryWrapper<>();
+        if ("factoryCode".equals(type)) {
+            wrapper.in(Sample::getFactoryCode, codes);
+        } else {
+            wrapper.in(Sample::getSampleCode, codes);
+        }
+        wrapper.select(Sample::getId, Sample::getSampleCode, Sample::getFactoryCode, Sample::getSampleName, Sample::getManufacturerCode);
+        return sampleMapper.selectList(wrapper);
     }
 
     @Transactional
@@ -355,6 +439,25 @@ public class SampleService {
                 Long userId = UserContext.getUserId();
                 sample.setCreateBy(userId);
                 sample.setUpdateBy(userId);
+
+                if (StringUtils.hasText(sample.getSampleCode())) {
+                    String code = sample.getSampleCode().trim();
+                    Sample softDeleted = sampleMapper.findByCodeIncludeDeleted(code);
+                    if (softDeleted != null) {
+                        sample.setId(softDeleted.getId());
+                        sample.setCreateBy(softDeleted.getCreateBy());
+                        sample.setCreateTime(softDeleted.getCreateTime());
+                        sample.setUpdateBy(userId);
+                        sample.setDeleted(0);
+                        sampleMapper.updateById(sample);
+                        importedCodes.add(code);
+                        existingCodes.add(code);
+                        CACHED_EXISTING_CODES.put(code, Boolean.TRUE);
+                        successCount++;
+                        continue;
+                    }
+                }
+
                 sampleMapper.insert(sample);
                 if (StringUtils.hasText(sample.getSampleCode())) {
                     importedCodes.add(sample.getSampleCode().trim());
@@ -380,6 +483,185 @@ public class SampleService {
         result.setFailCount(failedRows.size());
         result.setFailedRows(failedRows);
         return result;
+    }
+
+    public ImportResult batchInsert(List<Sample> samples, boolean updateMode) {
+        ImportResult result = new ImportResult();
+        List<Map<String, String>> failedRows = new ArrayList<>();
+        int successCount = 0;
+        int duplicateCount = 0;
+        int updatedCount = 0;
+
+        if (samples == null || samples.isEmpty()) {
+            result.setTotalCount(0);
+            result.setSuccessCount(0);
+            result.setFailCount(0);
+            result.setDuplicateCount(0);
+            result.setUpdatedCount(0);
+            result.setFailedRows(failedRows);
+            return result;
+        }
+
+        ensureCodesCacheLoaded();
+
+        Set<String> importedCodes = new HashSet<>();
+
+        for (int i = 0; i < samples.size(); i++) {
+            Sample sample = samples.get(i);
+            try {
+                StringBuilder rowErrors = new StringBuilder();
+                boolean isDuplicate = false;
+
+                if (!StringUtils.hasText(sample.getSampleCode()) && !StringUtils.hasText(sample.getSampleName())) {
+                    rowErrors.append("公司编号和样品名称均为空; ");
+                }
+
+                if (StringUtils.hasText(sample.getSampleCode())) {
+                    String code = sample.getSampleCode().trim();
+                    if (CACHED_EXISTING_CODES.containsKey(code)) {
+                        if (updateMode) {
+                            truncateFields(sample, i, failedRows);
+                            Long userId = UserContext.getUserId();
+                            sample.setUpdateBy(userId);
+                            LambdaQueryWrapper<Sample> qw = new LambdaQueryWrapper<>();
+                            qw.eq(Sample::getSampleCode, code).last("LIMIT 1");
+                            Sample existing = sampleMapper.selectOne(qw);
+                            if (existing != null) {
+                                sample.setId(existing.getId());
+                                sample.setCreateBy(existing.getCreateBy());
+                                sample.setCreateTime(existing.getCreateTime());
+                                sampleMapper.updateById(sample);
+                                updatedCount++;
+                                continue;
+                            }
+                            CACHED_EXISTING_CODES.remove(code);
+                        } else {
+                            rowErrors.append("公司编号[").append(code).append("]已存在于数据库; ");
+                            isDuplicate = true;
+                        }
+                    } else if (importedCodes.contains(code)) {
+                        rowErrors.append("公司编号[").append(code).append("]在导入数据中重复; ");
+                        isDuplicate = true;
+                    }
+                }
+
+                if (rowErrors.length() > 0) {
+                    Map<String, String> failRow = new LinkedHashMap<>();
+                    failRow.put("row", String.valueOf(i + 1));
+                    failRow.put("公司编号", sample.getSampleCode() != null ? sample.getSampleCode() : "");
+                    failRow.put("样品名称", sample.getSampleName() != null ? sample.getSampleName() : "");
+                    failRow.put("失败原因", rowErrors.toString());
+                    failRow.put("类型", isDuplicate ? "重复" : "校验失败");
+                    failedRows.add(failRow);
+                    if (isDuplicate) duplicateCount++;
+                    continue;
+                }
+
+                truncateFields(sample, i, failedRows);
+
+                Long userId = UserContext.getUserId();
+                sample.setCreateBy(userId);
+                sample.setUpdateBy(userId);
+                sample.setId(null);
+
+                if (StringUtils.hasText(sample.getSampleCode())) {
+                    String code = sample.getSampleCode().trim();
+                    Sample softDeleted = sampleMapper.findByCodeIncludeDeleted(code);
+                    if (softDeleted != null) {
+                        sample.setId(softDeleted.getId());
+                        sample.setCreateBy(softDeleted.getCreateBy());
+                        sample.setCreateTime(softDeleted.getCreateTime());
+                        sample.setUpdateBy(userId);
+                        sample.setDeleted(0);
+                        sampleMapper.updateById(sample);
+                        importedCodes.add(code);
+                        CACHED_EXISTING_CODES.put(code, Boolean.TRUE);
+                        successCount++;
+                        continue;
+                    }
+                }
+
+                sampleMapper.insert(sample);
+
+                if (StringUtils.hasText(sample.getSampleCode())) {
+                    String code = sample.getSampleCode().trim();
+                    importedCodes.add(code);
+                    CACHED_EXISTING_CODES.put(code, Boolean.TRUE);
+                }
+                successCount++;
+            } catch (Exception e) {
+                log.warn("批量导入第{}条失败: {}", i + 1, e.getMessage());
+                Map<String, String> failRow = new LinkedHashMap<>();
+                failRow.put("row", String.valueOf(i + 1));
+                failRow.put("公司编号", sample.getSampleCode() != null ? sample.getSampleCode() : "");
+                failRow.put("样品名称", sample.getSampleName() != null ? sample.getSampleName() : "");
+                failRow.put("失败原因", e.getMessage() != null ? e.getMessage() : "未知错误");
+                failRow.put("类型", "异常");
+                failedRows.add(failRow);
+            }
+        }
+
+        result.setTotalCount(samples.size());
+        result.setSuccessCount(successCount);
+        result.setFailCount(failedRows.size() - duplicateCount);
+        result.setDuplicateCount(duplicateCount);
+        result.setUpdatedCount(updatedCount);
+        result.setFailedRows(failedRows);
+        return result;
+    }
+
+    private synchronized void ensureCodesCacheLoaded() {
+        if (codesLoaded) return;
+        List<Sample> all = sampleMapper.selectList(
+                new LambdaQueryWrapper<Sample>().select(Sample::getSampleCode).isNotNull(Sample::getSampleCode));
+        for (Sample s : all) {
+            if (s.getSampleCode() != null) {
+                CACHED_EXISTING_CODES.put(s.getSampleCode().trim(), Boolean.TRUE);
+            }
+        }
+        List<String> deletedCodes = sampleMapper.findDeletedCodes();
+        if (deletedCodes != null) {
+            for (String code : deletedCodes) {
+                if (code != null) {
+                    CACHED_EXISTING_CODES.put(code.trim(), Boolean.TRUE);
+                }
+            }
+        }
+        codesLoaded = true;
+    }
+
+    private void truncateFields(Sample sample, int rowIndex, List<Map<String, String>> failedRows) {
+        int maxLen;
+        maxLen = 20; if (sample.getQq() != null && sample.getQq().length() > maxLen) { sample.setQq(sample.getQq().substring(0, maxLen)); }
+        maxLen = 20; if (sample.getMobile() != null && sample.getMobile().length() > maxLen) { sample.setMobile(sample.getMobile().substring(0, maxLen)); }
+        maxLen = 20; if (sample.getContactPhone() != null && sample.getContactPhone().length() > maxLen) { sample.setContactPhone(sample.getContactPhone().substring(0, maxLen)); }
+        maxLen = 20; if (sample.getFax() != null && sample.getFax().length() > maxLen) { sample.setFax(sample.getFax().substring(0, maxLen)); }
+        maxLen = 20; if (sample.getSampleUnit() != null && sample.getSampleUnit().length() > maxLen) { sample.setSampleUnit(sample.getSampleUnit().substring(0, maxLen)); }
+        maxLen = 20; if (sample.getPackingUnit() != null && sample.getPackingUnit().length() > maxLen) { sample.setPackingUnit(sample.getPackingUnit().substring(0, maxLen)); }
+        maxLen = 50; if (sample.getSampleCode() != null && sample.getSampleCode().length() > maxLen) { sample.setSampleCode(sample.getSampleCode().substring(0, maxLen)); }
+        maxLen = 50; if (sample.getManufacturerCode() != null && sample.getManufacturerCode().length() > maxLen) { sample.setManufacturerCode(sample.getManufacturerCode().substring(0, maxLen)); }
+        maxLen = 50; if (sample.getFactoryCode() != null && sample.getFactoryCode().length() > maxLen) { sample.setFactoryCode(sample.getFactoryCode().substring(0, maxLen)); }
+        maxLen = 50; if (sample.getBoothNo() != null && sample.getBoothNo().length() > maxLen) { sample.setBoothNo(sample.getBoothNo().substring(0, maxLen)); }
+        maxLen = 50; if (sample.getRegistrant() != null && sample.getRegistrant().length() > maxLen) { sample.setRegistrant(sample.getRegistrant().substring(0, maxLen)); }
+        maxLen = 50; if (sample.getModifier() != null && sample.getModifier().length() > maxLen) { sample.setModifier(sample.getModifier().substring(0, maxLen)); }
+        maxLen = 50; if (sample.getSampleUnitEn() != null && sample.getSampleUnitEn().length() > maxLen) { sample.setSampleUnitEn(sample.getSampleUnitEn().substring(0, maxLen)); }
+        maxLen = 50; if (sample.getContactPerson() != null && sample.getContactPerson().length() > maxLen) { sample.setContactPerson(sample.getContactPerson().substring(0, maxLen)); }
+        maxLen = 50; if (sample.getColor() != null && sample.getColor().length() > maxLen) { sample.setColor(sample.getColor().substring(0, maxLen)); }
+        maxLen = 50; if (sample.getWeight() != null && sample.getWeight().length() > maxLen) { sample.setWeight(sample.getWeight().substring(0, maxLen)); }
+        maxLen = 100; if (sample.getCategory() != null && sample.getCategory().length() > maxLen) { sample.setCategory(sample.getCategory().substring(0, maxLen)); }
+        maxLen = 100; if (sample.getMaterial() != null && sample.getMaterial().length() > maxLen) { sample.setMaterial(sample.getMaterial().substring(0, maxLen)); }
+        maxLen = 100; if (sample.getSize() != null && sample.getSize().length() > maxLen) { sample.setSize(sample.getSize().substring(0, maxLen)); }
+        maxLen = 100; if (sample.getOrigin() != null && sample.getOrigin().length() > maxLen) { sample.setOrigin(sample.getOrigin().substring(0, maxLen)); }
+        maxLen = 100; if (sample.getPackagingCn() != null && sample.getPackagingCn().length() > maxLen) { sample.setPackagingCn(sample.getPackagingCn().substring(0, maxLen)); }
+        maxLen = 100; if (sample.getPackagingEn() != null && sample.getPackagingEn().length() > maxLen) { sample.setPackagingEn(sample.getPackagingEn().substring(0, maxLen)); }
+        maxLen = 50; if (sample.getPackageCode() != null && sample.getPackageCode().length() > maxLen) { sample.setPackageCode(sample.getPackageCode().substring(0, maxLen)); }
+        maxLen = 100; if (sample.getColorEn() != null && sample.getColorEn().length() > maxLen) { sample.setColorEn(sample.getColorEn().substring(0, maxLen)); }
+        maxLen = 100; if (sample.getInfringement() != null && sample.getInfringement().length() > maxLen) { sample.setInfringement(sample.getInfringement().substring(0, maxLen)); }
+        maxLen = 200; if (sample.getSampleName() != null && sample.getSampleName().length() > maxLen) { sample.setSampleName(sample.getSampleName().substring(0, maxLen)); }
+        maxLen = 200; if (sample.getEnglishName() != null && sample.getEnglishName().length() > maxLen) { sample.setEnglishName(sample.getEnglishName().substring(0, maxLen)); }
+        maxLen = 200; if (sample.getSupplier() != null && sample.getSupplier().length() > maxLen) { sample.setSupplier(sample.getSupplier().substring(0, maxLen)); }
+        maxLen = 200; if (sample.getCertification() != null && sample.getCertification().length() > maxLen) { sample.setCertification(sample.getCertification().substring(0, maxLen)); }
+        maxLen = 200; if (sample.getBatteryInfo() != null && sample.getBatteryInfo().length() > maxLen) { sample.setBatteryInfo(sample.getBatteryInfo().substring(0, maxLen)); }
     }
 
     private void setFieldValue(Sample sample, String fieldName, String value) throws Exception {
@@ -427,4 +709,37 @@ public class SampleService {
                 return "";
         }
     }
+
+    private void fillThumbnails(List<Sample> samples) {
+        if (samples == null || samples.isEmpty()) return;
+        List<Long> ids = new ArrayList<>();
+        for (Sample s : samples) {
+            if (s.getId() != null) ids.add(s.getId());
+        }
+        if (ids.isEmpty()) return;
+        List<SampleThumbnail> thumbnails = sampleThumbnailMapper.selectBatchIds(ids);
+        Map<Long, SampleThumbnail> map = new HashMap<>();
+        for (SampleThumbnail t : thumbnails) {
+            map.put(t.getSampleId(), t);
+        }
+        for (Sample s : samples) {
+            SampleThumbnail t = map.get(s.getId());
+            if (t != null) {
+                s.setThumbnail(t.getThumbnail());
+                s.setFirstImageId(t.getImageId());
+            }
+        }
+    }
+
+    public PageResult<Sample> listDeleted(int current, int size) {
+        IPage<Sample> page = sampleMapper.selectDeleted(new Page<>(current, size));
+        return new PageResult<>(page.getRecords(), page.getTotal(), page.getCurrent(), page.getSize());
+    }
+
+    public int restoreDeleted(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) return 0;
+        String joined = ids.stream().map(String::valueOf).collect(Collectors.joining(","));
+        return sampleMapper.restoreByIds(joined);
+    }
+
 }

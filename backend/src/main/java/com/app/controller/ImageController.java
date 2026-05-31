@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/images")
@@ -72,6 +73,11 @@ public class ImageController {
         return new ResponseEntity<>(data, headers, HttpStatus.OK);
     }
 
+    @GetMapping("/sample/{sampleId}")
+    public Result<List<Image>> listBySample(@PathVariable Long sampleId) {
+        return Result.success(imageService.listBySampleId(sampleId));
+    }
+
     @GetMapping("/gallery/{galleryId}")
     public Result<List<Image>> listByGallery(@PathVariable Long galleryId) {
         return Result.success(imageService.listByGallery(galleryId));
@@ -83,10 +89,89 @@ public class ImageController {
         return Result.ok("删除成功");
     }
 
+    @DeleteMapping("/sample/{sampleId}")
+    public Result<Void> deleteBySampleId(@PathVariable Long sampleId) {
+        imageService.deleteBySampleId(sampleId);
+        return Result.ok("删除成功");
+    }
+
+    @GetMapping("/sample-images")
+    public Result<java.util.Map<Long, java.util.Map<String, Object>>> sampleImages(@RequestParam("ids") String ids) {
+        String[] parts = ids.split(",");
+        java.util.List<Long> idList = new java.util.ArrayList<>();
+        for (String p : parts) {
+            try { idList.add(Long.parseLong(p.trim())); } catch (NumberFormatException ignored) {}
+        }
+        return Result.success(imageService.findFirstImageIdAndThumbBySampleIds(idList));
+    }
+
+    @PostMapping("/sample-images")
+    public Result<java.util.Map<Long, java.util.Map<String, Object>>> sampleImagesPost(@RequestBody java.util.List<Long> ids) {
+        return Result.success(imageService.findFirstImageIdAndThumbBySampleIds(ids));
+    }
+
     @PostMapping("/batch-delete")
-    public Result<Void> deleteBatch(@RequestBody Long[] ids) {
-        imageService.deleteBatch(ids);
+    public Result<Void> deleteBatch(@RequestBody List<Map<String, Object>> items) {
+        imageService.deleteBatch(items);
         return Result.ok("批量删除成功");
+    }
+
+    @PostMapping("/reorder")
+    public Result<Void> reorder(@RequestBody List<Map<String, Object>> items) {
+        imageService.reorder(items);
+        return Result.ok("排序成功");
+    }
+
+    @PostMapping("/set-position")
+    public Result<Void> setPosition(@RequestBody Map<String, Object> body) {
+        Long imageId = body.get("imageId") != null ? ((Number) body.get("imageId")).longValue() : null;
+        int position = body.get("position") != null ? ((Number) body.get("position")).intValue() : -1;
+        if (imageId == null || position < 0) {
+            return Result.error("参数无效");
+        }
+        boolean ok = imageService.setPosition(imageId, position);
+        return ok ? Result.ok("设置成功") : Result.error("图片未找到");
+    }
+
+    @PostMapping("/swap-sort")
+    public Result<Void> swapSort(@RequestBody Map<String, Object> body) {
+        Long id1 = body.get("id1") != null ? ((Number) body.get("id1")).longValue() : null;
+        Long id2 = body.get("id2") != null ? ((Number) body.get("id2")).longValue() : null;
+        if (id1 == null || id2 == null) return Result.error("参数无效");
+        imageService.swapSortOrder(id1, id2);
+        return Result.ok("交换成功");
+    }
+
+    @PostMapping("/search-by-image")
+    public Result<java.util.List<java.util.Map<String, Object>>> searchByImage(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(defaultValue = "10") int maxDistance) {
+        return Result.success(imageService.searchByImage(file, maxDistance));
+    }
+
+    @PostMapping("/backfill-dhash")
+    public Result<Map<String, Object>> backfillDhash() {
+        return Result.success(imageService.backfillDhash());
+    }
+
+    @GetMapping("/has-dhash")
+    public Result<Boolean> hasDhash() {
+        return Result.success(imageService.hasDhashData());
+    }
+
+    @PostMapping("/backfill-buckets")
+    public Result<Map<String, Object>> backfillBuckets() {
+        return Result.success(imageService.backfillBuckets());
+    }
+
+    @PostMapping("/reset-features")
+    public Result<Map<String, Object>> resetFeatures() {
+        return Result.success(imageService.resetFeatures());
+    }
+
+    @PostMapping("/backfill-features")
+    public Result<Map<String, Object>> backfillFeatures() {
+        return Result.success(imageService.backfillFeatures());
     }
 
     private MediaType getMediaType(String ext) {

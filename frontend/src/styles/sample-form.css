@@ -1,0 +1,91 @@
+/* 样品页面专用表单样式覆盖 */
+/* 导入顺序必须在 sample.css 之后 */
+
+/* ===== 表单卡片紧凑 ===== */
+.sample-samples-page .sample-form-card {
+  height: 180px;
+  min-height: 180px;
+  padding: 0 20px 18px 24px;
+  overflow: visible;
+}
+
+.sample-samples-page .sample-form-card.expanded {
+  height: 340px;
+  min-height: 340px;
+}
+
+/* ===== 收起状态图片缩小 ===== */
+.sample-samples-page .sample-form-card:not(.expanded) .sample-image-thumb {
+  width: 44px;
+  height: 36px;
+}
+
+/* ===== 表单主体 ===== */
+.sample-samples-page .sample-form-body {
+  height: calc(100% - 0px);
+}
+
+/* ===== 顶部栏：定位到图片上方居中 ===== */
+.sample-samples-page .sample-form-top {
+  position: absolute;
+  right: 20px;
+  width: 180px;
+  top: 20px;
+  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0;
+  z-index: 10;
+}
+
+.sample-samples-page .sample-form-actions {
+  gap: 6px;
+}
+
+/* ===== 模式切换标签 ===== */
+.sample-samples-page .sample-mode-pill {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+/* ===== 表单滚动区域 ===== */
+.sample-samples-page .sample-form-scroll {
+  overflow: hidden;
+  padding-top: 20px;
+  box-sizing: border-box;
+}
+
+/* ===== 字段输入框 ===== */
+.sample-samples-page .sample-form-input {
+  box-sizing: border-box;
+}
+
+.sample-samples-page .sample-form-group-inputs .sample-form-input {
+  min-width: 60px;
+}
+
+/* ===== 图片缩略图统一尺寸 ===== */
+.sample-samples-page .sample-image-strip {
+  z-index: 1;
+  margin-top: 45px;
+}
+
+.sample-samples-page .sample-image-thumb {
+  width: 60px;
+  height: 50px;
+}
+
+.sample-samples-page .sample-form-card.expanded .sample-image-thumb {
+  width: 60px;
+  height: 50px;
+}
+
+/* ===== 按钮紧凑 ===== */
+.sample-samples-page .sample-btn {
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 12px !important;
+  font-size: 13px !important;
+}

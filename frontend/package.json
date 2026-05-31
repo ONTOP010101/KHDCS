@@ -1,0 +1,66 @@
+{
+  "name": "photo-manager",
+  "version": "1.0.0",
+  "description": "拍照管理系统 - 桌面客户端",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "dev:electron": "cross-env ELECTRON=true vite",
+    "build": "vite build",
+    "build:electron": "cross-env ELECTRON=true vite build && electron-builder",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@vitejs/plugin-vue": "^6.0.7",
+    "lucide-vue-next": "^1.0.0",
+    "qrcode": "^1.5.4",
+    "vite": "^8.0.14",
+    "vue": "^3.5.34",
+    "vue-router": "^4.6.4",
+    "vxe-table": "^4.19.1",
+    "xe-utils": "^4.0.8",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0",
+    "electron": "^42.2.0",
+    "electron-builder": "^26.8.1",
+    "esbuild": "^0.28.0",
+    "vite-plugin-electron": "^0.29.1",
+    "vite-plugin-electron-renderer": "^0.14.7"
+  },
+  "build": {
+    "appId": "com.ontop.photo-manager",
+    "productName": "拍照管理系统",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "public/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/logo.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "拍照管理系统"
+    }
+  }
+}
