@@ -25,9 +25,9 @@ D:/photo-management/
 node_modules/
 
 # Frontend build artifacts
-backend/src/main/resources/static/assets/
-backend/src/main/resources/static/logo.png
-backend/src/main/resources/static/index.html
+frontend/dist/
+frontend/dist-electron/
+backend/src/main/resources/static/
 
 # Local maven distribution
 apache-maven-3.9.6/
@@ -54,3 +54,6 @@ BOOT-INF/
 # Electron dist
 electron/dist/
 electron/jre/
+
+# Temp files
+*.fixed
