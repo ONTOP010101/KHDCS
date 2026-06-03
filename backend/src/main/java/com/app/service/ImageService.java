@@ -26,6 +26,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageWriteParam;
@@ -108,6 +110,12 @@ public class ImageService {
     private static final String SHARD_HEX = "0123456789abcdef";
 
     private final ExecutorService searchExecutor = Executors.newFixedThreadPool(32);
+
+    @PreDestroy
+    public void shutdown() {
+        searchExecutor.shutdown();
+        log.info("searchExecutor shutdown completed");
+    }
 
     private void applyDhashBuckets(Image image, long dhash) {
         image.setDhash(dhash);

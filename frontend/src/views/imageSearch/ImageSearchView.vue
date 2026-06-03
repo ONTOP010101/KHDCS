@@ -35,6 +35,8 @@
         </div>
       </div>
 
+      <div v-if="imageSearchError" class="isp-error-banner">{{ imageSearchError }}</div>
+
       <div class="isp-results-area">
         <div v-if="filteredResults.length > 0">
           <div class="isp-filter-bar">
@@ -116,7 +118,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api'
 import { Search, Plus, X, Crop, Image as ImageIcon } from 'lucide-vue-next'
@@ -189,14 +191,25 @@ const autoBackfillDhash = async () => {
   } catch (e) {}
 }
 
+const imageSearchError = ref('')
+
 const onImageSearchFilesChange = (e) => {
   const files = e.target.files
   if (!files || files.length === 0) return
+  let skipped = 0
   for (let i = 0; i < files.length; i++) {
     const file = files[i]
-    if (!file.type.startsWith('image/')) continue
+    if (!file.type.startsWith('image/')) {
+      skipped++
+      continue
+    }
     const url = URL.createObjectURL(file)
     imageSearchImages.value.push({ file, url, name: file.name })
+  }
+  if (skipped > 0) {
+    imageSearchError.value = skipped + ' 个非图片文件已跳过'
+  } else {
+    imageSearchError.value = ''
   }
   if (imageSearchSelectedIdx.value < 0 && imageSearchImages.value.length > 0) {
     imageSearchSelectedIdx.value = 0
@@ -329,7 +342,6 @@ const getCroppedFile = () => {
       return
     }
     const imageEl = new Image()
-    imageEl.crossOrigin = 'anonymous'
     imageEl.onload = () => {
       const sx = Math.max(0, Math.round(cropX.value * cropDisplayScale.value))
       const sy = Math.max(0, Math.round(cropY.value * cropDisplayScale.value))
@@ -349,6 +361,9 @@ const getCroppedFile = () => {
         resolve(croppedFile)
       }, 'image/jpeg', 0.95)
     }
+    imageEl.onerror = () => {
+      resolve(img.file)
+    }
     imageEl.src = img.url
   })
 }
@@ -358,6 +373,7 @@ const doImageSearch = async () => {
   imageSearching.value = true
   imageSearchDone.value = false
   imageSearchResults.value = []
+  imageSearchError.value = ''
   resultPage.value = 1
   const searchFile = await getCroppedFile()
   if (!searchFile) {
@@ -384,8 +400,11 @@ const doImageSearch = async () => {
           imageSearchResults.value = retryRes.data || []
         }
       }
+    } else {
+      imageSearchError.value = res.msg || '搜索失败，请重试'
     }
   } catch (e) {
+    imageSearchError.value = '网络错误，请检查连接后重试'
     console.error('图像搜索失败:', e)
   } finally {
     imageSearching.value = false
@@ -395,9 +414,18 @@ const doImageSearch = async () => {
 
 const viewImageSearchResult = (item) => {
   if (item.sampleId) {
-    router.push({ name: 'Sample' })
+    router.push({ name: 'Sample', query: { sampleId: item.sampleId, sampleCode: item.sampleCode || '' } })
   }
 }
+
+onBeforeUnmount(() => {
+  imageSearchImages.value.forEach(img => {
+    if (img.url && img.url.startsWith('blob:')) {
+      URL.revokeObjectURL(img.url)
+    }
+  })
+  imageSearchImages.value = []
+})
 </script>
 
 <style scoped>
@@ -556,6 +584,17 @@ const viewImageSearchResult = (item) => {
   font-weight: 600;
   color: #333;
   white-space: nowrap;
+}
+
+.isp-error-banner {
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: rgba(255,59,48,0.06);
+  color: #ff3b30;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid rgba(255,59,48,0.15);
 }
 
 .isp-threshold-select {

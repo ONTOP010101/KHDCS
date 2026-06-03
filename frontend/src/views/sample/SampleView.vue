@@ -1267,6 +1267,8 @@
             </button>
           </div>
 
+          <div v-if="imageSearchError" style="padding:10px 16px;margin-bottom:12px;border-radius:10px;background:rgba(255,59,48,0.06);color:#ff3b30;font-size:13px;font-weight:600;border:1px solid rgba(255,59,48,0.15)">{{ imageSearchError }}</div>
+
           <div v-if="imageSearchResults.length > 0" class="ism-results">
             <div class="ism-results-header">
               <span>匹配结果</span>
@@ -1317,6 +1319,7 @@ import {
 } from 'lucide-vue-next'
 
 const router = useRouter()
+const route = useRoute()
 
 const allFormFields = [
   { key: 'sampleCode', label: '公司编号', labelWidth: 84, labelJustify: true, width: 180 },
@@ -2997,14 +3000,25 @@ const autoBackfillDhash = async () => {
   } catch (e) {}
 }
 
+const imageSearchError = ref('')
+
 const onImageSearchFilesChange = (e) => {
   const files = e.target.files
   if (!files || files.length === 0) return
+  let skipped = 0
   for (let i = 0; i < files.length; i++) {
     const file = files[i]
-    if (!file.type.startsWith('image/')) continue
+    if (!file.type.startsWith('image/')) {
+      skipped++
+      continue
+    }
     const url = URL.createObjectURL(file)
     imageSearchImages.value.push({ file, url, name: file.name })
+  }
+  if (skipped > 0) {
+    imageSearchError.value = skipped + ' 个非图片文件已跳过'
+  } else {
+    imageSearchError.value = ''
   }
   if (imageSearchSelectedIdx.value < 0 && imageSearchImages.value.length > 0) {
     imageSearchSelectedIdx.value = 0
@@ -3137,7 +3151,6 @@ const getCroppedFile = () => {
       return
     }
     const imageEl = new Image()
-    imageEl.crossOrigin = 'anonymous'
     imageEl.onload = () => {
       const sx = Math.max(0, Math.round(cropX.value * cropDisplayScale.value))
       const sy = Math.max(0, Math.round(cropY.value * cropDisplayScale.value))
@@ -3157,16 +3170,23 @@ const getCroppedFile = () => {
         resolve(croppedFile)
       }, 'image/jpeg', 0.95)
     }
+    imageEl.onerror = () => {
+      resolve(img.file)
+    }
     imageEl.src = img.url
   })
 }
 
 const doImageSearch = async () => {
-  const searchFile = await getCroppedFile()
-  if (!searchFile) return
   imageSearching.value = true
   imageSearchDone.value = false
   imageSearchResults.value = []
+  imageSearchError.value = ''
+  const searchFile = await getCroppedFile()
+  if (!searchFile) {
+    imageSearching.value = false
+    return
+  }
   try {
     const formData = new FormData()
     formData.append('file', searchFile)
@@ -3187,8 +3207,11 @@ const doImageSearch = async () => {
           imageSearchResults.value = retryRes.data || []
         }
       }
+    } else {
+      imageSearchError.value = res.msg || '搜索失败，请重试'
     }
   } catch (e) {
+    imageSearchError.value = '网络错误，请检查连接后重试'
     console.error('图像搜索失败:', e)
   } finally {
     imageSearching.value = false
@@ -4128,6 +4151,16 @@ onMounted(() => {
     })
   })
 })
+
+watch(() => route.query.sampleId, (sampleId) => {
+  if (sampleId && !isNaN(Number(sampleId))) {
+    api('/samples/' + sampleId).then(res => {
+      if (res.code === 200 && res.data) {
+        viewSampleDetail(res.data)
+      }
+    })
+  }
+}, { immediate: true })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', closeDropdowns)
