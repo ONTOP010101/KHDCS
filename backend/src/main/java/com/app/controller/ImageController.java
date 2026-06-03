@@ -3,7 +3,9 @@ package com.app.controller;
 import com.app.common.PageResult;
 import com.app.common.Result;
 import com.app.entity.Image;
+import com.app.util.DeepFeatureExtractor;
 import com.app.service.ImageService;
+import com.app.service.PgVectorService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +20,9 @@ public class ImageController {
 
     @Autowired
     private ImageService imageService;
+
+    @Autowired(required = false)
+    private PgVectorService pgVectorService;
 
     @PostMapping("/upload")
     public Result<Image> upload(
@@ -172,6 +177,45 @@ public class ImageController {
     @PostMapping("/backfill-features")
     public Result<Map<String, Object>> backfillFeatures() {
         return Result.success(imageService.backfillFeatures());
+    }
+
+    @PostMapping("/backfill-deep-features")
+    public Result<Map<String, Object>> backfillDeepFeatures() {
+        return Result.success(imageService.backfillDeepFeatures());
+    }
+
+    @PostMapping("/reset-model")
+    public Result<String> resetModel() {
+        DeepFeatureExtractor.reset();
+        return Result.success("Model reset, will reload on next request");
+    }
+
+    @GetMapping("/pgvector-status")
+    public Result<Map<String, Object>> pgVectorStatus() {
+        Map<String, Object> status = new java.util.LinkedHashMap<>();
+        if (pgVectorService != null) {
+            status.put("available", pgVectorService.isAvailable());
+            status.put("count", pgVectorService.count());
+        } else {
+            status.put("available", false);
+            status.put("count", 0);
+        }
+        return Result.success(status);
+    }
+
+    @PostMapping("/backfill-pgvector")
+    public Result<Map<String, Object>> backfillPgVector() {
+        return Result.success(imageService.backfillPgVector());
+    }
+
+    @PostMapping("/test-pgvector-insert")
+    public Result<Map<String, Object>> testPgVectorInsert() {
+        return Result.success(imageService.testPgVectorInsert());
+    }
+
+    @GetMapping("/pgvector-check/{id}")
+    public Result<Map<String, Object>> pgVectorCheck(@PathVariable long id, @RequestParam(required = false) String shardPrefix) {
+        return Result.success(imageService.pgVectorCheck(id, shardPrefix));
     }
 
     private MediaType getMediaType(String ext) {

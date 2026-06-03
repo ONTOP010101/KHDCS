@@ -4,11 +4,10 @@ import com.app.interceptor.JwtInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-
-import java.io.File;
 
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
@@ -52,14 +51,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        String imageLocation = new File(imagePath).toURI().toString();
-        String thumbLocation = new File(thumbnailPath).toURI().toString();
         registry.addResourceHandler("/images/**")
-                .addResourceLocations(imageLocation);
+                .addResourceLocations(new FileSystemResource(imagePath + "/"));
         registry.addResourceHandler("/thumbnails/**")
-                .addResourceLocations(thumbLocation);
-        String videoLocation = new File(videoPath).toURI().toString();
+                .addResourceLocations(new FileSystemResource(thumbnailPath + "/"));
         registry.addResourceHandler("/videos/**")
-                .addResourceLocations(videoLocation);
+                .addResourceLocations(new FileSystemResource(videoPath + "/"));
     }
 }

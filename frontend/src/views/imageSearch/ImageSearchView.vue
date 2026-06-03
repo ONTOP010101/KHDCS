@@ -38,7 +38,7 @@
       <div class="isp-results-area">
         <div v-if="filteredResults.length > 0">
           <div class="isp-filter-bar">
-            <span class="isp-filter-bar-hint">匹配 {{ imageSearchResults.length }} 条，显示 {{ filteredResults.length }} 条（≥70%）</span>
+            <span class="isp-filter-bar-hint">匹配 {{ imageSearchResults.length }} 条，显示 {{ filteredResults.length }} 条（≥{{ Math.round(displayThreshold * 100) }}%）</span>
           </div>
           <div class="isp-card-grid">
             <div v-for="(item, idx) in pagedResults" :key="idx"
@@ -68,7 +68,7 @@
         </div>
         <div v-else-if="imageSearchDone && !imageSearching" class="isp-empty">
           <ImageIcon :size="40" />
-          <p v-if="imageSearchResults.length > 0">所有结果相似度低于 70%</p>
+          <p v-if="imageSearchResults.length > 0">所有结果相似度低于 {{ Math.round(displayThreshold * 100) }}%</p>
           <p v-else>未找到相似图片</p>
           <p class="isp-empty-hint">尝试调整相似度阈值或更换图片后重新搜索</p>
         </div>
@@ -137,10 +137,12 @@ const showCropModal = ref(false)
 const resultPage = ref(1)
 const resultPageSize = 100
 
+const displayThreshold = computed(() => 0.55)
+
 const filteredResults = computed(() => {
   return imageSearchResults.value.filter(item => {
     const sim = item.similarity || (1 - (item.distance || 0) / 64)
-    return sim >= 0.7
+    return sim >= displayThreshold.value
   })
 })
 

@@ -1,0 +1,31 @@
+spring:
+  devtools:
+    restart:
+      enabled: false
+  web:
+    resources:
+      static-locations: classpath:/static/
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+
+app:
+  upload:
+    path: D:/PZXT/photo-management/uploads
+    image-path: D:/PZXT/photo-management/images
+    thumbnail-path: D:/PZXT/photo-management/thumbnails
+    video-path: D:/PZXT/photo-management/videos
+    ffmpeg-path: ffmpeg
+
+search:
+  image:
+    engine: legacy
+    siamese-model-path:
+
+pgvector:
+  enabled: false
+  datasource:
+    url: jdbc:postgresql://localhost:5432/photo_management
+    username: postgres
+    password: 123456

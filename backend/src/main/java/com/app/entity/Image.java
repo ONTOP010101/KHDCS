@@ -21,6 +21,7 @@ public class Image extends BaseEntity {
     private Integer dhBucket2;
     private Integer dhBucket3;
     private byte[] featureVector;
+    private byte[] deepFeatureVector;
     private String description;
     private String tags;
     private Integer sortOrder;
@@ -58,6 +59,8 @@ public class Image extends BaseEntity {
     public void setDhBucket3(Integer dhBucket3) { this.dhBucket3 = dhBucket3; }
     public byte[] getFeatureVector() { return featureVector; }
     public void setFeatureVector(byte[] featureVector) { this.featureVector = featureVector; }
+    public byte[] getDeepFeatureVector() { return deepFeatureVector; }
+    public void setDeepFeatureVector(byte[] deepFeatureVector) { this.deepFeatureVector = deepFeatureVector; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
     public String getTags() { return tags; }

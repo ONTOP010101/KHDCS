@@ -20,9 +20,6 @@ spring:
     restart:
       enabled: true
       additional-paths: src/main/resources/static
-  web:
-    resources:
-      static-locations: file:src/main/resources/static/, classpath:/static/
   data:
     redis:
       host: localhost
@@ -70,3 +67,19 @@ app:
     thumbnail-path: d:/客户端测试/photo-management/thumbnails
     video-path: d:/客户端测试/photo-management/videos
     ffmpeg-path: ffmpeg
+
+search:
+  image:
+    engine: deep
+    siamese-model-path: models/mobilenet_v2_feat/mobilenet_v2_feat.pt
+
+pgvector:
+  enabled: true
+  datasource:
+    url: jdbc:postgresql://localhost:5432/photo_management
+    username: postgres
+    password: 123456
+
+logging:
+  level:
+    com.app.service.PgVectorService: DEBUG
