@@ -405,6 +405,7 @@ public class ImageService {
             return Files.readAllBytes(fullPath);
         } catch (BusinessException e) { throw e; }
         catch (IOException e) { throw new BusinessException(500, "\u8bfb\u53d6\u56fe\u7247\u5931\u8d25"); }
+        catch (Exception e) { throw new BusinessException(404, "\u56fe\u7247\u4e0d\u5b58\u5728"); }
         finally { ImageShardContext.clear(); }
     }
 
