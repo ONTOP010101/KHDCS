@@ -9,7 +9,7 @@
                @click="selectSearchImage(idx)">
             <img :src="img.url" />
             <button class="isp-thumb-del" @click.stop="removeSearchImage(idx)"><X :size="12" /></button>
-            <div v-if="idx === 0 || idx === imageSearchSelectedIdx" class="isp-crop-badge" @click.stop="showCropModal = true; selectSearchImage(idx)">
+            <div v-if="idx === 0 || idx === imageSearchSelectedIdx" class="isp-crop-badge" @click.stop="showCropModal = true; selectSearchImage(idx, true)">
               <Crop :size="11" /> 裁剪
             </div>
           </div>
@@ -220,11 +220,12 @@ const onImageSearchFilesChange = (e) => {
   e.target.value = ''
 }
 
-const selectSearchImage = (idx) => {
+const selectSearchImage = (idx, skipAutoSearch) => {
   imageSearchSelectedIdx.value = idx
   resetCropState()
-  imageSearchResults.value = []
-  imageSearchDone.value = false
+  if (!skipAutoSearch && imageSearchDone.value && imageSearchImages.value[idx]) {
+    doImageSearch()
+  }
 }
 
 const removeSearchImage = (idx) => {
@@ -694,8 +695,9 @@ onBeforeUnmount(() => {
 .isp-card-img img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
+  background: #f7f8fa;
 }
 
 .isp-card-no-img {

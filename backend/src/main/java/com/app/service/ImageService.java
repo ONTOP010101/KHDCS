@@ -932,8 +932,10 @@ public class ImageService {
         if (pgAvailable && pgCount > 0) {
             return searchByPgVector(queryFeature);
         }
-        log.info("Falling back to searchByDeepFeatureScan");
-        return searchByDeepFeatureScan(queryFeature);
+        // When pgvector is unavailable, return empty to let searchByImage fall back to dHash search
+        // instead of triggering searchByDeepFeatureScan (full table scan on 256 shard tables)
+        log.info("PgVector unavailable (available={}, count={}), skipping deep feature scan to avoid full table scan", pgAvailable, pgCount);
+        return new ArrayList<>();
     }
 
     private List<Map<String, Object>> searchByPgVector(float[] queryFeature) {
@@ -941,19 +943,38 @@ public class ImageService {
         log.info("PgVector search returned {} candidates", candidates.size());
         if (candidates.isEmpty()) return new ArrayList<>();
 
+        // Collect image IDs with their pgvector similarity
         Map<String, Long> mergeKeyToImgId = new LinkedHashMap<>();
+        Map<String, Double> pgSimilarityMap = new LinkedHashMap<>();
         for (Map<String, Object> candidate : candidates) {
             Long imageId = (Long) candidate.get("imageId");
             String shardPrefix = (String) candidate.get("shardPrefix");
+            Object simObj = candidate.get("similarity");
             if (imageId != null && shardPrefix != null) {
                 String mergeKey = shardPrefix + "_" + imageId;
-                mergeKeyToImgId.putIfAbsent(mergeKey, imageId);
+                if (!mergeKeyToImgId.containsKey(mergeKey)) {
+                    mergeKeyToImgId.put(mergeKey, imageId);
+                    double sim = simObj instanceof Number ? ((Number) simObj).doubleValue() : 0.0;
+                    pgSimilarityMap.put(mergeKey, sim);
+                }
             }
         }
         log.info("Extracted {} unique mergeKeys from pgvector results", mergeKeyToImgId.size());
 
         Map<String, Image> imageMap = batchFindImagesByIds(mergeKeyToImgId);
         log.info("batchFindImagesByIds found {} images", imageMap.size());
+
+        // Collect unique sampleIds and batch load
+        Map<Long, Sample> sampleMap = new LinkedHashMap<>();
+        for (Image img : imageMap.values()) {
+            if (img.getSampleId() != null && !sampleMap.containsKey(img.getSampleId())) {
+                Sample s = sampleMapper.selectById(img.getSampleId());
+                if (s != null) {
+                    sampleMap.put(img.getSampleId(), s);
+                }
+            }
+        }
+        log.info("Loaded {} unique samples", sampleMap.size());
 
         Map<String, Map<String, Object>> results = new LinkedHashMap<>();
         for (Map.Entry<String, Long> entry : mergeKeyToImgId.entrySet()) {
@@ -962,20 +983,12 @@ public class ImageService {
             if (img == null || img.getSampleId() == null) {
                 continue;
             }
-
-            byte[] dfvBytes = img.getDeepFeatureVector();
-            double sim = 0;
-            if (dfvBytes != null) {
-                float[] dbFeature = DeepFeatureExtractor.fromBytes(dfvBytes);
-                if (dbFeature != null) {
-                    sim = DeepFeatureExtractor.cosineSimilarity(queryFeature, dbFeature);
-                }
-            }
-
-            Sample s = sampleMapper.selectById(img.getSampleId());
+            Sample s = sampleMap.get(img.getSampleId());
             if (s == null) {
                 continue;
             }
+
+            Double sim = pgSimilarityMap.getOrDefault(mergeKey, 0.0);
 
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("imageId", img.getId());

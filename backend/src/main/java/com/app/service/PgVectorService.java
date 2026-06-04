@@ -31,6 +31,8 @@ public class PgVectorService {
     private JdbcTemplate pgJdbcTemplate;
     private HikariDataSource pgDataSource;
     private volatile Boolean available;
+    private volatile long availableCheckTime = 0;
+    private static final long AVAILABLE_TTL_MS = 30_000;
 
     @PostConstruct
     public void init() {
@@ -68,15 +70,23 @@ public class PgVectorService {
 
     public boolean isAvailable() {
         if (!pgVectorConfig.isEnabled()) return false;
-        if (available != null) return available;
+        long now = System.currentTimeMillis();
+        if (available != null && (now - availableCheckTime) < AVAILABLE_TTL_MS) {
+            return available;
+        }
         try {
             pgJdbcTemplate.queryForObject("SELECT 1", Integer.class);
+            if (available == null || !available) {
+                log.info("PgVectorService became available");
+            }
             available = true;
-            log.info("PgVectorService is available");
         } catch (Exception e) {
+            if (available == null || available) {
+                log.warn("PgVectorService is not available: {}", e.getMessage());
+            }
             available = false;
-            log.warn("PgVectorService is not available: {}", e.getMessage());
         }
+        availableCheckTime = now;
         return available;
     }
 
@@ -124,18 +134,18 @@ public class PgVectorService {
         }
         try {
             PGvector vec = new PGvector(queryEmbedding);
-            double maxDistance = 1.0 - minSimilarity;
             return pgJdbcTemplate.query(
-                    "SELECT image_id, shard_prefix FROM image_vectors " +
-                            "WHERE embedding <=> ? <= ? " +
+                    "SELECT image_id, shard_prefix, 1.0 - (embedding <=> ?) AS similarity " +
+                            "FROM image_vectors WHERE embedding <=> ? <= ? " +
                             "ORDER BY embedding <=> ? LIMIT ?",
                     (rs, rowNum) -> {
                         Map<String, Object> row = new LinkedHashMap<>();
                         row.put("imageId", rs.getLong("image_id"));
                         row.put("shardPrefix", rs.getString("shard_prefix"));
+                        row.put("similarity", rs.getDouble("similarity"));
                         return row;
                     },
-                    vec, maxDistance, vec, limit);
+                    vec, vec, 1.0 - minSimilarity, vec, limit);
         } catch (Exception e) {
             log.warn("PgVector search failed: {}", e.getMessage());
             return Collections.emptyList();

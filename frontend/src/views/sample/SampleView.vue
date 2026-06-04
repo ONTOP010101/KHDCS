@@ -4096,6 +4096,11 @@ const formatFileSize = (bytes) => {
   return size.toFixed(1) + ' ' + units[i]
 }
 
+const viewSampleDetail = (data) => {
+  if (!data || !data.id) return
+  selectSample(data)
+}
+
 watch(currentSampleImages, () => {
   if (stripIndex.value >= currentSampleImages.value.length) {
     stripIndex.value = 0
@@ -4142,14 +4147,16 @@ onMounted(() => {
     })
     resizeObserver.observe(tableWrapRef.value)
   }
-  loadTableData().then(() => {
-    nextTick(() => {
-      if (tableData.value.length > 0 && gridRef.value) {
-        gridRef.value.setCurrentRow(tableData.value[0])
-        selectSample(tableData.value[0])
-      }
+  if (!route.query.sampleCode) {
+    loadTableData().then(() => {
+      nextTick(() => {
+        if (tableData.value.length > 0 && gridRef.value) {
+          gridRef.value.setCurrentRow(tableData.value[0])
+          selectSample(tableData.value[0])
+        }
+      })
     })
-  })
+  }
 })
 
 watch(() => route.query.sampleId, (sampleId) => {
@@ -4159,6 +4166,13 @@ watch(() => route.query.sampleId, (sampleId) => {
         viewSampleDetail(res.data)
       }
     })
+  }
+}, { immediate: true })
+
+watch(() => route.query.sampleCode, (sampleCode) => {
+  if (sampleCode) {
+    searchKeyword.value = sampleCode
+    onSearch()
   }
 }, { immediate: true })
 
