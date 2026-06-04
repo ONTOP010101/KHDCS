@@ -256,7 +256,7 @@
               <div class="sample-card-body">
                 <div class="sample-card-name" :title="item.sampleName">{{ item.sampleName || '--' }}</div>
                 <div class="sample-card-field">
-                  <span class="card-label">公司编号</span><span class="card-val-cell"><span class="card-val" :title="item.sampleCode">{{ item.sampleCode || '-' }}</span><button v-if="item.sampleCode" class="card-copy-btn" @click.stop="copyCardCode(item.sampleCode)" :title="'复制 ' + item.sampleCode"><Copy :size="10" /></button></span>
+                  <span class="card-val-cell" style="grid-column:1/3"><span class="card-val" :title="item.sampleCode">{{ item.sampleCode || '-' }}</span><button v-if="item.sampleCode" class="card-copy-btn" @click.stop="copyCardCode(item.sampleCode)" :title="'复制 ' + item.sampleCode"><Copy :size="10" /></button></span>
                   <span class="card-label">货号</span><span class="card-val" :title="item.factoryCode">{{ item.factoryCode || '-' }}</span>
                 </div>
                 <div class="sample-card-field">
@@ -2338,7 +2338,18 @@ const formatCardDate = (val) => {
 }
 
 const copyCardCode = (code) => {
-  navigator.clipboard.writeText(code).catch(() => {})
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(code).catch(() => {})
+  } else {
+    const ta = document.createElement('textarea')
+    ta.value = code
+    ta.style.position = 'fixed'
+    ta.style.left = '-9999px'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
 }
 
 const selectSample = (row) => {
