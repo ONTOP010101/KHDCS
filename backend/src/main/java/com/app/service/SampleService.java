@@ -7,8 +7,10 @@ import com.app.entity.Sample;
 import com.app.entity.SampleThumbnail;
 import com.app.mapper.SampleMapper;
 import com.app.mapper.SampleThumbnailMapper;
+import com.app.mapper.ImageMapper;
 import com.app.util.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.apache.poi.ss.usermodel.*;
@@ -16,10 +18,15 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 
@@ -43,6 +50,12 @@ public class SampleService {
 
     @Autowired
     private SampleThumbnailMapper sampleThumbnailMapper;
+
+    @Autowired
+    private ImageMapper imageMapper;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private static final Map<String, SFunction<Sample, ?>> SORT_FIELD_MAP = new LinkedHashMap<>();
     static {
@@ -148,6 +161,9 @@ public class SampleService {
         HEADER_TO_FIELD.put("QQ", "qq");
         HEADER_TO_FIELD.put("登记人", "registrant");
         HEADER_TO_FIELD.put("修改人", "modifier");
+        HEADER_TO_FIELD.put("登记日期", "createTime");
+        HEADER_TO_FIELD.put("登记时间", "createTime");
+        HEADER_TO_FIELD.put("修改日期", "updateTime");
         HEADER_TO_FIELD.put("侵权", "infringement");
         HEADER_TO_FIELD.put("电池信息", "batteryInfo");
     }
@@ -161,6 +177,10 @@ public class SampleService {
 
     private static final Set<String> INT_FIELDS = new HashSet<>(Arrays.asList(
             "innerBoxCount", "cartonCapacity", "certificationCount"
+    ));
+
+    private static final Set<String> LOCAL_DATETIME_FIELDS = new HashSet<>(Arrays.asList(
+            "createTime", "updateTime"
     ));
 
     public PageResult<Sample> list(long current, long size, String keyword, String category, String supplier,
@@ -196,7 +216,7 @@ public class SampleService {
         }
 
         wrapper.select(
-            Sample::getId, Sample::getCreateTime, Sample::getSampleCode,
+            Sample::getId, Sample::getCreateTime, Sample::getUpdateTime, Sample::getSampleCode,
             Sample::getManufacturerCode, Sample::getSampleName,
             Sample::getEnglishName, Sample::getCategory, Sample::getFactoryCode,
             Sample::getSampleUnit, Sample::getSampleUnitEn, Sample::getPackagingCn, Sample::getPackagingEn, Sample::getPackageCode,
@@ -316,6 +336,39 @@ public class SampleService {
         for (Long id : ids) {
             sampleMapper.deleteById(id);
         }
+    }
+
+    private LocalDateTime parseDateTime(String value) {
+        if (value == null || value.trim().isEmpty()) return null;
+        value = value.trim();
+        // 尝试多种常见格式
+        String[] patterns = {
+                "yyyy-MM-dd HH:mm:ss",
+                "yyyy-MM-dd HH:mm",
+                "yyyy-MM-dd'T'HH:mm:ss",
+                "yyyy-MM-dd'T'HH:mm",
+                "yyyy/MM/dd HH:mm:ss",
+                "yyyy/MM/dd HH:mm",
+                "yyyy-M-d H:m:s",
+                "yyyy/M/d H:m:s",
+                "yyyy-MM-dd",
+                "yyyy/MM/dd"
+        };
+        for (String pattern : patterns) {
+            try {
+                DateTimeFormatter fmt = DateTimeFormatter.ofPattern(pattern);
+                if (pattern.contains("HH")) {
+                    return LocalDateTime.parse(value, fmt);
+                } else {
+                    return LocalDateTime.parse(value + " 00:00:00", DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                }
+            } catch (DateTimeParseException ignored) {}
+        }
+        // 最后尝试 ISO 格式
+        try {
+            return LocalDateTime.parse(value);
+        } catch (DateTimeParseException ignored) {}
+        return null;
     }
 
     public java.util.List<Sample> matchByCodes(String type, java.util.List<String> codes) {
@@ -445,8 +498,8 @@ public class SampleService {
                     Sample softDeleted = sampleMapper.findByCodeIncludeDeleted(code);
                     if (softDeleted != null) {
                         sample.setId(softDeleted.getId());
-                        sample.setCreateBy(softDeleted.getCreateBy());
-                        sample.setCreateTime(softDeleted.getCreateTime());
+                        if (sample.getCreateTime() == null) sample.setCreateTime(softDeleted.getCreateTime());
+                        if (sample.getCreateBy() == null) sample.setCreateBy(softDeleted.getCreateBy());
                         sample.setUpdateBy(userId);
                         sample.setDeleted(0);
                         sampleMapper.updateById(sample);
@@ -528,8 +581,8 @@ public class SampleService {
                             Sample existing = sampleMapper.selectOne(qw);
                             if (existing != null) {
                                 sample.setId(existing.getId());
-                                sample.setCreateBy(existing.getCreateBy());
-                                sample.setCreateTime(existing.getCreateTime());
+                                if (sample.getCreateTime() == null) sample.setCreateTime(existing.getCreateTime());
+                                if (sample.getCreateBy() == null) sample.setCreateBy(existing.getCreateBy());
                                 sampleMapper.updateById(sample);
                                 updatedCount++;
                                 continue;
@@ -676,6 +729,10 @@ public class SampleService {
             paramType = Integer.class;
             Method setter = Sample.class.getMethod(setterName, paramType);
             setter.invoke(sample, Integer.valueOf(value));
+        } else if (LOCAL_DATETIME_FIELDS.contains(fieldName)) {
+            paramType = LocalDateTime.class;
+            Method setter = Sample.class.getMethod(setterName, paramType);
+            setter.invoke(sample, parseDateTime(value));
         } else {
             paramType = String.class;
             Method setter = Sample.class.getMethod(setterName, paramType);
@@ -727,6 +784,7 @@ public class SampleService {
             if (t != null) {
                 s.setThumbnail(t.getThumbnail());
                 s.setFirstImageId(t.getImageId());
+                s.setFirstImageHash(t.getHash());
             }
         }
     }

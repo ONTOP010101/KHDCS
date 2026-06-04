@@ -48,6 +48,7 @@
                     class="sample-form-input"
                     :readonly="formMode === 'readonly'"
                     :placeholder="sf.placeholder"
+                    :title="formData[sf.key] || ''"
                     :style="sf.width ? { flex: '0 0 ' + sf.width + 'px', minWidth: sf.width + 'px' } : {}"
                     v-model="formData[sf.key]"
                   />
@@ -59,6 +60,7 @@
                   class="sample-form-input"
                   :readonly="formMode === 'readonly'"
                   :placeholder="formMode === 'readonly' ? '' : f.label"
+                  :title="formData[f.key] || ''"
                   :style="{ ...(f.width ? { flex: '0 0 ' + f.width + 'px' } : {}), ...(f.color ? { color: f.color } : {}) }"
                   v-model="formData[f.key]"
                 />
@@ -195,7 +197,7 @@
       </div>
     </div>
 
-    <div class="sample-card sample-table-card">
+    <div class="sample-table-card">
       <div ref="tableWrapRef" class="sample-table-wrap">
         <vxe-grid
           ref="gridRef"
@@ -203,7 +205,7 @@
           :data="tableData"
           :loading="tableLoading"
           :height="tableWrapHeight"
-          :toolbar-config="{ custom: true, zoom: true }"
+          :toolbar-config="gridToolbarConfig"
           :column-config="{ resizable: true, drag: true }"
           :row-config="{ isHover: true, isCurrent: true, keyField: 'id' }"
           :cell-config="{ height: 44 }"
@@ -240,6 +242,56 @@
           </template>
         </vxe-grid>
       </div>
+
+      <!-- 卡片覆盖层：绝对定位，不影响布局 -->
+      <div v-if="cardMode" ref="cardOverlayRef" class="sample-card-overlay" @scroll.passive="onCardScroll">
+        <div class="sample-card-scroll-body" :style="{ paddingTop: cardSpacerTop + 'px', paddingBottom: cardSpacerBottom + 'px' }">
+          <div class="sample-card-grid">
+            <div v-for="item in cardVisibleItems" :key="item.id"
+                 class="sample-card-item" @click="onCellClick({ row: item })">
+              <div class="sample-card-img">
+                <img v-if="item.firstImageHash || item.thumbnail" :src="item.firstImageHash ? '/images/view/hash/' + item.firstImageHash : '/thumbnails/' + item.thumbnail" :data-thumb="item.thumbnail" @error="onCardImgError" @click.stop="openPhotoModalFor(item)" loading="lazy" decoding="async" />
+                <div v-else class="sample-card-no-img" @click.stop="openPhotoModalFor(item)"><ImageIcon :size="36" /></div>
+              </div>
+              <div class="sample-card-body">
+                <div class="sample-card-name" :title="item.sampleName">{{ item.sampleName || '--' }}</div>
+                <div class="sample-card-field">
+                  <span class="card-label">公司编号</span><span class="card-val-cell"><span class="card-val" :title="item.sampleCode">{{ item.sampleCode || '-' }}</span><button v-if="item.sampleCode" class="card-copy-btn" @click.stop="copyCardCode(item.sampleCode)" :title="'复制 ' + item.sampleCode"><Copy :size="10" /></button></span>
+                  <span class="card-label">货号</span><span class="card-val" :title="item.factoryCode">{{ item.factoryCode || '-' }}</span>
+                </div>
+                <div class="sample-card-field">
+                  <span class="card-label">装量</span><span class="card-val" :title="(item.innerBoxCount ?? '-') + ' / ' + (item.cartonCapacity ?? '-')">{{ item.innerBoxCount != null ? item.innerBoxCount : '-' }} / {{ item.cartonCapacity != null ? item.cartonCapacity : '-' }}</span>
+                  <span class="card-label">毛/净</span><span class="card-val" :title="(item.cartonGrossWeight ?? '-') + ' / ' + (item.cartonNetWeight ?? '-')">{{ item.cartonGrossWeight != null ? item.cartonGrossWeight : '-' }} / {{ item.cartonNetWeight != null ? item.cartonNetWeight : '-' }}</span>
+                </div>
+                <div class="sample-card-field">
+                  <span class="card-label">材积体积</span><span class="card-val" :title="(item.cartonMaterialVolume ?? '-') + ' / ' + (item.cartonVolume ?? '-')">{{ item.cartonMaterialVolume != null ? item.cartonMaterialVolume : '-' }} / {{ item.cartonVolume != null ? item.cartonVolume : '-' }}</span>
+                  <span class="card-label">摊位号</span><span class="card-val" :title="item.boothNo">{{ item.boothNo || '-' }}</span>
+                </div>
+                <div class="sample-card-field">
+                  <span class="card-label">出厂价</span>
+                  <span v-if="item.factoryPrice" class="card-val card-price" style="grid-column:2/-1" :title="'¥' + item.factoryPrice">¥{{ item.factoryPrice }}</span>
+                  <span v-else class="card-val" style="grid-column:2/-1">-</span>
+                </div>
+                <div class="sample-card-divider"></div>
+                <div class="sample-card-field">
+                  <span class="card-label">厂名</span><span class="card-val" style="grid-column:2/-1" :title="item.supplier">{{ item.supplier || '-' }}</span>
+                </div>
+                <div class="sample-card-field">
+                  <span class="card-label">手机</span><span class="card-val" :title="item.mobile">{{ item.mobile || '-' }}</span>
+                  <span class="card-label">电话</span><span class="card-val" :title="item.contactPhone">{{ item.contactPhone || '-' }}</span>
+                </div>
+                <div class="sample-card-field">
+                  <span class="card-label">登记日期</span><span class="card-val" style="grid-column:2/-1" :title="formatCardDate(item.createTime)">{{ formatCardDate(item.createTime) }}</span>
+                </div>
+                <div class="sample-card-field">
+                  <span class="card-label">修改日期</span><span class="card-val" style="grid-column:2/-1" :title="formatCardDate(item.updateTime)">{{ formatCardDate(item.updateTime) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="sample-statusbar">
         <div class="sample-row-select-box">
           <span class="sample-row-select-label">选中行:</span>
@@ -255,6 +307,15 @@
           已选 <strong>{{ selectedIds.length }}</strong> 条，共 <strong>{{ totalRecords }}</strong> 条
         </div>
         <div class="sample-pagination">
+          <button
+            class="sample-btn sample-btn-card-toggle"
+            :title="cardMode ? '切换到表格模式' : '切换到卡片模式'"
+            @click="cardMode = !cardMode"
+            style="margin-right:8px"
+          >
+            <LayoutGrid :size="14" />
+            <span>{{ cardMode ? '表格' : '卡片' }}</span>
+          </button>
           <span class="sample-page-size-label">每页</span>
           <select class="sample-page-size-select" v-model.number="pageSize">
             <option v-for="opt in pageSizeOptions" :key="opt" :value="opt">{{ opt }}</option>
@@ -793,7 +854,11 @@
         <div class="spm-body-left">
           <div class="spm-main-img-wrap">
             <img v-if="photoModalImages.length > 0"
-                 :src="photoModalImages[photoModalIndex]?.thumbnailPath ? '/thumbnails/' + photoModalImages[photoModalIndex]?.thumbnailPath : '/images/view/hash/' + photoModalImages[photoModalIndex]?.hash" />
+                 :src="photoModalImages[photoModalIndex]?.hash ? '/images/view/hash/' + photoModalImages[photoModalIndex]?.hash : '/thumbnails/' + photoModalImages[photoModalIndex]?.thumbnailPath"
+                 :data-thumb="photoModalImages[photoModalIndex]?.thumbnailPath"
+                 @error="onModalImgError"
+                 @click="openFullPreview"
+                 style="cursor:pointer" />
             <span v-else class="spm-no-img">无图片</span>
             <button v-if="photoModalImages.length > 1" class="spm-main-img-nav spm-main-img-prev" @click="photoModalPrev">&#10094;</button>
             <button v-if="photoModalImages.length > 1" class="spm-main-img-nav spm-main-img-next" @click="photoModalNext">&#10095;</button>
@@ -1315,7 +1380,7 @@ import {
   FileUp, FileDown, FileSpreadsheet, MoreHorizontal, Settings,
   ChevronsUp, ChevronsDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
   MapPin, Crosshair, Filter, Columns3, ImagePlus, Coins, Package, DollarSign, Printer,
-  Image as ImageIcon, RotateCcw, AlertTriangle, AlertCircle, CheckCircle, CheckCircle as CheckCircleIcon, Info, Video as VideoIcon, List
+  Image as ImageIcon, RotateCcw, AlertTriangle, AlertCircle, CheckCircle, CheckCircle as CheckCircleIcon, Info, Video as VideoIcon, List, LayoutGrid, Copy
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -1328,7 +1393,10 @@ const allFormFields = [
     { key: 'packagingCn', placeholder: '中文包装', width: 130 },
     { key: 'packagingEn', placeholder: '英文包装', width: 48 },
   ]},
-  { key: 'category', label: '种类名称', labelWidth: 84, labelJustify: true, width: 150 },
+  { group: true, key: 'g-category', label: '种类名称', labelWidth: 84, labelJustify: true, width: 0, fields: [
+    { key: 'categoryCode', placeholder: '种类编号', width: 44 },
+    { key: 'category', placeholder: '种类名称', width: 100 },
+  ]},
   { key: 'sampleName', label: '样品名称', labelWidth: 84, labelJustify: true, width: 500 },
   { key: 'factoryCode', label: '出厂货号', labelWidth: 84, labelJustify: true, width: 180 },
   { group: true, key: 'g-cartonSize', label: '外箱规格', labelWidth: 84, labelJustify: true, width: 0, fields: [
@@ -1352,7 +1420,7 @@ const allFormFields = [
     { key: 'cartonVolume', placeholder: '体积', width: 72 },
   ]},
   { key: 'certification', label: '产品认证', labelWidth: 84, labelJustify: true, width: 500 },
-  { key: 'englishName', label: '英文名称', labelWidth: 84, labelJustify: true, width: 180 },
+  { key: 'infringement', label: '是否侵权', labelWidth: 84, labelJustify: true, width: 180 },
   { group: true, key: 'g-productSize', label: '产品规格', labelWidth: 84, labelJustify: true, width: 0, fields: [
     { key: 'sampleLength', placeholder: '产品长', width: 80 },
     { key: 'sampleWidth', placeholder: '产品宽', width: 79 },
@@ -1377,6 +1445,7 @@ const allFormFields = [
   { key: 'fax', label: '传真', labelWidth: 84, labelJustify: true, width: 250 },
   { key: 'taxPrice', label: '税点价', labelWidth: 84, labelJustify: true, color: 'red', width: 150 },
   { key: 'color', label: '颜色', labelWidth: 84, labelJustify: true, width: 195 },
+  { key: 'englishName', label: '英文名称', labelWidth: 84, labelJustify: true, width: 180 },
 ]
 
 const fieldVisible = reactive({})
@@ -1386,6 +1455,67 @@ const visibleFormFields = computed(() => allFormFields.filter(f => fieldVisible[
 
 const showFieldSettings = ref(false)
 const toggleFieldSettings = () => { showFieldSettings.value = !showFieldSettings.value }
+
+const cardMode = ref(false)
+const gridToolbarConfig = { custom: true }
+
+// ===== 卡片虚拟滚动 =====
+const cardOverlayRef = ref(null)
+const cardScrollTop = ref(0)
+const cardContainerWidth = ref(1200)
+
+const CARD_COLS = 6
+const CARD_GAP = 14
+const CARD_BODY_H = 80
+
+const cardRowHeight = computed(() => {
+  const w = cardContainerWidth.value
+  const cardW = (w - (CARD_COLS - 1) * CARD_GAP) / CARD_COLS
+  return cardW + CARD_BODY_H + CARD_GAP
+})
+
+const cardVisibleRange = computed(() => {
+  const h = cardOverlayRef.value?.clientHeight || 600
+  const rh = cardRowHeight.value
+  if (rh <= 0) return { start: 0, end: 24 }
+  const buffer = 2
+  const start = Math.max(0, Math.floor(cardScrollTop.value / rh) - buffer)
+  const end = Math.ceil((cardScrollTop.value + h) / rh) + buffer
+  return { start, end }
+})
+
+const cardTotalRows = computed(() => Math.ceil(tableData.value.length / CARD_COLS))
+
+const cardVisibleItems = computed(() => {
+  const { start, end } = cardVisibleRange.value
+  return tableData.value.slice(start * CARD_COLS, end * CARD_COLS)
+})
+
+const cardSpacerTop = computed(() => cardVisibleRange.value.start * cardRowHeight.value)
+
+const cardSpacerBottom = computed(() => {
+  const total = cardTotalRows.value
+  const end = cardVisibleRange.value.end
+  return Math.max(0, (total - end) * cardRowHeight.value)
+})
+
+watch(cardMode, async (v) => {
+  if (v) {
+    formExpanded.value = false
+    await nextTick()
+    cardScrollTop.value = 0
+    if (cardOverlayRef.value) {
+      cardContainerWidth.value = cardOverlayRef.value.clientWidth
+    }
+  }
+})
+
+function onCardScroll() {
+  if (cardOverlayRef.value) {
+    cardScrollTop.value = cardOverlayRef.value.scrollTop
+    cardContainerWidth.value = cardOverlayRef.value.clientWidth
+  }
+}
 
 const showMultiPrintModal = ref(false)
 const multiPrintType = ref('barcode')
@@ -1523,7 +1653,9 @@ const isAllImageSelected = computed(() => {
 const currentPreviewSrc = computed(() => {
   const img = imagePreviewList.value[imagePreviewIndex.value]
   if (!img) return ''
-  return img.filePath ? '/images/' + img.filePath : '/thumbnails/' + img.thumbnailPath
+  if (img.filePath) return '/images/' + img.filePath
+  if (img.hash) return '/images/view/hash/' + img.hash
+  return '/thumbnails/' + img.thumbnailPath
 })
 const photoModalH = ref(540)
 const photoModalInit = () => {
@@ -1547,8 +1679,8 @@ const rebuildDetailHtml = () => {
   const d = photoModalSample.value
   if (!d) { photoModalDetailHtml.value = ''; return }
   const v = (k) => { const x = d[k]; return (x != null && x !== '') ? String(x) : ''; }
-  const f = (label, val, cls) => `<div class="spm-field"><span class="spm-field-label">${label}</span><span class="spm-field-value${cls ? ' ' + cls : ''}">${val || '-'}</span></div>`
-  const ff = (label, val, cls) => `<div class="spm-field spm-field-full"><span class="spm-field-label">${label}</span><span class="spm-field-value${cls ? ' ' + cls : ''}">${val || '-'}</span></div>`
+  const f = (label, val, cls) => `<div class="spm-field"><span class="spm-field-label">${label}</span><span class="spm-field-value${cls ? ' ' + cls : ''}" title="${val || '-'}">${val || '-'}</span></div>`
+  const ff = (label, val, cls) => `<div class="spm-field spm-field-full"><span class="spm-field-label">${label}</span><span class="spm-field-value${cls ? ' ' + cls : ''}" title="${val || '-'}">${val || '-'}</span></div>`
   const row = (...args) => `<div class="spm-field-row">${args.join('')}</div>`
   const rowS = (section, ...args) => {
     const hidden = (section === 'factory-price' && hideFactoryPrice.value) || (section === 'supplier-info' && hideSupplierInfo.value)
@@ -1564,7 +1696,7 @@ const rebuildDetailHtml = () => {
     row(f('体积/材积', (v('cartonVolume')||'-') + ' / ' + (v('cartonMaterialVolume')||'-')), f('包装', v('packagingEn') || v('packagingCn') || '-')) +
     row(f('摊位号', v('boothNo')), f('电池信息', v('batteryInfo'))) +
     row(ff('产品认证', v('certification'))) +
-    row(ff('产品备注', v('remark'))) +
+    row(ff('中文备注', v('remark'))) +
     '<div class="spm-section-title">厂商信息</div>' +
     rowS('supplier-info', f('厂商编号', v('manufacturerCode')), f('厂商名称', v('supplier'))) +
     rowS('supplier-info', f('联系人', v('contactPerson')), f('电话', v('contactPhone'))) +
@@ -1854,10 +1986,13 @@ const allColumns = [
   { field: 'description', title: '描述', width: 140, showOverflow: true, visible: false },
   { field: 'remark', title: '备注', width: 800, showOverflow: true, sortable: true },
   { field: 'remarkEn', title: '英文备注', width: 140, showOverflow: true, visible: false },
-  { field: 'registrant', title: '登记人', width: 90, showOverflow: true, visible: false },
+  { field: 'registrant', title: '登记人', width: 100, showOverflow: true },
   { field: 'infringement', title: '侵权', width: 70, showOverflow: true, visible: false },
   { field: 'batteryInfo', title: '电池信息', width: 100, showOverflow: true, visible: false },
-  { field: 'createTime', title: '登记日期', width: 114, formatter: ({ cellValue }) => cellValue ? String(cellValue).substring(0, 10) : '', visible: false },
+  { field: 'createTime', title: '登记日期', width: 114, sortable: true, formatter: ({ cellValue }) => cellValue ? String(cellValue).substring(0, 10) : '', visible: false },
+  { field: 'modifier', title: '修改人', width: 100, showOverflow: true },
+  { field: 'updateTime', title: '修改日期', width: 300, sortable: true, showOverflow: true, formatter: ({ cellValue }) => cellValue ? String(cellValue).replace('T', ' ') : '' },
+  { field: 'createTime', title: '登记时间', width: 300, sortable: true, showOverflow: true, formatter: ({ cellValue }) => cellValue ? String(cellValue).replace('T', ' ') : '' },
   { field: 'action', title: '操作', width: 82, fixed: 'right', slots: { default: 'action_default' }, visible: false }
 ]
 
@@ -2075,6 +2210,22 @@ const viewOriginal = () => {
   showImagePreview.value = true
 }
 
+const openFullPreview = () => {
+  if (photoModalImages.value.length === 0) return
+  imagePreviewList.value = photoModalImages.value
+  imagePreviewIndex.value = photoModalIndex.value
+  imagePreviewSelected.value = new Set()
+  showPhotoModal.value = false
+  showImagePreview.value = true
+}
+
+// 关闭图片预览时恢复照片模态框
+watch(showImagePreview, (v) => {
+  if (!v && photoModalImages.value.length > 0) {
+    showPhotoModal.value = true
+  }
+})
+
 const deletePreviewImage = async () => {
   const img = imagePreviewList.value[imagePreviewIndex.value]
   if (!img || !img.id) return
@@ -2162,6 +2313,32 @@ const updateSelectedIds = () => {
 
 const onCellClick = ({ row }) => {
   selectSample(row)
+}
+
+const onCardImgError = (e) => {
+  const img = e.target
+  const thumb = img?.dataset?.thumb
+  if (thumb && !img.src.includes('/thumbnails/')) {
+    img.src = '/thumbnails/' + thumb
+  }
+}
+
+const onModalImgError = (e) => {
+  const img = e.target
+  const thumb = img?.dataset?.thumb
+  if (thumb && !img.src.includes('/thumbnails/')) {
+    img.src = '/thumbnails/' + thumb
+  }
+}
+
+const formatCardDate = (val) => {
+  if (!val) return '-'
+  const s = String(val).replace('T', ' ')
+  return s
+}
+
+const copyCardCode = (code) => {
+  navigator.clipboard.writeText(code).catch(() => {})
 }
 
 const selectSample = (row) => {
@@ -2365,11 +2542,10 @@ const openPhotoModal = () => {
 const openPhotoModalFor = (row) => {
   photoModalSample.value = row
   photoModalIndex.value = 0
-  if (row.thumbnail) {
-    photoModalImages.value = [{ thumbnailPath: row.thumbnail, filePath: row.thumbnail }]
-  } else {
-    photoModalImages.value = []
-  }
+  const temp = {}
+  if (row.firstImageHash) temp.hash = row.firstImageHash
+  if (row.thumbnail) temp.thumbnailPath = row.thumbnail
+  photoModalImages.value = (row.firstImageHash || row.thumbnail) ? [temp] : []
   photoModalInit()
   showPhotoModal.value = true
   fetchPhotoModalImages(row.id)
@@ -4200,4 +4376,173 @@ onActivated(() => {
 :deep(.vxe-pager) {
   justify-content: center;
 }
+
+/* 列管理按钮左移 */
+:deep(.vxe-toolbar-custom-target) {
+  margin-right: 5px;
+}
+
+.sample-btn-card-toggle {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px;
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 14px !important;
+  font-size: 13px !important;
+  margin-right: 6px;
+  margin-left: 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(0,122,255,0.15);
+  background: rgba(0,122,255,0.04);
+  color: #007aff;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.sample-btn-card-toggle:hover {
+  background: rgba(0,122,255,0.10);
+  border-color: rgba(0,122,255,0.3);
+}
+
+/* 卡片覆盖层：绝对定位在 table-card 内，不影响布局 */
+.sample-card-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 56px;
+  z-index: 10;
+  overflow-y: auto;
+  background: #f7f8fa;
+}
+
+.sample-card-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+  padding: 8px 12px 12px;
+  align-content: start;
+}
+
+.sample-card-item {
+  background: #fff;
+  border: 1px solid #eaecef;
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.sample-card-item:hover {
+  border-color: rgba(0,122,255,0.3);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  transform: translateY(-3px);
+}
+
+.sample-card-img {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: #f7f8fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sample-card-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: #f7f8fa;
+}
+
+.sample-card-no-img {
+  color: rgba(29,29,31,0.1);
+}
+
+.sample-card-body {
+  padding: 10px 12px 12px;
+}
+
+.sample-card-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1d1d1f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.35;
+  margin-bottom: 4px;
+}
+
+.sample-card-field {
+  display: grid;
+  grid-template-columns: 54px 1fr 54px 1fr;
+  gap: 2px 6px;
+  align-items: baseline;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(29,29,31,0.72);
+}
+
+.card-label {
+  color: rgba(29,29,31,0.38);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.card-val {
+  color: rgba(29,29,31,0.72);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.card-val-cell {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.card-copy-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: rgba(29,29,31,0.2);
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s, background 0.15s;
+}
+
+.card-copy-btn:hover {
+  color: rgba(29,29,31,0.6);
+  background: rgba(29,29,31,0.06);
+}
+
+.card-price {
+  font-size: 15px;
+  font-weight: 700;
+  color: #e03e2d;
+}
+
+.sample-card-divider {
+  height: 1px;
+  background: rgba(29,29,31,0.08);
+  margin: 4px 0;
+}
+
 </style>

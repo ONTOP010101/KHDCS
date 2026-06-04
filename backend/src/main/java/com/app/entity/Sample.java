@@ -70,10 +70,15 @@ public class Sample extends BaseEntity {
     @TableField(exist = false)
     private Long firstImageId;
 
+    @TableField(exist = false)
+    private String firstImageHash;
+
     public String getThumbnail() { return thumbnail; }
     public void setThumbnail(String thumbnail) { this.thumbnail = thumbnail; }
     public Long getFirstImageId() { return firstImageId; }
     public void setFirstImageId(Long firstImageId) { this.firstImageId = firstImageId; }
+    public String getFirstImageHash() { return firstImageHash; }
+    public void setFirstImageHash(String firstImageHash) { this.firstImageHash = firstImageHash; }
 
     public String getSampleCode() { return sampleCode; }
     public void setSampleCode(String sampleCode) { this.sampleCode = sampleCode; }
