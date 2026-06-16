@@ -3,21 +3,20 @@ package com.app.service;
 import com.app.common.BusinessException;
 import com.app.common.PageResult;
 import com.app.dto.ImportResult;
+import com.app.dto.SearchCondition;
+import com.app.entity.Manufacturer;
 import com.app.entity.Sample;
 import com.app.entity.SampleThumbnail;
+import com.app.mapper.ManufacturerMapper;
 import com.app.mapper.SampleMapper;
 import com.app.mapper.SampleThumbnailMapper;
-import com.app.mapper.ImageMapper;
 import com.app.util.UserContext;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,13 +27,18 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -44,6 +48,7 @@ public class SampleService {
 
     private static final ConcurrentHashMap<String, Boolean> CACHED_EXISTING_CODES = new ConcurrentHashMap<>();
     private static volatile boolean codesLoaded = false;
+    private static final Pattern SAMPLE_CODE_PATTERN = Pattern.compile("^([A-Za-z]+)(\\d+)$");
 
     @Autowired
     private SampleMapper sampleMapper;
@@ -52,12 +57,47 @@ public class SampleService {
     private SampleThumbnailMapper sampleThumbnailMapper;
 
     @Autowired
-    private ImageMapper imageMapper;
+    private ManufacturerMapper manufacturerMapper;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
     private static final Map<String, SFunction<Sample, ?>> SORT_FIELD_MAP = new LinkedHashMap<>();
+
+    // 前端字段名 → 数据库列名
+    private static final Map<String, String> FIELD_COL_MAP = new LinkedHashMap<>();
+    static {
+        FIELD_COL_MAP.put("manufacturerCode", "manufacturer_code");
+        FIELD_COL_MAP.put("supplier", "supplier");
+        FIELD_COL_MAP.put("contactPerson", "contact_person");
+        FIELD_COL_MAP.put("contactPhone", "contact_phone");
+        FIELD_COL_MAP.put("mobile", "mobile");
+        FIELD_COL_MAP.put("sampleName", "sample_name");
+        FIELD_COL_MAP.put("sampleCode", "sample_code");
+        FIELD_COL_MAP.put("factoryCode", "factory_code");
+        FIELD_COL_MAP.put("boothNo", "booth_no");
+        FIELD_COL_MAP.put("category", "category");
+        FIELD_COL_MAP.put("categoryCode", "category_code");
+        FIELD_COL_MAP.put("packageCode", "package_code");
+        FIELD_COL_MAP.put("packagingCn", "packaging_cn");
+        FIELD_COL_MAP.put("certification", "certification");
+        FIELD_COL_MAP.put("infringement", "infringement");
+        FIELD_COL_MAP.put("batteryInfo", "battery_info");
+        FIELD_COL_MAP.put("hideFromXzx", "hide_from_xzx");
+        FIELD_COL_MAP.put("factoryPrice", "factory_price");
+        FIELD_COL_MAP.put("cartonCapacity", "carton_capacity");
+        FIELD_COL_MAP.put("innerBoxCount", "inner_box_count");
+        FIELD_COL_MAP.put("sampleLength", "sample_length");
+        FIELD_COL_MAP.put("sampleWidth", "sample_width");
+        FIELD_COL_MAP.put("sampleHeight", "sample_height");
+        FIELD_COL_MAP.put("packageLength", "package_length");
+        FIELD_COL_MAP.put("packageWidth", "package_width");
+        FIELD_COL_MAP.put("packageHeight", "package_height");
+        FIELD_COL_MAP.put("cartonLength", "carton_length");
+        FIELD_COL_MAP.put("cartonWidth", "carton_width");
+        FIELD_COL_MAP.put("cartonHeight", "carton_height");
+    }
+
     static {
         SORT_FIELD_MAP.put("id", Sample::getId);
         SORT_FIELD_MAP.put("manufacturerCode", Sample::getManufacturerCode);
@@ -109,26 +149,45 @@ public class SampleService {
         SORT_FIELD_MAP.put("updateTime", Sample::getUpdateTime);
         SORT_FIELD_MAP.put("infringement", Sample::getInfringement);
         SORT_FIELD_MAP.put("batteryInfo", Sample::getBatteryInfo);
+        SORT_FIELD_MAP.put("hideFromXzx", Sample::getHideFromXzx);
+        SORT_FIELD_MAP.put("packageCode", Sample::getPackageCode);
+        SORT_FIELD_MAP.put("size", Sample::getSize);
+        SORT_FIELD_MAP.put("origin", Sample::getOrigin);
+    }
+
+    /** 搜索缓存：(hash(条件+分页) -> PageResult)，5分钟过期，最大500条 */
+    private final Map<String, CacheEntry<PageResult<Sample>>> searchCache = new ConcurrentHashMap<>();
+    private static final long CACHE_TTL_MS = 5 * 60 * 1000;
+    private static final int CACHE_MAX_SIZE = 500;
+
+    private static class CacheEntry<T> {
+        final T data;
+        final long expireAt;
+        CacheEntry(T data, long expireAt) { this.data = data; this.expireAt = expireAt; }
+        boolean expired() { return System.currentTimeMillis() > expireAt; }
     }
 
     private static final Map<String, String> HEADER_TO_FIELD = new LinkedHashMap<>();
     static {
         HEADER_TO_FIELD.put("厂商编号", "manufacturerCode");
         HEADER_TO_FIELD.put("公司编号", "sampleCode");
-        HEADER_TO_FIELD.put("种类编号", "category");
+        HEADER_TO_FIELD.put("种类编号", "categoryCode");
         HEADER_TO_FIELD.put("种类名称", "category");
         HEADER_TO_FIELD.put("样品名称", "sampleName");
         HEADER_TO_FIELD.put("英文名称", "englishName");
         HEADER_TO_FIELD.put("出厂货号", "factoryCode");
+        HEADER_TO_FIELD.put("货号", "factoryCode");
         HEADER_TO_FIELD.put("样品单位", "sampleUnit");
         HEADER_TO_FIELD.put("样品英文单位", "sampleUnitEn");
         HEADER_TO_FIELD.put("中文包装", "packagingCn");
+        HEADER_TO_FIELD.put("包装", "packagingCn");
         HEADER_TO_FIELD.put("英文包装", "packagingEn");
+        HEADER_TO_FIELD.put("包装编号", "packageCode");
         HEADER_TO_FIELD.put("出厂价", "factoryPrice");
         HEADER_TO_FIELD.put("价格", "factoryPrice");
+        HEADER_TO_FIELD.put("单价", "factoryPrice");
         HEADER_TO_FIELD.put("税点价", "taxPrice");
         HEADER_TO_FIELD.put("样品长度", "sampleLength");
-        HEADER_TO_FIELD.put("样品 长度", "sampleLength");
         HEADER_TO_FIELD.put("样品宽度", "sampleWidth");
         HEADER_TO_FIELD.put("样品高度", "sampleHeight");
         HEADER_TO_FIELD.put("样品毛重", "sampleGrossWeight");
@@ -166,6 +225,31 @@ public class SampleService {
         HEADER_TO_FIELD.put("修改日期", "updateTime");
         HEADER_TO_FIELD.put("侵权", "infringement");
         HEADER_TO_FIELD.put("电池信息", "batteryInfo");
+        HEADER_TO_FIELD.put("不在小竹熊显示", "hideFromXzx");
+        HEADER_TO_FIELD.put("是否不在小竹熊显示", "hideFromXzx");
+        HEADER_TO_FIELD.put("品名", "sampleName");
+        HEADER_TO_FIELD.put("产品名称", "sampleName");
+        // 复合列（在导入循环中单独处理拆分）
+        HEADER_TO_FIELD.put("包装规格", "_pkgDimensions");
+        HEADER_TO_FIELD.put("包装尺寸", "_pkgDimensions");
+        HEADER_TO_FIELD.put("外箱规格", "_cartonDimensions");
+        HEADER_TO_FIELD.put("外箱尺寸", "_cartonDimensions");
+        HEADER_TO_FIELD.put("规格", "_cartonDimensions");
+        HEADER_TO_FIELD.put("箱规", "_cartonDimensions");
+        HEADER_TO_FIELD.put("产品规格", "_productDimensions");
+        HEADER_TO_FIELD.put("产品尺寸", "_productDimensions");
+        HEADER_TO_FIELD.put("尺寸", "_productDimensions");
+        HEADER_TO_FIELD.put("毛/净重", "_grossNetWeight");
+        HEADER_TO_FIELD.put("毛净重", "_grossNetWeight");
+    }
+
+    // 表头匹配：去除空格后查找
+    private String resolveHeader(String rawHeader) {
+        if (rawHeader == null) return null;
+        String cleaned = rawHeader.replaceAll("\\s+", "");
+        String field = HEADER_TO_FIELD.get(cleaned);
+        if (field != null) return field;
+        return HEADER_TO_FIELD.get(rawHeader); // fallback
     }
 
     private static final Set<String> DECIMAL_FIELDS = new HashSet<>(Arrays.asList(
@@ -185,113 +269,274 @@ public class SampleService {
 
     public PageResult<Sample> list(long current, long size, String keyword, String category, String supplier,
                                    String manufacturerCode, String sortField, String sortOrder) {
-        LambdaQueryWrapper<Sample> wrapper = new LambdaQueryWrapper<>();
+        StringBuilder sql = new StringBuilder("SELECT * FROM samples WHERE deleted = 0");
+        List<Object> params = new ArrayList<>();
+
         if (StringUtils.hasText(keyword)) {
-            wrapper.and(w -> w
-                    .like(Sample::getSampleCode, keyword)
-                    .or()
-                    .like(Sample::getSampleName, keyword)
-                    .or()
-                    .like(Sample::getMaterial, keyword)
-                    .or()
-                    .like(Sample::getManufacturerCode, keyword));
+            sql.append(" AND (sample_code LIKE ? OR sample_name LIKE ? OR manufacturer_code LIKE ?)");
+            String kw = "%" + escapeLike(keyword) + "%";
+            params.add(kw);
+            params.add(kw);
+            params.add(kw);
         }
         if (StringUtils.hasText(category) && !"all".equals(category)) {
-            wrapper.eq(Sample::getCategory, category);
+            sql.append(" AND category = ?");
+            params.add(category);
         }
         if (StringUtils.hasText(supplier)) {
-            wrapper.like(Sample::getSupplier, supplier);
+            sql.append(" AND supplier LIKE ?");
+            params.add("%" + escapeLike(supplier) + "%");
         }
         if (StringUtils.hasText(manufacturerCode)) {
-            wrapper.eq(Sample::getManufacturerCode, manufacturerCode);
+            sql.append(" AND manufacturer_code = ?");
+            params.add(manufacturerCode);
         }
 
+        // Count query
+        String countSql = sql.toString().replaceFirst("SELECT \\*", "SELECT COUNT(1)");
+        Long total = jdbcTemplate.queryForObject(countSql, Long.class, params.toArray());
+
+        // Sort
+        String dbSortField = FIELD_COL_MAP.getOrDefault(sortField, "create_time");
         boolean asc = !"desc".equalsIgnoreCase(sortOrder);
         if ("hasThumbnail".equals(sortField)) {
-            wrapper.last("ORDER BY (SELECT COUNT(1) FROM sample_thumbnail WHERE sample_id = samples.id) " + (asc ? "ASC" : "DESC"));
-        } else if (StringUtils.hasText(sortField) && SORT_FIELD_MAP.containsKey(sortField)) {
-            wrapper.orderBy(true, asc, SORT_FIELD_MAP.get(sortField));
+            sql.append(" ORDER BY (SELECT COUNT(1) FROM sample_thumbnail WHERE sample_id = samples.id) ").append(asc ? "ASC" : "DESC");
         } else {
-            wrapper.orderByDesc(Sample::getCreateTime);
+            sql.append(" ORDER BY ").append(dbSortField).append(" ").append(asc ? "ASC" : "DESC");
         }
 
-        wrapper.select(
-            Sample::getId, Sample::getCreateTime, Sample::getUpdateTime, Sample::getSampleCode,
-            Sample::getManufacturerCode, Sample::getSampleName,
-            Sample::getEnglishName, Sample::getCategory, Sample::getFactoryCode,
-            Sample::getSampleUnit, Sample::getSampleUnitEn, Sample::getPackagingCn, Sample::getPackagingEn, Sample::getPackageCode,
-            Sample::getMaterial, Sample::getColor,
-            Sample::getColorEn, Sample::getSize, Sample::getWeight,
-            Sample::getOrigin, Sample::getSupplier, Sample::getBoothNo,
-            Sample::getContactPerson, Sample::getContactPhone,
-            Sample::getMobile, Sample::getFax, Sample::getQq,
-            Sample::getFactoryPrice, Sample::getTaxPrice,
-            Sample::getSampleLength, Sample::getSampleWidth, Sample::getSampleHeight,
-            Sample::getSampleGrossWeight, Sample::getSampleNetWeight,
-            Sample::getCartonLength, Sample::getCartonWidth, Sample::getCartonHeight,
-            Sample::getCartonMaterialVolume, Sample::getCartonVolume,
-            Sample::getInnerBoxCount, Sample::getCartonCapacity, Sample::getPackingUnit,
-            Sample::getPackageLength, Sample::getPackageWidth, Sample::getPackageHeight,
-            Sample::getCartonGrossWeight, Sample::getCartonNetWeight,
-            Sample::getCertification, Sample::getCertificationCount,
-            Sample::getDescription, Sample::getRemark, Sample::getRemarkEn,
-            Sample::getRegistrant, Sample::getInfringement, Sample::getBatteryInfo
-        );
+        // Page
+        sql.append(" LIMIT ? OFFSET ?");
+        params.add(size);
+        params.add((current - 1) * size);
 
-        IPage<Sample> page = sampleMapper.selectPage(new Page<>(current, size), wrapper);
-        PageResult<Sample> result = new PageResult<>(page.getRecords(), page.getTotal(), current, size);
+        List<Sample> records = jdbcTemplate.query(sql.toString(), new BeanPropertyRowMapper<>(Sample.class), params.toArray());
+        PageResult<Sample> result = new PageResult<>(records, total != null ? total : 0, current, size);
         fillThumbnails(result.getRecords());
         return result;
     }
 
-    public PageResult<Sample> advancedSearch(long current, long size, Map<String, String> params, String sortField, String sortOrder) {
-        LambdaQueryWrapper<Sample> wrapper = new LambdaQueryWrapper<>();
-        for (Map.Entry<String, String> entry : params.entrySet()) {
-            String key = entry.getKey();
-            String value = entry.getValue();
-            if (!StringUtils.hasText(value)) continue;
-            SFunction<Sample, ?> getter = SORT_FIELD_MAP.get(key);
-            if (getter == null) continue;
-            wrapper.like(getter, value);
+    public List<Sample> listByIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) return new ArrayList<>();
+        List<Sample> list = sampleMapper.selectBatchIds(ids);
+        return list != null ? list : new ArrayList<>();
+    }
+
+    public PageResult<Sample> advancedSearch(long current, long size, List<SearchCondition> conditions, String sortField, String sortOrder) {
+        log.info("[ADV_SEARCH] current={} size={} conditions={} sortField={} sortOrder={}", current, size, conditions != null ? conditions.size() : 0, sortField, sortOrder);
+        if (conditions != null) for (var c : conditions) log.info("[ADV_SEARCH]   cond: field={} op={} val={}", c.getField(), c.getOperator(), c.getValue());
+        // 1. 构建缓存key
+        String cacheKey = buildSearchCacheKey(current, size, conditions, sortField, sortOrder);
+        CacheEntry<PageResult<Sample>> cached = searchCache.get(cacheKey);
+        if (cached != null && !cached.expired()) {
+            return cached.data;
         }
 
+        // 2. 分离 keyword 条件与其他条件
+        String keyword = null;
+        List<SearchCondition> otherConditions = new ArrayList<>();
+        if (conditions != null) {
+            for (SearchCondition cond : conditions) {
+                if ("keyword".equals(cond.getField()) && cond.isValid()) {
+                    keyword = cond.getValue();
+                } else {
+                    otherConditions.add(cond);
+                }
+            }
+        }
+
+        // 3. 关键词搜索：FULLTEXT ngram（多字纯中文/字母数字）+ LIKE（单字词和含特殊字符词）
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            List<String> ftTerms = new ArrayList<>();   // FULLTEXT（>=2字符的纯中文/ASCII/数字，无特殊符号）
+            List<String> likeTerms = new ArrayList<>();  // LIKE（单字词、冒号变体、含特殊符号词）
+            for (String t : keyword.trim().split("\\s+")) {
+                String tt = t.trim();
+                if (tt.isEmpty()) continue;
+                boolean hasSpecial = tt.matches(".*[:：\\-/,.\\(\\)\\[\\]\"'@#$%^&*+=~`|\\\\].*");
+                if (tt.length() >= 2 && !hasSpecial) {
+                    if (!ftTerms.contains(tt)) ftTerms.add(tt);
+                } else {
+                    if (!likeTerms.contains(tt)) likeTerms.add(tt);
+                }
+                // 冒号变体（全角⇔半角）
+                if (tt.indexOf(':') >= 0) {
+                    String fw = tt.replace(':', '：');
+                    if (!likeTerms.contains(fw)) likeTerms.add(fw);
+                } else if (tt.indexOf('：') >= 0) {
+                    String hw = tt.replace('：', ':');
+                    if (!likeTerms.contains(hw)) likeTerms.add(hw);
+                }
+            }
+            log.info("[ADV_SEARCH] keyword='{}' ftTerms={} likeTerms={}", keyword, ftTerms, likeTerms);
+            IPage<Sample> page = sampleMapper.searchByKeyword(
+                    new Page<>(current, size), ftTerms, likeTerms, sortField, sortOrder);
+            PageResult<Sample> result = new PageResult<>(page.getRecords(), page.getTotal(), current, size);
+            fillThumbnails(result.getRecords());
+            // 缓存
+            if (searchCache.size() >= CACHE_MAX_SIZE) {
+                searchCache.entrySet().removeIf(e -> e.getValue().expired());
+            }
+            if (searchCache.size() < CACHE_MAX_SIZE) {
+                searchCache.put(cacheKey, new CacheEntry<>(result, System.currentTimeMillis() + CACHE_TTL_MS));
+            }
+            return result;
+        }
+
+        // 4. 非关键词条件：使用原有 JdbcTemplate 方式
+        StringBuilder where = new StringBuilder();
+        List<Object> params = new ArrayList<>();
+
+        if (otherConditions != null) {
+            for (SearchCondition cond : otherConditions) {
+                if (!cond.isValid()) continue;
+
+                if ("image".equals(cond.getField())) {
+                    if (where.length() > 0) where.append(" AND ");
+                    where.append("EXISTS (SELECT 1 FROM sample_thumbnail WHERE sample_id = samples.id)");
+                    continue;
+                }
+
+                // 标准字段
+                String col = FIELD_COL_MAP.get(cond.getField());
+                if (col == null) continue;
+                String op = cond.getOperator();
+                String val = cond.getValue();
+
+                if (where.length() > 0) where.append(" AND ");
+                switch (op) {
+                    case "eq":
+                        where.append(col).append(" = ?");
+                        params.add(val);
+                        break;
+                    case "ne":
+                        where.append(col).append(" <> ?");
+                        params.add(val);
+                        break;
+                    case "like":
+                        // 分词匹配：空格分割后每个词都必须在同列中出现
+                        String[] words = val.trim().split("\\s+");
+                        if (words.length > 1) {
+                            where.append("(");
+                            for (int i = 0; i < words.length; i++) {
+                                String w = words[i].trim();
+                                if (w.isEmpty()) continue;
+                                if (i > 0) where.append(" AND ");
+                                where.append(col).append(" LIKE CONCAT('%',?,'%')");
+                                params.add(w);
+                                // 冒号变体
+                                if (w.indexOf(':') >= 0) {
+                                    where.append(" AND ").append(col).append(" LIKE CONCAT('%',?,'%')");
+                                    params.add(w.replace(':', '：'));
+                                } else if (w.indexOf('：') >= 0) {
+                                    where.append(" AND ").append(col).append(" LIKE CONCAT('%',?,'%')");
+                                    params.add(w.replace('：', ':'));
+                                }
+                            }
+                            where.append(")");
+                        } else {
+                            where.append(col).append(" LIKE CONCAT('%',?,'%')");
+                            params.add(val.trim());
+                        }
+                        break;
+                    case "gt": case "ge": case "lt": case "le":
+                        String sqlOp = "gt".equals(op) ? ">" : "ge".equals(op) ? ">=" : "lt".equals(op) ? "<" : "<=";
+                        where.append(col).append(" ").append(sqlOp).append(" ?");
+                        try { params.add(new BigDecimal(val)); }
+                        catch (NumberFormatException ignored) { params.add(val); }
+                        break;
+                    default:
+                        // 默认按 like 处理（分词匹配）
+                        String[] defWords = val.trim().split("\\s+");
+                        if (defWords.length > 1) {
+                            where.append("(");
+                            for (int i = 0; i < defWords.length; i++) {
+                                String w = defWords[i].trim();
+                                if (w.isEmpty()) continue;
+                                if (i > 0) where.append(" AND ");
+                                where.append(col).append(" LIKE CONCAT('%',?,'%')");
+                                params.add(w);
+                                if (w.indexOf(':') >= 0) {
+                                    where.append(" AND ").append(col).append(" LIKE CONCAT('%',?,'%')");
+                                    params.add(w.replace(':', '：'));
+                                } else if (w.indexOf('：') >= 0) {
+                                    where.append(" AND ").append(col).append(" LIKE CONCAT('%',?,'%')");
+                                    params.add(w.replace('：', ':'));
+                                }
+                            }
+                            where.append(")");
+                        } else {
+                            where.append(col).append(" LIKE CONCAT('%',?,'%')");
+                            params.add(val.trim());
+                        }
+                }
+            }
+        }
+
+        // WHERE 前缀
+        String whereClause = where.length() > 0 ? " WHERE " + where.toString() : "";
+        log.info("[ADV_SEARCH] whereClause={} params={}", whereClause, params);
+
+        // 3. COUNT 查询
+        Long total = 0L;
+        try {
+            String countSql = "SELECT COUNT(*) FROM samples" + whereClause;
+            total = jdbcTemplate.queryForObject(countSql, Long.class, params.toArray());
+        } catch (Exception e) {
+            log.warn("Count query failed, falling back to limit count", e);
+            String countSql2 = "SELECT COUNT(*) FROM (SELECT 1 FROM samples" + whereClause + " LIMIT 10000) t";
+            total = jdbcTemplate.queryForObject(countSql2, Long.class, params.toArray());
+        }
+
+        // 4. 排序
+        String orderClause;
         boolean asc = !"desc".equalsIgnoreCase(sortOrder);
         if ("hasThumbnail".equals(sortField)) {
-            wrapper.last("ORDER BY (SELECT COUNT(1) FROM sample_thumbnail WHERE sample_id = samples.id) " + (asc ? "ASC" : "DESC"));
-        } else if (StringUtils.hasText(sortField) && SORT_FIELD_MAP.containsKey(sortField)) {
-            wrapper.orderBy(true, asc, SORT_FIELD_MAP.get(sortField));
+            orderClause = "ORDER BY (SELECT COUNT(1) FROM sample_thumbnail WHERE sample_id = samples.id) " + (asc ? "ASC" : "DESC");
+        } else if (sortField != null && !sortField.isEmpty()) {
+            String sortCol = FIELD_COL_MAP.get(sortField);
+            if (sortCol == null) sortCol = "create_time";
+            orderClause = "ORDER BY " + sortCol + " " + (asc ? "ASC" : "DESC");
         } else {
-            wrapper.orderByDesc(Sample::getCreateTime);
+            orderClause = "ORDER BY create_time DESC";
         }
 
-        wrapper.select(
-            Sample::getId, Sample::getCreateTime, Sample::getUpdateTime, Sample::getDeleted,
-            Sample::getSampleCode, Sample::getManufacturerCode, Sample::getSampleName,
-            Sample::getEnglishName, Sample::getCategory, Sample::getFactoryCode,
-            Sample::getSampleUnit, Sample::getSampleUnitEn, Sample::getPackagingCn,
-            Sample::getPackagingEn, Sample::getMaterial, Sample::getColor, Sample::getColorEn,
-            Sample::getSize, Sample::getWeight, Sample::getOrigin, Sample::getSupplier,
-            Sample::getBoothNo, Sample::getContactPerson, Sample::getContactPhone,
-            Sample::getMobile, Sample::getFax, Sample::getQq,
-            Sample::getFactoryPrice, Sample::getTaxPrice,
-            Sample::getSampleLength, Sample::getSampleWidth, Sample::getSampleHeight,
-            Sample::getSampleGrossWeight, Sample::getSampleNetWeight,
-            Sample::getCartonLength, Sample::getCartonWidth, Sample::getCartonHeight,
-            Sample::getCartonMaterialVolume, Sample::getCartonVolume,
-            Sample::getInnerBoxCount, Sample::getCartonCapacity,
-            Sample::getPackingUnit, Sample::getCartonGrossWeight, Sample::getCartonNetWeight,
-            Sample::getPackageLength, Sample::getPackageWidth, Sample::getPackageHeight,
-            Sample::getCertification, Sample::getCertificationCount,
-            Sample::getRemark,
-            Sample::getRegistrant, Sample::getModifier, Sample::getStatus,
-            Sample::getInfringement, Sample::getBatteryInfo,
-            Sample::getCreateBy, Sample::getUpdateBy
-        );
+        // 5. 数据查询
+        long offset = (current - 1) * size;
+        String sql = "SELECT * FROM samples" + whereClause + " " + orderClause + " LIMIT " + offset + ", " + size;
+        List<Sample> records = jdbcTemplate.query(sql, new BeanPropertyRowMapper<>(Sample.class), params.toArray());
 
-        IPage<Sample> page = sampleMapper.selectPage(new Page<>(current, size), wrapper);
-        PageResult<Sample> result = new PageResult<>(page.getRecords(), page.getTotal(), current, size);
+        PageResult<Sample> result = new PageResult<>(records, total != null ? total : 0L, current, size);
         fillThumbnails(result.getRecords());
+
+        // 6. 缓存
+        if (searchCache.size() >= CACHE_MAX_SIZE) {
+            searchCache.entrySet().removeIf(e -> e.getValue().expired());
+        }
+        if (searchCache.size() < CACHE_MAX_SIZE) {
+            searchCache.put(cacheKey, new CacheEntry<>(result, System.currentTimeMillis() + CACHE_TTL_MS));
+        }
+
         return result;
+    }
+
+    /** 构建搜索缓存key */
+    private String buildSearchCacheKey(long current, long size, List<SearchCondition> conditions, String sortField, String sortOrder) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(current).append('|').append(size).append('|').append(sortField).append('|').append(sortOrder);
+        if (conditions != null) {
+            for (SearchCondition c : conditions) {
+                if (c.isValid()) {
+                    sb.append('|').append(c.getField()).append('=').append(c.getOperator()).append('=').append(c.getValue());
+                }
+            }
+        }
+        return Integer.toHexString(sb.toString().hashCode());
+    }
+
+    /** 转义 LIKE 特殊字符，防止 SQL 注入和意外通配 */
+    private String escapeLike(String s) {
+        if (s == null) return "";
+        return s.replace("'", "''").replace("%", "\\%").replace("_", "\\_");
     }
 
     public Sample getById(Long id) {
@@ -349,8 +594,10 @@ public class SampleService {
                 "yyyy-MM-dd'T'HH:mm",
                 "yyyy/MM/dd HH:mm:ss",
                 "yyyy/MM/dd HH:mm",
-                "yyyy-M-d H:m:s",
-                "yyyy/M/d H:m:s",
+                "yyyy-M-d H:mm:ss",
+                "yyyy-M-d H:mm",
+                "yyyy/M/d H:mm:ss",
+                "yyyy/M/d H:mm",
                 "yyyy-MM-dd",
                 "yyyy/MM/dd"
         };
@@ -395,18 +642,37 @@ public class SampleService {
         Workbook workbook = new XSSFWorkbook(file.getInputStream());
         Sheet sheet = workbook.getSheetAt(0);
 
-        Row headerRow = sheet.getRow(0);
-        if (headerRow == null) {
+        // 自动检测表头行：扫描前5行，匹配别名最多的作为表头
+        Row headerRow = null;
+        int bestRow = 0;
+        int bestMatch = 0;
+        List<String> bestHeaders = new ArrayList<>();
+        for (int r = 0; r < Math.min(5, sheet.getLastRowNum() + 1); r++) {
+            Row candidate = sheet.getRow(r);
+            if (candidate == null) continue;
+            int match = 0;
+            List<String> tentative = new ArrayList<>();
+            for (int i = 0; i < candidate.getLastCellNum(); i++) {
+                Cell cell = candidate.getCell(i);
+                String val = getCellStringValue(cell).trim();
+                tentative.add(val);
+                if (StringUtils.hasText(val) && resolveHeader(val) != null) match++;
+            }
+            if (match > bestMatch) {
+                bestMatch = match;
+                bestRow = r;
+                bestHeaders = tentative;
+                headerRow = candidate;
+            }
+        }
+        if (headerRow == null || bestMatch == 0) {
             workbook.close();
-            throw new BusinessException(400, "Excel文件无表头行");
+            throw new BusinessException(400, "Excel文件中未找到可识别的表头行");
         }
+        List<String> headers = bestHeaders;
 
-        List<String> headers = new ArrayList<>();
-        for (int i = 0; i < headerRow.getLastCellNum(); i++) {
-            Cell cell = headerRow.getCell(i);
-            String val = getCellStringValue(cell).trim();
-            headers.add(val);
-        }
+        // 数据起始行 = 表头行 + 1，直接跳过前面的标题行
+        int dataStartRow = bestRow + 1;
 
         ImportResult result = new ImportResult();
         List<Map<String, String>> failedRows = new ArrayList<>();
@@ -424,7 +690,7 @@ public class SampleService {
 
         Set<String> importedCodes = new HashSet<>();
 
-        for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+        for (int i = dataStartRow; i <= sheet.getLastRowNum(); i++) {
             Row row = sheet.getRow(i);
             if (row == null) continue;
 
@@ -443,6 +709,7 @@ public class SampleService {
             try {
                 Sample sample = new Sample();
                 StringBuilder rowErrors = new StringBuilder();
+                Map<String, String> compositeValues = new HashMap<>();
 
                 for (int j = 0; j < headers.size(); j++) {
                     String header = headers.get(j);
@@ -452,8 +719,14 @@ public class SampleService {
                     String cellValue = getCellStringValue(cell).trim();
                     if (!StringUtils.hasText(cellValue)) continue;
 
-                    String fieldName = HEADER_TO_FIELD.get(header);
+                    String fieldName = resolveHeader(header);
                     if (fieldName == null) continue;
+
+                    // 复合列暂存到 map，后续统一拆分
+                    if (fieldName.startsWith("_")) {
+                        compositeValues.put(fieldName, cellValue);
+                        continue;
+                    }
 
                     try {
                         setFieldValue(sample, fieldName, cellValue);
@@ -462,6 +735,17 @@ public class SampleService {
                     } catch (Exception e) {
                         rowErrors.append(header).append("赋值失败; ");
                     }
+                }
+
+                // 复合列拆分
+                applySplits(sample, compositeValues);
+
+                // 自动生成公司编号：公司编号为空但样品名称有值时，基于现有编号最大值+1生成
+                if (!StringUtils.hasText(sample.getSampleCode()) && StringUtils.hasText(sample.getSampleName())) {
+                    Set<String> allExisting = new HashSet<>(existingCodes);
+                    allExisting.addAll(importedCodes);
+                    String generatedCode = generateNextSampleCode(allExisting);
+                    sample.setSampleCode(generatedCode);
                 }
 
                 if (!StringUtils.hasText(sample.getSampleCode()) && !StringUtils.hasText(sample.getSampleName())) {
@@ -489,6 +773,15 @@ public class SampleService {
                     continue;
                 }
 
+                // 将成功导入的编号加入已导入集合，防止同一批内重复
+                if (StringUtils.hasText(sample.getSampleCode())) {
+                    importedCodes.add(sample.getSampleCode().trim());
+                    existingCodes.add(sample.getSampleCode().trim());
+                }
+
+                // 根据厂商编码自动回填摊位号等信息
+                fillFromManufacturer(sample, null);
+
                 Long userId = UserContext.getUserId();
                 sample.setCreateBy(userId);
                 sample.setUpdateBy(userId);
@@ -503,8 +796,6 @@ public class SampleService {
                         sample.setUpdateBy(userId);
                         sample.setDeleted(0);
                         sampleMapper.updateById(sample);
-                        importedCodes.add(code);
-                        existingCodes.add(code);
                         CACHED_EXISTING_CODES.put(code, Boolean.TRUE);
                         successCount++;
                         continue;
@@ -512,9 +803,6 @@ public class SampleService {
                 }
 
                 sampleMapper.insert(sample);
-                if (StringUtils.hasText(sample.getSampleCode())) {
-                    importedCodes.add(sample.getSampleCode().trim());
-                }
                 successCount++;
             } catch (Exception e) {
                 log.warn("导入第{}行失败: {}", i + 1, e.getMessage());
@@ -558,12 +846,21 @@ public class SampleService {
         ensureCodesCacheLoaded();
 
         Set<String> importedCodes = new HashSet<>();
+        Map<String, Manufacturer> manufacturerCache = new HashMap<>();
 
         for (int i = 0; i < samples.size(); i++) {
             Sample sample = samples.get(i);
             try {
                 StringBuilder rowErrors = new StringBuilder();
                 boolean isDuplicate = false;
+
+                // 自动生成公司编号：公司编号为空但样品名称有值时，基于现有编号最大值+1生成
+                if (!StringUtils.hasText(sample.getSampleCode()) && StringUtils.hasText(sample.getSampleName())) {
+                    Set<String> allExisting = new HashSet<>(CACHED_EXISTING_CODES.keySet());
+                    allExisting.addAll(importedCodes);
+                    String generatedCode = generateNextSampleCode(allExisting);
+                    sample.setSampleCode(generatedCode);
+                }
 
                 if (!StringUtils.hasText(sample.getSampleCode()) && !StringUtils.hasText(sample.getSampleName())) {
                     rowErrors.append("公司编号和样品名称均为空; ");
@@ -573,6 +870,8 @@ public class SampleService {
                     String code = sample.getSampleCode().trim();
                     if (CACHED_EXISTING_CODES.containsKey(code)) {
                         if (updateMode) {
+                            // 根据厂商编码自动回填摊位号等信息
+                            fillFromManufacturer(sample, manufacturerCache);
                             truncateFields(sample, i, failedRows);
                             Long userId = UserContext.getUserId();
                             sample.setUpdateBy(userId);
@@ -610,6 +909,16 @@ public class SampleService {
                     continue;
                 }
 
+                // 将成功导入的编号加入已导入集合，防止同一批内重复
+                if (StringUtils.hasText(sample.getSampleCode())) {
+                    String code = sample.getSampleCode().trim();
+                    importedCodes.add(code);
+                    CACHED_EXISTING_CODES.put(code, Boolean.TRUE);
+                }
+
+                // 根据厂商编码自动回填摊位号等信息
+                fillFromManufacturer(sample, manufacturerCache);
+
                 truncateFields(sample, i, failedRows);
 
                 Long userId = UserContext.getUserId();
@@ -627,8 +936,6 @@ public class SampleService {
                         sample.setUpdateBy(userId);
                         sample.setDeleted(0);
                         sampleMapper.updateById(sample);
-                        importedCodes.add(code);
-                        CACHED_EXISTING_CODES.put(code, Boolean.TRUE);
                         successCount++;
                         continue;
                     }
@@ -636,11 +943,6 @@ public class SampleService {
 
                 sampleMapper.insert(sample);
 
-                if (StringUtils.hasText(sample.getSampleCode())) {
-                    String code = sample.getSampleCode().trim();
-                    importedCodes.add(code);
-                    CACHED_EXISTING_CODES.put(code, Boolean.TRUE);
-                }
                 successCount++;
             } catch (Exception e) {
                 log.warn("批量导入第{}条失败: {}", i + 1, e.getMessage());
@@ -683,6 +985,39 @@ public class SampleService {
         codesLoaded = true;
     }
 
+    /**
+     * 自动生成下一个公司编号：基于已有编号中字母+数字模式的数字部分最大值+1。
+     * 例如存在 YX01,YX02 → 返回 YX03；YX99 → 返回 YX100。
+     * 若数据库无任何编号，默认返回 YX01。
+     */
+    private String generateNextSampleCode(Set<String> existingCodes) {
+        String prefix = "YX";
+        int maxNum = 0;
+        int padding = 2;
+
+        for (String code : existingCodes) {
+            if (code == null) continue;
+            Matcher m = SAMPLE_CODE_PATTERN.matcher(code.trim());
+            if (m.matches()) {
+                String pfx = m.group(1).toUpperCase();
+                int num = Integer.parseInt(m.group(2));
+                int digits = m.group(2).length();
+                if (num > maxNum) {
+                    maxNum = num;
+                    prefix = pfx;
+                    padding = digits;
+                }
+            }
+        }
+
+        int next = maxNum + 1;
+        String formatted = String.format("%0" + padding + "d", next);
+        if (formatted.length() > padding) {
+            formatted = String.format("%0" + formatted.length() + "d", next);
+        }
+        return prefix + formatted;
+    }
+
     private void truncateFields(Sample sample, int rowIndex, List<Map<String, String>> failedRows) {
         int maxLen;
         maxLen = 20; if (sample.getQq() != null && sample.getQq().length() > maxLen) { sample.setQq(sample.getQq().substring(0, maxLen)); }
@@ -700,9 +1035,7 @@ public class SampleService {
         maxLen = 50; if (sample.getSampleUnitEn() != null && sample.getSampleUnitEn().length() > maxLen) { sample.setSampleUnitEn(sample.getSampleUnitEn().substring(0, maxLen)); }
         maxLen = 50; if (sample.getContactPerson() != null && sample.getContactPerson().length() > maxLen) { sample.setContactPerson(sample.getContactPerson().substring(0, maxLen)); }
         maxLen = 50; if (sample.getColor() != null && sample.getColor().length() > maxLen) { sample.setColor(sample.getColor().substring(0, maxLen)); }
-        maxLen = 50; if (sample.getWeight() != null && sample.getWeight().length() > maxLen) { sample.setWeight(sample.getWeight().substring(0, maxLen)); }
         maxLen = 100; if (sample.getCategory() != null && sample.getCategory().length() > maxLen) { sample.setCategory(sample.getCategory().substring(0, maxLen)); }
-        maxLen = 100; if (sample.getMaterial() != null && sample.getMaterial().length() > maxLen) { sample.setMaterial(sample.getMaterial().substring(0, maxLen)); }
         maxLen = 100; if (sample.getSize() != null && sample.getSize().length() > maxLen) { sample.setSize(sample.getSize().substring(0, maxLen)); }
         maxLen = 100; if (sample.getOrigin() != null && sample.getOrigin().length() > maxLen) { sample.setOrigin(sample.getOrigin().substring(0, maxLen)); }
         maxLen = 100; if (sample.getPackagingCn() != null && sample.getPackagingCn().length() > maxLen) { sample.setPackagingCn(sample.getPackagingCn().substring(0, maxLen)); }
@@ -718,6 +1051,10 @@ public class SampleService {
     }
 
     private void setFieldValue(Sample sample, String fieldName, String value) throws Exception {
+        if (fieldName.startsWith("_")) {
+            // 复合列暂存不直接赋值，后续通过 applySplits 处理
+            return;
+        }
         String setterName = "set" + fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1);
         Class<?> paramType;
 
@@ -737,6 +1074,83 @@ public class SampleService {
             paramType = String.class;
             Method setter = Sample.class.getMethod(setterName, paramType);
             setter.invoke(sample, value);
+        }
+    }
+
+    // === 复合列拆分方法 ===
+
+    // 尺寸拆分: 13.5*13.5*13.5 | 13.5x13.5x13.5CM → [长, 宽, 高]
+    private BigDecimal[] splitDimensions(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        String cleaned = raw.trim().replaceAll("(?i)cm$", "");
+        String[] parts = cleaned.split("[*xX]");
+        if (parts.length < 3) return null;
+        try {
+            BigDecimal l = new BigDecimal(parts[0].trim());
+            BigDecimal w = new BigDecimal(parts[1].trim());
+            BigDecimal h = new BigDecimal(parts[2].trim());
+            return new BigDecimal[]{l, w, h};
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    // 毛净重拆分: 26/24 → 毛重26 净重24 (大值=毛重)
+    private BigDecimal[] splitGrossNet(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        String[] parts = raw.trim().split("/");
+        if (parts.length < 2) return null;
+        try {
+            BigDecimal a = new BigDecimal(parts[0].trim());
+            BigDecimal b = new BigDecimal(parts[1].trim());
+            return new BigDecimal[]{a.max(b), a.min(b)}; // [gross, net]
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private void applySplits(Sample sample, Map<String, String> compositeValues) {
+        // 包装规格 → 包装长宽高
+        String pkgDim = compositeValues.get("_pkgDimensions");
+        if (pkgDim != null) {
+            BigDecimal[] dims = splitDimensions(pkgDim);
+            if (dims != null) {
+                sample.setPackageLength(dims[0]);
+                sample.setPackageWidth(dims[1]);
+                sample.setPackageHeight(dims[2]);
+                if (!StringUtils.hasText(sample.getPackagingCn())) {
+                    sample.setPackagingCn(pkgDim.trim());
+                }
+            }
+        }
+        // 外箱规格 → 外箱长宽高
+        String cartonDim = compositeValues.get("_cartonDimensions");
+        if (cartonDim != null) {
+            BigDecimal[] dims = splitDimensions(cartonDim);
+            if (dims != null) {
+                sample.setCartonLength(dims[0]);
+                sample.setCartonWidth(dims[1]);
+                sample.setCartonHeight(dims[2]);
+            }
+        }
+        // 产品规格 → 产品长宽高
+        String prodDim = compositeValues.get("_productDimensions");
+        if (prodDim != null) {
+            BigDecimal[] dims = splitDimensions(prodDim);
+            if (dims != null) {
+                sample.setSampleLength(dims[0]);
+                sample.setSampleWidth(dims[1]);
+                sample.setSampleHeight(dims[2]);
+            }
+        }
+        // 毛/净重 → 外箱毛重/净重
+        String gn = compositeValues.get("_grossNetWeight");
+        if (gn != null) {
+            BigDecimal[] gnv = splitGrossNet(gn);
+            if (gnv != null) {
+                sample.setCartonGrossWeight(gnv[0]);
+                sample.setCartonNetWeight(gnv[1]);
+            }
         }
     }
 
@@ -764,6 +1178,50 @@ public class SampleService {
                 }
             default:
                 return "";
+        }
+    }
+
+    /**
+     * 根据厂商编码从厂商表回填摊位号、厂商名称、联系人等信息（仅填充样品中为空的字段）
+     * @param sample 样品对象
+     * @param manufacturerCache 厂商缓存，批量导入时复用，单条导入传 null 即可
+     */
+    private void fillFromManufacturer(Sample sample, Map<String, Manufacturer> manufacturerCache) {
+        String mfrCode = sample.getManufacturerCode();
+        if (!StringUtils.hasText(mfrCode)) return;
+
+        Manufacturer mfr;
+        if (manufacturerCache != null) {
+            mfr = manufacturerCache.computeIfAbsent(mfrCode, code -> {
+                LambdaQueryWrapper<Manufacturer> qw = new LambdaQueryWrapper<>();
+                qw.eq(Manufacturer::getManufacturerCode, code).last("LIMIT 1");
+                return manufacturerMapper.selectOne(qw);
+            });
+        } else {
+            LambdaQueryWrapper<Manufacturer> qw = new LambdaQueryWrapper<>();
+            qw.eq(Manufacturer::getManufacturerCode, mfrCode).last("LIMIT 1");
+            mfr = manufacturerMapper.selectOne(qw);
+        }
+
+        if (mfr == null) return;
+
+        if (!StringUtils.hasText(sample.getBoothNo()) && StringUtils.hasText(mfr.getBoothNo())) {
+            sample.setBoothNo(mfr.getBoothNo());
+        }
+        if (!StringUtils.hasText(sample.getSupplier()) && StringUtils.hasText(mfr.getName())) {
+            sample.setSupplier(mfr.getName());
+        }
+        if (!StringUtils.hasText(sample.getContactPerson()) && StringUtils.hasText(mfr.getContact1())) {
+            sample.setContactPerson(mfr.getContact1());
+        }
+        if (!StringUtils.hasText(sample.getContactPhone()) && StringUtils.hasText(mfr.getPhone1())) {
+            sample.setContactPhone(mfr.getPhone1());
+        }
+        if (!StringUtils.hasText(sample.getMobile()) && StringUtils.hasText(mfr.getMobile1())) {
+            sample.setMobile(mfr.getMobile1());
+        }
+        if (!StringUtils.hasText(sample.getQq()) && StringUtils.hasText(mfr.getQq())) {
+            sample.setQq(mfr.getQq());
         }
     }
 
@@ -796,8 +1254,76 @@ public class SampleService {
 
     public int restoreDeleted(List<Long> ids) {
         if (ids == null || ids.isEmpty()) return 0;
-        String joined = ids.stream().map(String::valueOf).collect(Collectors.joining(","));
-        return sampleMapper.restoreByIds(joined);
+        return sampleMapper.restoreByIds(ids);
+    }
+
+    public List<Map<String, Object>> vendorConfirmReportData(List<Long> sampleIds) {
+        String sql = "SELECT m.id AS company_id, m.manufacturer_code AS vendor_code, s.manufacturer_code AS manufacturerCode, m.name AS vendor_name, "
+                + "m.booth_no AS boothNo, m.contact1 AS contact, m.mobile1 AS mobile, "
+                + "m.phone1 AS phone, m.qq AS qq, m.address AS address, "
+                + "m.booth_type AS boothType, m.floor_area AS floorZone, "
+                + "m.booth_area AS boothArea, m.certificate AS certNo, "
+                + "m.last_expiry AS lastExpiry, m.expiry_date AS expiryDate, "
+                + "m.registrant AS registrant, m.create_time AS createTime, "
+                + "s.id AS sample_id, s.sample_code AS sampleCode, s.sample_name AS sampleName, "
+                + "s.english_name AS englishName, s.factory_code AS factoryCode, "
+                + "s.sample_unit AS sampleUnit, s.packaging_cn AS packagingCn, "
+                + "s.packaging_en AS packagingEn, s.package_code AS packageCode, "
+                + "s.factory_price AS factoryPrice, s.tax_price AS taxPrice, "
+                + "CONCAT(s.sample_length,'x',s.sample_width,'x',s.sample_height) AS productSpec, "
+                + "s.sample_length AS sampleLength, s.sample_width AS sampleWidth, s.sample_height AS sampleHeight, "
+                + "s.sample_gross_weight AS sampleGrossWeight, s.sample_net_weight AS sampleNetWeight, "
+                + "s.carton_length AS cartonLength, s.carton_width AS cartonWidth, "
+                + "s.carton_height AS cartonHeight, "
+                + "CONCAT(s.carton_length,'x',s.carton_width,'x',s.carton_height) AS cartonSpec, "
+                + "s.carton_volume AS cartonVolume, s.carton_material_volume AS cartonMaterialVolume, "
+                + "s.carton_gross_weight AS cartonGrossWeight, s.carton_net_weight AS cartonNetWeight, "
+                + "s.inner_box_count AS innerBoxCount, s.carton_capacity AS cartonCapacity, "
+                + "s.packing_unit AS packingUnit, "
+                + "s.package_length AS packageLength, s.package_width AS packageWidth, s.package_height AS packageHeight, "
+                + "CONCAT(s.package_length,'x',s.package_width,'x',s.package_height) AS packageSpec, "
+                + "s.certification AS certification, s.category AS category, s.category_code AS categoryCode, "
+                + "s.color AS color, s.size AS size, "
+                + "s.battery_info AS batteryInfo, "
+                + "s.hide_from_xzx AS hideFromXzx, "
+                + "s.infringement AS infringement, "
+                + "s.remark AS remarkCn, s.remark_en AS remarkEn, "
+                + "CONCAT('http://localhost:8080/thumbnails/', st.thumbnail) AS imagePath, "
+                + "st.thumbnail AS thumbnail, "
+                + "NOW() AS printTime "
+                + "FROM manufacturers m "
+                + "LEFT JOIN samples s ON m.manufacturer_code = s.manufacturer_code "
+                + "LEFT JOIN sample_thumbnail st ON st.sample_id = s.id "
+                + "WHERE m.deleted = 0 AND s.deleted = 0 ";
+
+        if (sampleIds != null && !sampleIds.isEmpty()) {
+            String placeholders = sampleIds.stream().map(id -> "?").collect(Collectors.joining(","));
+            sql += "AND s.id IN (" + placeholders + ") ";
+        } else {
+            // 空列表 = 没有匹配数据，加一个永远不成立的条件
+            sql += "AND 1=0 ";
+        }
+        sql += "ORDER BY m.create_time DESC, s.create_time DESC";
+
+        if (sampleIds != null && !sampleIds.isEmpty()) {
+            Object[] params = sampleIds.toArray();
+            return jdbcTemplate.queryForList(sql, params);
+        }
+        return jdbcTemplate.queryForList(sql);
+    }
+
+    /**
+     * 获取当前活跃操作员名称（打印报表用）
+     */
+    public String getActiveOperatorName() {
+        try {
+            return jdbcTemplate.queryForObject(
+                "SELECT COALESCE(real_name, '') FROM users WHERE status = 1 LIMIT 1",
+                String.class
+            );
+        } catch (Exception e) {
+            return "";
+        }
     }
 
 }
