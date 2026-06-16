@@ -1,21 +1,26 @@
 package com.app.service;
 
 import com.app.common.PageResult;
+import com.app.common.Result;
 import com.app.dto.ImportResult;
 import com.app.entity.Manufacturer;
 import com.app.mapper.ManufacturerMapper;
 import com.app.util.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -29,6 +34,9 @@ public class ManufacturerService {
 
     @Autowired
     private ManufacturerMapper manufacturerMapper;
+
+    @Value("${app.upload.image-path}")
+    private String imagePath;
 
     private static final Map<String, SFunction<Manufacturer, ?>> SORT_FIELD_MAP = new LinkedHashMap<>();
     static {
@@ -47,6 +55,12 @@ public class ManufacturerService {
                 .like(Manufacturer::getName, keyword)
                 .or()
                 .like(Manufacturer::getManufacturerCode, keyword)
+                .or()
+                .like(Manufacturer::getBoothNo, keyword)
+                .or()
+                .like(Manufacturer::getMobile1, keyword)
+                .or()
+                .like(Manufacturer::getSmsNumber, keyword)
                 .or()
                 .like(Manufacturer::getContact1, keyword));
         }
@@ -97,6 +111,48 @@ public class ManufacturerService {
 
     public void deleteBatch(Long[] ids) {
         manufacturerMapper.deleteBatchIds(Arrays.asList(ids));
+    }
+
+    public Result<Map<String, String>> uploadCertificate(Long id, MultipartFile file) {
+        try {
+            Manufacturer manufacturer = manufacturerMapper.selectById(id);
+            if (manufacturer == null) {
+                return Result.error(404, "厂商不存在");
+            }
+
+            String originalFilename = file.getOriginalFilename();
+            String ext = "";
+            if (originalFilename != null && originalFilename.contains(".")) {
+                ext = originalFilename.substring(originalFilename.lastIndexOf("."));
+            }
+            String filename = "certificate_" + id + "_" + System.currentTimeMillis() + ext;
+            Path dir = Paths.get(imagePath);
+            if (!Files.exists(dir)) {
+                Files.createDirectories(dir);
+            }
+            Path filePath = dir.resolve(filename);
+            file.transferTo(filePath.toFile());
+
+            // Delete old certificate file if exists
+            String oldCertificate = manufacturer.getCertificate();
+            if (StringUtils.hasText(oldCertificate)) {
+                try {
+                    Path oldPath = Paths.get(imagePath, oldCertificate);
+                    Files.deleteIfExists(oldPath);
+                } catch (Exception ignored) {}
+            }
+
+            manufacturer.setCertificate(filename);
+            manufacturer.setUpdateBy(UserContext.getUserId());
+            manufacturerMapper.updateById(manufacturer);
+
+            Map<String, String> result = new LinkedHashMap<>();
+            result.put("filePath", filename);
+            return Result.success("上传成功", result);
+        } catch (Exception e) {
+            log.error("上传营业执照失败: {}", e.getMessage(), e);
+            return Result.error(500, "上传失败: " + e.getMessage());
+        }
     }
 
     @Transactional
@@ -234,5 +290,8 @@ public class ManufacturerService {
         maxLen = 100; if (m.getCertificate() != null && m.getCertificate().length() > maxLen) { m.setCertificate(m.getCertificate().substring(0, maxLen)); }
         maxLen = 50; if (m.getSmsNumber() != null && m.getSmsNumber().length() > maxLen) { m.setSmsNumber(m.getSmsNumber().substring(0, maxLen)); }
         maxLen = 100; if (m.getName() != null && m.getName().length() > maxLen) { m.setName(m.getName().substring(0, maxLen)); }
+        maxLen = 20; if (m.getContact3() != null && m.getContact3().length() > maxLen) { m.setContact3(m.getContact3().substring(0, maxLen)); }
+        maxLen = 50; if (m.getTelevision() != null && m.getTelevision().length() > maxLen) { m.setTelevision(m.getTelevision().substring(0, maxLen)); }
+        maxLen = 20; if (m.getCanInvoice() != null && m.getCanInvoice().length() > maxLen) { m.setCanInvoice(m.getCanInvoice().substring(0, maxLen)); }
     }
 }

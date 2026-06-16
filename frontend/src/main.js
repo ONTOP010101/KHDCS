@@ -8,11 +8,6 @@ import { VxeLoading, VxeTooltip } from 'vxe-pc-ui'
 import './styles/base-layout.css'
 import './styles/common.css'
 import './styles/login.css'
-import './styles/sample.css'
-import './styles/gallery.css'
-import './styles/friends.css'
-import './styles/users.css'
-import './styles/roles.css'
 
 const app = createApp(App)
 app.use(router)

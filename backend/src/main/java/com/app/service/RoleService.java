@@ -12,7 +12,6 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +43,29 @@ public class RoleService {
 
         IPage<Role> page = roleMapper.selectPage(new Page<>(current, size), wrapper);
 
+        if (page.getRecords().isEmpty()) {
+            return new PageResult<>(List.of(), page.getTotal(), current, size);
+        }
+
+        // 批量查询所有角色的权限，避免N+1问题
+        List<Long> roleIds = page.getRecords().stream().map(Role::getId).collect(Collectors.toList());
+
+        LambdaQueryWrapper<RolePermission> rpWrapper = new LambdaQueryWrapper<>();
+        rpWrapper.in(RolePermission::getRoleId, roleIds);
+        List<RolePermission> allRolePermissions = rolePermissionMapper.selectList(rpWrapper);
+
+        // 批量查询所有相关权限
+        List<Long> permIds = allRolePermissions.stream()
+                .map(RolePermission::getPermissionId).distinct().collect(Collectors.toList());
+        Map<Long, Permission> permMap = new HashMap<>();
+        if (!permIds.isEmpty()) {
+            permissionMapper.selectBatchIds(permIds).forEach(p -> permMap.put(p.getId(), p));
+        }
+
+        // 按roleId分组
+        Map<Long, List<RolePermission>> rpByRole = allRolePermissions.stream()
+                .collect(Collectors.groupingBy(RolePermission::getRoleId));
+
         List<Map<String, Object>> records = page.getRecords().stream().map(role -> {
             Map<String, Object> record = new HashMap<>();
             record.put("id", role.getId());
@@ -53,18 +75,16 @@ public class RoleService {
             record.put("status", role.getStatus());
             record.put("createTime", role.getCreateTime());
 
-            LambdaQueryWrapper<RolePermission> rpWrapper = new LambdaQueryWrapper<>();
-            rpWrapper.eq(RolePermission::getRoleId, role.getId());
-            List<RolePermission> rolePermissions = rolePermissionMapper.selectList(rpWrapper);
-            List<String> permissions = rolePermissions.stream()
+            List<RolePermission> rps = rpByRole.getOrDefault(role.getId(), List.of());
+            List<String> permissions = rps.stream()
                     .map(rp -> {
-                        Permission p = permissionMapper.selectById(rp.getPermissionId());
+                        Permission p = permMap.get(rp.getPermissionId());
                         return p != null ? p.getCode() : null;
                     })
                     .filter(p -> p != null)
                     .collect(Collectors.toList());
             record.put("permissions", permissions);
-            record.put("permissionIds", rolePermissions.stream().map(RolePermission::getPermissionId).collect(Collectors.toList()));
+            record.put("permissionIds", rps.stream().map(RolePermission::getPermissionId).collect(Collectors.toList()));
 
             return record;
         }).collect(Collectors.toList());
@@ -72,7 +92,6 @@ public class RoleService {
         return new PageResult<>(records, page.getTotal(), current, size);
     }
 
-    @Cacheable(value = "roles", key = "#id")
     public Map<String, Object> getById(Long id) {
         Role role = roleMapper.selectById(id);
         if (role == null) {
@@ -87,12 +106,19 @@ public class RoleService {
         record.put("status", role.getStatus());
         record.put("createTime", role.getCreateTime());
 
-        LambdaQueryWrapper<RolePermission> rpWrapper = new LambdaQueryWrapper<>();
-        rpWrapper.eq(RolePermission::getRoleId, id);
-        List<RolePermission> rolePermissions = rolePermissionMapper.selectList(rpWrapper);
-        record.put("permissionIds", rolePermissions.stream().map(RolePermission::getPermissionId).collect(Collectors.toList()));
+        List<Long> permIds = getPermissionIdsByRoleId(id);
+        record.put("permissionIds", permIds);
 
         return record;
+    }
+
+    public List<Long> getPermissionIdsByRoleId(Long roleId) {
+        LambdaQueryWrapper<RolePermission> rpWrapper = new LambdaQueryWrapper<>();
+        rpWrapper.eq(RolePermission::getRoleId, roleId);
+        List<RolePermission> rolePermissions = rolePermissionMapper.selectList(rpWrapper);
+        return rolePermissions.stream()
+                .map(RolePermission::getPermissionId)
+                .collect(Collectors.toList());
     }
 
     @Transactional
@@ -129,7 +155,6 @@ public class RoleService {
     }
 
     @Transactional
-    @CacheEvict(value = "roles", key = "#id")
     public void delete(Long id) {
         Role role = roleMapper.selectById(id);
         if (role == null) {
@@ -145,7 +170,14 @@ public class RoleService {
     }
 
     @Transactional
-    @CacheEvict(value = "roles", key = "#id")
+    public void batchDelete(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) return;
+        for (Long id : ids) {
+            delete(id);
+        }
+    }
+
+    @Transactional
     public void updatePermissions(Long id, List<Long> permissionIds) {
         Role role = roleMapper.selectById(id);
         if (role == null) {

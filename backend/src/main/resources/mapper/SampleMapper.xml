@@ -7,7 +7,7 @@
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
             AND (
-                MATCH(sample_name, material, description) AGAINST(#{keyword} IN BOOLEAN MODE)
+                MATCH(sample_name) AGAINST(#{keyword} IN BOOLEAN MODE)
                 OR sample_code LIKE CONCAT('%', #{keywordRaw}, '%')
             )
         </if>
@@ -17,7 +17,67 @@
         <if test="supplier != null and supplier != ''">
             AND supplier LIKE CONCAT('%', #{supplier}, '%')
         </if>
-        ORDER BY ${sortField} ${sortOrder}
+        ORDER BY
+        <choose>
+            <when test="sortField == 'sample_name'">sample_name</when>
+            <when test="sortField == 'category'">category</when>
+            <when test="sortField == 'supplier'">supplier</when>
+            <when test="sortField == 'create_time'">create_time</when>
+            <when test="sortField == 'update_time'">update_time</when>
+            <otherwise>create_time</otherwise>
+        </choose>
+        <choose>
+            <when test="sortOrder == 'asc' or sortOrder == 'ASC'">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>
+    </select>
+
+    <select id="searchByKeyword" resultType="com.app.entity.Sample">
+        SELECT * FROM samples WHERE deleted = 0
+        <!-- FULLTEXT ngram: 多字词(>=2字符)用全文索引快速过滤 -->
+        <if test="ftTerms != null and ftTerms.size() > 0">
+            AND MATCH(sample_name, sample_code, factory_code, manufacturer_code,
+                      supplier, packaging_cn, category)
+                AGAINST(
+                <foreach collection="ftTerms" item="t" separator=" ">
+                    +#{t}
+                </foreach>
+                IN BOOLEAN MODE
+                )
+        </if>
+        <!-- LIKE: 单字词和冒号变体精确补充过滤 -->
+        <if test="likeTerms != null and likeTerms.size() > 0">
+            AND (
+            <foreach collection="likeTerms" item="t" separator=" AND ">
+                (
+                    sample_name LIKE CONCAT('%', #{t}, '%')
+                    OR sample_code LIKE CONCAT('%', #{t}, '%')
+                    OR factory_code LIKE CONCAT('%', #{t}, '%')
+                    OR manufacturer_code LIKE CONCAT('%', #{t}, '%')
+                    OR supplier LIKE CONCAT('%', #{t}, '%')
+                    OR packaging_cn LIKE CONCAT('%', #{t}, '%')
+                    OR category LIKE CONCAT('%', #{t}, '%')
+                )
+            </foreach>
+            )
+        </if>
+        <!-- 没有任何搜索词时也返回空结果 -->
+        <if test="(ftTerms == null or ftTerms.size() == 0) and (likeTerms == null or likeTerms.size() == 0)">
+            AND 1=0
+        </if>
+        ORDER BY
+        <choose>
+            <when test="sortField == 'sample_name'">sample_name</when>
+            <when test="sortField == 'category'">category</when>
+            <when test="sortField == 'supplier'">supplier</when>
+            <when test="sortField == 'create_time'">create_time</when>
+            <when test="sortField == 'update_time'">update_time</when>
+            <otherwise>create_time</otherwise>
+        </choose>
+        <choose>
+            <when test="sortOrder == 'asc' or sortOrder == 'ASC'">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>
     </select>
 
     <select id="selectDeleted" resultType="com.app.entity.Sample">
@@ -25,7 +85,11 @@
     </select>
 
     <update id="restoreByIds">
-        UPDATE samples SET deleted = 0 WHERE id IN (#{ids}) AND deleted = 1
+        UPDATE samples SET deleted = 0 WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        AND deleted = 1
     </update>
 
 </mapper>

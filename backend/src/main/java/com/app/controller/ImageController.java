@@ -1,16 +1,21 @@
 package com.app.controller;
 
-import com.app.common.PageResult;
 import com.app.common.Result;
+import com.app.dto.UploadTask;
 import com.app.entity.Image;
 import com.app.util.DeepFeatureExtractor;
+import com.app.service.ImageAsyncUploadService;
 import com.app.service.ImageService;
 import com.app.service.PgVectorService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 
@@ -20,6 +25,9 @@ public class ImageController {
 
     @Autowired
     private ImageService imageService;
+
+    @Autowired
+    private ImageAsyncUploadService asyncUploadService;
 
     @Autowired(required = false)
     private PgVectorService pgVectorService;
@@ -41,41 +49,91 @@ public class ImageController {
         return Result.success("批量上传成功", imageService.uploadBatch(files, galleryId));
     }
 
+    @PostMapping("/upload/async")
+    public Result<UploadTask> uploadAsync(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(required = false) Long galleryId,
+            @RequestParam(required = false) Long sampleId,
+            @RequestParam(required = false) String description,
+            @RequestParam(required = false) String tags) {
+        UploadTask task = asyncUploadService.submit(file, galleryId, sampleId, description, tags);
+        return Result.success("已加入上传队列", task);
+    }
+
+    @PostMapping("/upload/async-batch")
+    public Result<List<UploadTask>> uploadAsyncBatch(
+            @RequestParam("files") MultipartFile[] files,
+            @RequestParam(required = false) Long galleryId) {
+        List<UploadTask> tasks = asyncUploadService.submitBatch(
+                java.util.Arrays.asList(files), galleryId);
+        return Result.success("已加入上传队列", tasks);
+    }
+
+    @GetMapping("/upload/progress/{taskId}")
+    public Result<UploadTask> getUploadProgress(@PathVariable String taskId) {
+        return Result.success(asyncUploadService.getTask(taskId));
+    }
+
+    @PostMapping("/upload/progress-batch")
+    public Result<List<UploadTask>> getUploadProgressBatch(@RequestBody java.util.List<String> taskIds) {
+        return Result.success(asyncUploadService.getTasks(taskIds));
+    }
+
+    @GetMapping("/upload/queue-depth")
+    public Result<Integer> getQueueDepth() {
+        return Result.success(asyncUploadService.getQueueDepth());
+    }
+
     @GetMapping("/view/{id}")
-    public ResponseEntity<byte[]> viewById(@PathVariable Long id) {
+    public ResponseEntity<Resource> viewById(@PathVariable Long id) {
         Image image = imageService.loadImageInfo(id);
-        byte[] data = imageService.loadImageById(id);
+        Resource resource = imageService.loadImageByIdAsResource(id);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setCacheControl(CacheControl.maxAge(30, java.util.concurrent.TimeUnit.DAYS).cachePublic());
         headers.setContentType(getMediaType(image.getFileType()));
-        headers.setContentLength(data.length);
 
-        return new ResponseEntity<>(data, headers, HttpStatus.OK);
+        return new ResponseEntity<>(resource, headers, HttpStatus.OK);
     }
 
     @GetMapping("/view/hash/{hash}")
-    public ResponseEntity<byte[]> viewByHash(@PathVariable String hash) {
-        byte[] data = imageService.loadImage(hash);
+    public ResponseEntity<Resource> viewByHash(@PathVariable String hash) {
+        Resource resource = imageService.loadImageAsResource(hash);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setCacheControl(CacheControl.maxAge(30, java.util.concurrent.TimeUnit.DAYS).cachePublic());
         headers.setContentType(MediaType.IMAGE_JPEG);
-        headers.setContentLength(data.length);
 
-        return new ResponseEntity<>(data, headers, HttpStatus.OK);
+        return new ResponseEntity<>(resource, headers, HttpStatus.OK);
     }
 
     @GetMapping("/thumbnail/{id}")
-    public ResponseEntity<byte[]> thumbnail(@PathVariable Long id) {
-        byte[] data = imageService.loadThumbnail(id);
+    public ResponseEntity<Resource> thumbnail(@PathVariable Long id) {
+        Resource resource = imageService.loadThumbnailAsResource(id);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setCacheControl(CacheControl.maxAge(30, java.util.concurrent.TimeUnit.DAYS).cachePublic());
-        headers.setContentType(MediaType.IMAGE_JPEG);
-        headers.setContentLength(data.length);
 
-        return new ResponseEntity<>(data, headers, HttpStatus.OK);
+        // Detect MIME type from file extension
+        MediaType mediaType = MediaType.IMAGE_JPEG; // default
+        try {
+            Path filePath = resource.getFile().toPath();
+            String contentType = Files.probeContentType(filePath);
+            if (contentType != null) {
+                mediaType = MediaType.parseMediaType(contentType);
+            } else {
+                // fallback: check extension
+                String name = filePath.getFileName().toString().toLowerCase();
+                if (name.endsWith(".webp")) {
+                    mediaType = MediaType.parseMediaType("image/webp");
+                } else if (name.endsWith(".png")) {
+                    mediaType = MediaType.IMAGE_PNG;
+                }
+            }
+        } catch (Exception ignored) {}
+        headers.setContentType(mediaType);
+
+        return new ResponseEntity<>(resource, headers, HttpStatus.OK);
     }
 
     @GetMapping("/sample/{sampleId}")
@@ -208,14 +266,19 @@ public class ImageController {
         return Result.success(imageService.backfillPgVector());
     }
 
+    @PostMapping("/regenerate-thumbnails")
+    public Result<Map<String, Object>> regenerateThumbnails() {
+        return Result.success(imageService.regenerateAllThumbnails());
+    }
+
     @PostMapping("/test-pgvector-insert")
     public Result<Map<String, Object>> testPgVectorInsert() {
         return Result.success(imageService.testPgVectorInsert());
     }
 
     @GetMapping("/pgvector-check/{id}")
-    public Result<Map<String, Object>> pgVectorCheck(@PathVariable long id, @RequestParam(required = false) String shardPrefix) {
-        return Result.success(imageService.pgVectorCheck(id, shardPrefix));
+    public Result<Map<String, Object>> pgVectorCheck(@PathVariable long id) {
+        return Result.success(imageService.pgVectorCheck(id));
     }
 
     private MediaType getMediaType(String ext) {

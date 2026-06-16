@@ -31,10 +31,52 @@ const routes = [
         meta: { title: '样品资料', subtitle: '按厂商查看样品', icon: 'database', keepAlive: true, dynamicTitle: true }
       },
       {
+        path: 'stall-info',
+        name: 'StallInfo',
+        component: () => import('@/views/stall/StallInfoView.vue'),
+        meta: { title: '摊位资料', subtitle: '管理摊位信息与展位数据', icon: 'store', keepAlive: true }
+      },
+      {
+        path: 'stall-overview',
+        name: 'StallOverview',
+        component: () => import('@/views/stall/StallOverviewView.vue'),
+        meta: { title: '摊位概况', subtitle: '查看摊位统计概况与分布', icon: 'chart-bar', keepAlive: true }
+      },
+      {
+        path: 'customer-info',
+        name: 'CustomerInfo',
+        component: () => import('@/views/customer/CustomerInfoView.vue'),
+        meta: { title: '客户资料', subtitle: '管理客户信息与业务记录', icon: 'contact', keepAlive: true }
+      },
+      {
+        path: 'removed-manufacturer',
+        name: 'RemovedManufacturer',
+        component: () => import('@/views/removed/RemovedManufacturerView.vue'),
+        meta: { title: '下架厂商资料', subtitle: '查看已下架的厂商资料信息', icon: 'archive-x', keepAlive: true }
+      },
+      {
+        path: 'removed-sample',
+        name: 'RemovedSample',
+        component: () => import('@/views/removed/RemovedSampleView.vue'),
+        meta: { title: '下架样品资料', subtitle: '查看已下架的样品资料信息', icon: 'archive-x', keepAlive: true }
+      },
+      {
+        path: 'manufacturer-export',
+        name: 'ManufacturerExport',
+        component: () => import('@/views/export/ManufacturerExportView.vue'),
+        meta: { title: '厂商带出记录', subtitle: '查看厂商带出记录与历史', icon: 'file-text', keepAlive: true }
+      },
+      {
         path: 'gallery',
         name: 'Gallery',
         component: () => import('@/views/gallery/GalleryView.vue'),
         meta: { title: '择样图库', subtitle: '管理择样图片资料、代号、客户与拍摄记录', icon: 'image', keepAlive: true }
+      },
+      {
+        path: 'client-sample',
+        name: 'ClientSample',
+        component: () => import('@/views/clientSample/ClientSampleView.vue'),
+        meta: { title: '客户择样', subtitle: '管理客户择样信息与业务记录', icon: 'clipboard-check', keepAlive: true }
       },
       {
         path: 'manufacturer',
@@ -73,6 +115,12 @@ const routes = [
         meta: { title: '图像搜索', keepAlive: true }
       }
     ]
+  },
+  {
+    path: '/report/designer',
+    name: 'ReportDesigner',
+    component: () => import('@/views/report/ReportDesigner.vue'),
+    meta: { title: '报表设计器', keepAlive: false, requiresAuth: false }
   }
 ]
 

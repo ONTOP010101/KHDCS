@@ -242,6 +242,7 @@
       height: 100vh;
       padding: 16px;
       animation: fadeInLeft 0.65s cubic-bezier(.2,.8,.2,1);
+      transition: none;
     }
 
     .sidebar-shell {
@@ -568,6 +569,249 @@
       width: 3px;
       height: 18px;
       background: var(--blue);
+    }
+
+    /* Collapse toggle */
+    .sidebar-collapse-area {
+      padding: 6px 12px 8px;
+    }
+
+    .collapse-toggle {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      width: calc(100% - 8px);
+      margin: 4px;
+      padding: 12px 13px;
+      border-radius: 18px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: rgba(29,29,31,0.38);
+      cursor: pointer;
+      user-select: none;
+      font-size: 13.5px;
+      font-weight: 620;
+      letter-spacing: -0.015em;
+      transition:
+        transform 0.22s ease,
+        background 0.22s ease,
+        border-color 0.22s ease,
+        color 0.22s ease,
+        box-shadow 0.22s ease;
+    }
+
+    .collapse-toggle:hover {
+      color: #1d1d1f;
+      transform: translateX(3px);
+      background: rgba(255,255,255,0.72);
+      border-color: rgba(0,122,255,0.10);
+      box-shadow:
+        0 10px 24px rgba(0,122,255,0.07),
+        inset 0 1px 0 rgba(255,255,255,0.94);
+    }
+
+    /* Sidebar collapsed */
+    .sidebar.collapsed {
+      --sidebar-width: 72px;
+      min-width: 72px;
+      padding: 12px 5px;
+    }
+
+    .sidebar.collapsed .sidebar-shell {
+      border-radius: 24px;
+      overflow: visible;
+    }
+
+    .sidebar.collapsed .sidebar-nav {
+      overflow: visible;
+    }
+
+    .sidebar.collapsed .brand-info,
+    .sidebar.collapsed .system-pill span:last-child,
+    .sidebar.collapsed .section-title,
+    .sidebar.collapsed .sidebar-item span,
+    .sidebar.collapsed .item-badge,
+    .sidebar.collapsed .chevron,
+    .sidebar.collapsed .avatar-stack,
+    .sidebar.collapsed .user-info,
+    .sidebar.collapsed .flex-1,
+    .sidebar.collapsed .pulse-dot {
+      display: none;
+    }
+
+    /* 折叠时子菜单作为悬浮弹窗 */
+    .sidebar.collapsed .nav-section {
+      position: relative;
+    }
+
+    .sidebar.collapsed .sub-menu {
+      display: block;
+      max-height: none;
+      overflow: visible;
+      position: absolute;
+      left: calc(100% + 6px);
+      top: -4px;
+      min-width: 140px;
+      padding: 6px 8px;
+      margin: 0;
+      border-left: none;
+      border-radius: 16px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.96), rgba(240,248,255,0.92));
+      border: 1px solid rgba(0,122,255,0.12);
+      box-shadow:
+        0 16px 40px rgba(0,91,181,0.14),
+        0 6px 16px rgba(0,0,0,0.06);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.18s ease, visibility 0.18s ease;
+      z-index: 100;
+    }
+
+    .sidebar.collapsed .nav-section:hover .sub-menu {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    .sidebar.collapsed .sub-menu .sidebar-item {
+      justify-content: flex-start;
+      padding: 9px 12px;
+      width: 100%;
+      margin: 2px 0;
+      border-radius: 12px;
+    }
+
+    .sidebar.collapsed .sub-menu .sidebar-item span {
+      display: inline;
+      white-space: nowrap;
+      font-size: 13px;
+      color: rgba(29,29,31,0.65);
+    }
+
+    .sidebar.collapsed .sub-menu .sidebar-item:hover span {
+      color: #1d1d1f;
+    }
+
+    .sidebar.collapsed .sub-menu .sidebar-item.active span {
+      color: var(--blue);
+    }
+
+    .sidebar.collapsed .sub-menu .sidebar-item .item-badge {
+      display: inline-flex;
+    }
+
+    .sidebar.collapsed .sub-menu .sidebar-item.active::before {
+      display: none;
+    }
+
+    .sidebar.collapsed .brand-card {
+      padding: 8px 4px;
+      gap: 0;
+      justify-content: center;
+    }
+
+    .sidebar.collapsed .brand-area {
+      padding: 14px 6px 10px;
+    }
+
+    .sidebar.collapsed .system-pill {
+      justify-content: center;
+      padding: 0;
+      width: 34px;
+      height: 34px;
+      margin: 8px auto 0;
+      border-radius: 12px;
+    }
+
+    .sidebar.collapsed .sidebar-nav {
+      padding: 10px 2px;
+    }
+
+    .sidebar.collapsed .nav-section {
+      margin-bottom: 8px;
+    }
+
+    .sidebar.collapsed .sidebar-item {
+      justify-content: center;
+      padding: 11px 8px;
+      width: calc(100% - 2px);
+      margin: 3px 1px;
+      border-radius: 14px;
+    }
+
+    .sidebar.collapsed .sidebar-item:hover {
+      transform: none;
+    }
+
+    .sidebar.collapsed .sidebar-item.active::before {
+      display: none;
+    }
+
+    .sidebar.collapsed .sidebar-footer {
+      padding: 6px;
+    }
+
+    .sidebar.collapsed .user-card {
+      justify-content: center;
+      padding: 6px;
+      gap: 0;
+    }
+
+    .sidebar.collapsed .logo-box {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+    }
+
+    .sidebar.collapsed .user-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+    }
+
+    .sidebar.collapsed .user-avatar-inner {
+      border-radius: 10px;
+      font-size: 11px;
+    }
+
+    .sidebar.collapsed .logout-btn {
+      display: none;
+    }
+
+    .sidebar.collapsed .user-online {
+      right: -1px;
+      bottom: -1px;
+      width: 10px;
+      height: 10px;
+    }
+
+    .sidebar.collapsed .online-dot {
+      width: 7px;
+      height: 7px;
+    }
+
+    .sidebar.collapsed .collapse-toggle {
+      justify-content: center;
+      padding: 11px 8px;
+      width: calc(100% - 2px);
+      margin: 3px 1px;
+      border-radius: 14px;
+    }
+
+    .sidebar.collapsed .collapse-toggle:hover {
+      transform: none;
+    }
+
+    .sidebar.collapsed .sidebar-collapse-area {
+      padding: 4px 4px 6px;
+    }
+
+    .sidebar.collapsed .logo-box img {
+      padding: 4px;
     }
 
     .avatar-stack {

@@ -132,7 +132,7 @@
                   </div>
                   <div class="role-name-text">
                     <strong>{{ role.name }}</strong>
-                    <span>{{ role.desc || '暂无描述' }}</span>
+                    <span>{{ role.description || '暂无描述' }}</span>
                   </div>
                 </div>
               </td>
@@ -142,8 +142,8 @@
               <td>{{ role.scope }}</td>
               <td>{{ role.users }} 人</td>
               <td>
-                <span :class="['role-badge', role.status === 'enabled' ? 'enabled' : 'disabled']">
-                  {{ role.status === 'enabled' ? '启用' : '停用' }}
+                <span :class="['role-badge', role.status === 1 ? 'enabled' : 'disabled']">
+                  {{ role.status === 1 ? '启用' : '停用' }}
                 </span>
               </td>
               <td>{{ role.createTime }}</td>
@@ -162,8 +162,8 @@
                     编辑
                   </button>
                   <button class="role-row-btn warning" @click="toggleRoleStatus(role.id)">
-                    <component :is="role.status === 'enabled' ? PauseCircle : PlayCircle" :size="14" />
-                    {{ role.status === 'enabled' ? '停用' : '启用' }}
+                    <component :is="role.status === 1 ? PauseCircle : PlayCircle" :size="14" />
+                    {{ role.status === 1 ? '停用' : '启用' }}
                   </button>
                   <button class="role-row-btn danger" @click="deleteRole(role.id)">
                     <Trash2 :size="14" />
@@ -199,22 +199,13 @@
             <div class="role-form-item">
               <label>状态</label>
               <select class="role-select" v-model="formData.status">
-                <option value="enabled">启用</option>
-                <option value="disabled">停用</option>
+                <option :value="1">启用</option>
+                <option :value="0">停用</option>
               </select>
             </div>
             <div class="role-form-item">
-              <label>数据范围</label>
-              <select class="role-select" v-model="formData.scope">
-                <option value="全部数据">全部数据</option>
-                <option value="本部门数据">本部门数据</option>
-                <option value="本人数据">本人数据</option>
-                <option value="自定义数据">自定义数据</option>
-              </select>
-            </div>
-            <div class="role-form-item full">
               <label>角色描述</label>
-              <textarea class="role-textarea" v-model="formData.desc" placeholder="请输入角色说明..."></textarea>
+              <textarea class="role-textarea" v-model="formData.description" placeholder="请输入角色说明..."></textarea>
             </div>
           </div>
         </div>
@@ -270,14 +261,14 @@
                 <div class="role-permission-group">
                   <div class="role-permission-group-title">请选择权限</div>
                   <div class="role-permission-checks">
-                    <label class="role-check-item" v-for="item in menuPermissions" :key="item.key">
+                    <label class="role-check-item" v-for="item in menuPermissions" :key="item.id">
                       <input
                         type="checkbox"
                         class="role-permission-check"
-                        :value="item.key"
+                        :value="item.id"
                         v-model="permissionChecks"
                       />
-                      <span>{{ item.label }}</span>
+                      <span>{{ item.name }}</span>
                     </label>
                   </div>
                 </div>
@@ -288,14 +279,14 @@
                 <div class="role-permission-group">
                   <div class="role-permission-group-title">请选择权限</div>
                   <div class="role-permission-checks">
-                    <label class="role-check-item" v-for="item in buttonPermissions" :key="item.key">
+                    <label class="role-check-item" v-for="item in buttonPermissions" :key="item.id">
                       <input
                         type="checkbox"
                         class="role-permission-check"
-                        :value="item.key"
+                        :value="item.id"
                         v-model="permissionChecks"
                       />
-                      <span>{{ item.label }}</span>
+                      <span>{{ item.name }}</span>
                     </label>
                   </div>
                 </div>
@@ -306,14 +297,14 @@
                 <div class="role-permission-group">
                   <div class="role-permission-group-title">请选择权限</div>
                   <div class="role-permission-checks">
-                    <label class="role-check-item" v-for="item in dataPermissions" :key="item.key">
+                    <label class="role-check-item" v-for="item in dataPermissions" :key="item.id">
                       <input
                         type="checkbox"
                         class="role-permission-check"
-                        :value="item.key"
+                        :value="item.id"
                         v-model="permissionChecks"
                       />
-                      <span>{{ item.label }}</span>
+                      <span>{{ item.name }}</span>
                     </label>
                   </div>
                 </div>
@@ -363,7 +354,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import {
   ShieldCheck,
   CheckCircle,
@@ -383,123 +374,58 @@ import {
   MousePointerClick,
   Database
 } from 'lucide-vue-next'
+import { api } from '@/api'
+import { appAlert, appConfirm, appToast } from '@/utils/dialog'
 import '@/styles/roles.css'
 
-const roleList = reactive([
-  {
-    id: 1,
-    name: '系统管理员',
-    code: 'admin',
-    scope: '全部数据',
-    users: 3,
-    status: 'enabled',
-    desc: '拥有系统全部管理权限',
-    createTime: '2024-01-12',
-    permissions: ['dashboard', 'sample', 'gallery', 'friends', 'roles', 'users', 'add', 'edit', 'delete', 'export', 'all-data']
-  },
-  {
-    id: 2,
-    name: '设计主管',
-    code: 'design_manager',
-    scope: '本部门数据',
-    users: 8,
-    status: 'enabled',
-    desc: '负责设计部门样品与图库管理',
-    createTime: '2024-02-08',
-    permissions: ['dashboard', 'sample', 'gallery', 'add', 'edit', 'export', 'dept-data']
-  },
-  {
-    id: 3,
-    name: '摄影师',
-    code: 'photographer',
-    scope: '本人数据',
-    users: 12,
-    status: 'enabled',
-    desc: '负责图片上传与图片资料维护',
-    createTime: '2024-03-16',
-    permissions: ['gallery', 'add', 'edit', 'self-data']
-  },
-  {
-    id: 4,
-    name: '数据审核员',
-    code: 'data_auditor',
-    scope: '自定义数据',
-    users: 5,
-    status: 'disabled',
-    desc: '负责样品数据审核与校验',
-    createTime: '2024-04-21',
-    permissions: ['sample', 'export', 'custom-data']
-  }
-])
-
-const roleMemberMock = [
-  { name: 'Alex', account: 'alex', dept: '设计部' },
-  { name: 'Bella', account: 'bella', dept: '摄影部' },
-  { name: 'Chris', account: 'chris', dept: '运营部' },
-  { name: 'Diana', account: 'diana', dept: '数据部' },
-  { name: 'Eric', account: 'eric', dept: '技术部' }
-]
-
-const menuPermissions = [
-  { key: 'dashboard', label: '首页仪表盘' },
-  { key: 'sample', label: '样品资料' },
-  { key: 'gallery', label: '择样图库' },
-  { key: 'friends', label: '好友列表' },
-  { key: 'roles', label: '角色管理' },
-  { key: 'users', label: '用户管理' }
-]
-
-const buttonPermissions = [
-  { key: 'add', label: '新增' },
-  { key: 'edit', label: '编辑' },
-  { key: 'delete', label: '删除' },
-  { key: 'export', label: '导出' },
-  { key: 'import', label: '导入' },
-  { key: 'audit', label: '审核' }
-]
-
-const dataPermissions = [
-  { key: 'all-data', label: '全部数据' },
-  { key: 'dept-data', label: '本部门数据' },
-  { key: 'self-data', label: '本人数据' },
-  { key: 'custom-data', label: '自定义数据' }
-]
+// ===== 数据状态 =====
+const roleList = ref([])
+const totalRecords = ref(0)
+const currentPage = ref(1)
+const pageSize = ref(20)
+const tableLoading = ref(false)
 
 const searchKeyword = ref('')
 const statusFilter = ref('all')
 const selectedIds = reactive(new Set())
 
+// ===== 弹窗状态 =====
 const formModalVisible = ref(false)
 const permissionModalVisible = ref(false)
 const membersModalVisible = ref(false)
+const formLoading = ref(false)
 
 const editingId = ref(null)
 const formData = reactive({
   name: '',
   code: '',
-  status: 'enabled',
-  scope: '本部门数据',
-  desc: ''
+  status: 1,
+  description: ''
 })
 
+// ===== 权限相关 =====
 const permissionRoleId = ref(null)
 const permissionTab = ref('menu')
 const permissionChecks = reactive([])
+const allPermissions = ref([])
+const permissionsLoading = ref(false)
 
+// ===== 成员相关 =====
 const membersRoleName = ref('')
 const membersList = ref([])
 
-const enabledCount = computed(() => roleList.filter(r => r.status === 'enabled').length)
-const disabledCount = computed(() => roleList.filter(r => r.status === 'disabled').length)
-const totalUsers = computed(() => roleList.reduce((sum, r) => sum + Number(r.users || 0), 0))
+// ===== 计算属性 =====
+const enabledCount = computed(() => roleList.value.filter(r => r.status === 1).length)
+const disabledCount = computed(() => roleList.value.filter(r => r.status === 0).length)
+const totalUsers = computed(() => roleList.value.reduce((sum, r) => sum + Number(r.userCount || 0), 0))
 
 const filteredRoles = computed(() => {
-  const keyword = (searchKeyword.value || '').toLowerCase()
-  return roleList.filter(role => {
-    const matchKeyword = !keyword || role.name.toLowerCase().includes(keyword) || role.code.toLowerCase().includes(keyword)
-    const matchStatus = statusFilter.value === 'all' || role.status === statusFilter.value
-    return matchKeyword && matchStatus
-  })
+  let data = roleList.value
+  if (statusFilter.value !== 'all') {
+    const statusVal = statusFilter.value === 'enabled' ? 1 : 0
+    data = data.filter(r => r.status === statusVal)
+  }
+  return data
 })
 
 const isAllChecked = computed(() => {
@@ -514,19 +440,67 @@ const isIndeterminate = computed(() => {
 })
 
 const permissionRoleName = computed(() => {
-  const role = roleList.find(r => r.id === permissionRoleId.value)
+  const role = roleList.value.find(r => r.id === permissionRoleId.value)
   return role ? role.name : ''
 })
 
+// 按类型分组的权限列表
+const menuPermissions = computed(() => allPermissions.value.filter(p => p.type === 1))
+const buttonPermissions = computed(() => allPermissions.value.filter(p => p.type === 2))
+const dataPermissions = computed(() => allPermissions.value.filter(p => p.type === 3))
+
+// ===== 数据加载 =====
+const loadRoles = async () => {
+  tableLoading.value = true
+  try {
+    const params = new URLSearchParams({
+      current: currentPage.value,
+      size: pageSize.value
+    })
+    if (searchKeyword.value) params.set('keyword', searchKeyword.value)
+    const res = await api(`/roles?${params.toString()}`)
+    const data = res.data || res
+    roleList.value = (data.records || []).map(r => ({
+      ...r,
+      userCount: 0,
+      scope: r.description || '-'
+    }))
+    totalRecords.value = data.total || 0
+  } catch (e) {
+    console.error('加载角色列表失败:', e)
+    roleList.value = []
+  } finally {
+    tableLoading.value = false
+  }
+}
+
+const loadAllPermissions = async () => {
+  if (allPermissions.value.length > 0) return // 缓存：只加载一次
+  permissionsLoading.value = true
+  try {
+    const res = await api('/roles/permissions')
+    const list = Array.isArray(res.data) ? res.data : (Array.isArray(res) ? res : [])
+    allPermissions.value = list
+  } catch (e) {
+    console.error('加载权限列表失败:', e)
+    allPermissions.value = []
+  } finally {
+    permissionsLoading.value = false
+  }
+}
+
+// ===== 操作方法 =====
 function handleQuery() {
-  alert('查询完成')
+  currentPage.value = 1
+  loadRoles()
 }
 
 function handleRefresh() {
   searchKeyword.value = ''
   statusFilter.value = 'all'
   selectedIds.clear()
-  alert('已刷新')
+  currentPage.value = 1
+  loadRoles()
 }
 
 function toggleCheckAll(e) {
@@ -550,134 +524,153 @@ function openAddForm() {
   editingId.value = null
   formData.name = ''
   formData.code = ''
-  formData.status = 'enabled'
-  formData.scope = '本部门数据'
-  formData.desc = ''
+  formData.status = 1
+  formData.description = ''
   formModalVisible.value = true
 }
 
 function openEditForm(id) {
-  const role = roleList.find(r => r.id === id)
+  const role = roleList.value.find(r => r.id === id)
   if (!role) return
   editingId.value = id
   formData.name = role.name
   formData.code = role.code
   formData.status = role.status
-  formData.scope = role.scope
-  formData.desc = role.desc || ''
+  formData.description = role.description || ''
   formModalVisible.value = true
 }
 
-function submitForm() {
+async function submitForm() {
   const name = formData.name.trim()
   const code = formData.code.trim()
-  if (!name) {
-    alert('请输入角色名称')
-    return
-  }
-  if (!code) {
-    alert('请输入角色编码')
-    return
-  }
-  const duplicated = roleList.some(role => role.code === code && role.id !== editingId.value)
-  if (duplicated) {
-    alert('角色编码已存在')
-    return
-  }
-  if (editingId.value) {
-    const role = roleList.find(r => r.id === editingId.value)
-    if (role) {
-      role.name = name
-      role.code = code
-      role.status = formData.status
-      role.scope = formData.scope
-      role.desc = formData.desc.trim()
+  if (!name) { appAlert('请输入角色名称', '表单验证', 'warning'); return }
+  if (!code) { appAlert('请输入角色编码', '表单验证', 'warning'); return }
+
+  formLoading.value = true
+  try {
+    if (editingId.value) {
+      await api(`/roles/${editingId.value}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name,
+          description: formData.description.trim(),
+          status: formData.status
+        })
+      })
+      appToast('角色已更新')
+    } else {
+      await api('/roles', {
+        method: 'POST',
+        body: JSON.stringify({
+          name,
+          code,
+          description: formData.description.trim(),
+          status: formData.status
+        })
+      })
+      appToast('角色已新增')
     }
-    alert('角色已更新')
-  } else {
-    roleList.unshift({
-      id: Date.now(),
-      name,
-      code,
-      status: formData.status,
-      scope: formData.scope,
-      desc: formData.desc.trim(),
-      users: 0,
-      createTime: new Date().toISOString().slice(0, 10),
-      permissions: []
-    })
-    alert('角色已新增')
+    formModalVisible.value = false
+    loadRoles()
+  } catch (e) {
+    appAlert(e.message || '操作失败', '操作失败', 'danger')
+  } finally {
+    formLoading.value = false
   }
-  formModalVisible.value = false
 }
 
 async function toggleRoleStatus(id) {
-  const role = roleList.find(r => r.id === id)
+  const role = roleList.value.find(r => r.id === id)
   if (!role) return
-  const nextStatus = role.status === 'enabled' ? 'disabled' : 'enabled'
-  const actionText = nextStatus === 'enabled' ? '启用' : '停用'
-  const ok = confirm(`确定要${actionText}角色「${role.name}」吗？`)
+  const nextStatus = role.status === 1 ? 0 : 1
+  const actionText = nextStatus === 1 ? '启用' : '停用'
+  const ok = await appConfirm(`确定要${actionText}角色「${role.name}」吗？`, `${actionText}角色`, 'warning')
   if (!ok) return
-  role.status = nextStatus
-  alert(`角色已${actionText}`)
+  try {
+    await api(`/roles/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: nextStatus })
+    })
+    role.status = nextStatus
+  } catch (e) {
+    appAlert(e.message || '操作失败', '操作失败', 'danger')
+  }
 }
 
 async function deleteRole(id) {
-  const role = roleList.find(r => r.id === id)
+  const role = roleList.value.find(r => r.id === id)
   if (!role) return
-  const ok = confirm(`确定删除角色「${role.name}」吗？删除后不可恢复。`)
+  const ok = await appConfirm(`确定删除角色「${role.name}」吗？<br/><small style="color:rgba(29,29,31,0.45)">删除后不可恢复</small>`, '删除角色', 'danger')
   if (!ok) return
-  const idx = roleList.findIndex(r => r.id === id)
-  if (idx > -1) roleList.splice(idx, 1)
-  selectedIds.delete(id)
-  alert('角色已删除')
+  try {
+    await api(`/roles/${id}`, { method: 'DELETE' })
+    selectedIds.delete(id)
+    loadRoles()
+  } catch (e) {
+    appAlert(e.message || '删除失败', '删除失败', 'danger')
+  }
 }
 
 async function handleBatchDelete() {
-  if (selectedIds.size === 0) {
-    alert('请先选择需要删除的角色')
-    return
-  }
-  const ok = confirm(`确定删除选中的 ${selectedIds.size} 个角色吗？`)
+  if (selectedIds.size === 0) { appAlert('请先选择需要删除的角色', '提示', 'warning'); return }
+  const ok = await appConfirm(`确定删除选中的 ${selectedIds.size} 个角色吗？<br/><small style="color:rgba(29,29,31,0.45)">删除后不可恢复</small>`, '批量删除', 'danger')
   if (!ok) return
-  const idsToDelete = new Set(selectedIds)
-  for (let i = roleList.length - 1; i >= 0; i--) {
-    if (idsToDelete.has(roleList[i].id)) {
-      roleList.splice(i, 1)
-    }
+  try {
+    await api('/roles/batch-delete', {
+      method: 'POST',
+      body: JSON.stringify([...selectedIds])
+    })
+    selectedIds.clear()
+    loadRoles()
+  } catch (e) {
+    appAlert(e.message || '批量删除失败', '批量删除失败', 'danger')
   }
-  selectedIds.clear()
-  alert('已删除选中角色')
 }
 
-function openPermissionModal(id) {
-  const role = roleList.find(r => r.id === id)
-  if (!role) {
-    alert('未找到角色')
-    return
-  }
+async function openPermissionModal(id) {
+  const role = roleList.value.find(r => r.id === id)
+  if (!role) return
   permissionRoleId.value = id
   permissionTab.value = 'menu'
-  permissionChecks.splice(0, permissionChecks.length, ...role.permissions)
+  permissionChecks.splice(0, permissionChecks.length)
+
+  // 并行加载权限列表和角色已有权限
+  await loadAllPermissions()
+  try {
+    const res = await api(`/roles/${id}/permissions`)
+    const ids = Array.isArray(res.data) ? res.data : (Array.isArray(res) ? res : [])
+    permissionChecks.splice(0, permissionChecks.length, ...ids)
+  } catch (e) {
+    console.error('加载角色权限失败:', e)
+    // 权限加载失败时仍打开弹窗，只是不勾选
+  }
   permissionModalVisible.value = true
 }
 
-function savePermissions() {
-  const role = roleList.find(r => r.id === permissionRoleId.value)
-  if (!role) {
-    alert('未找到角色')
-    return
+async function savePermissions() {
+  try {
+    await api(`/roles/${permissionRoleId.value}/permissions`, {
+      method: 'PUT',
+      body: JSON.stringify([...permissionChecks])
+    })
+    permissionModalVisible.value = false
+    loadRoles()
+    appToast('权限已保存')
+  } catch (e) {
+    appAlert(e.message || '保存权限失败', '保存权限失败', 'danger')
   }
-  role.permissions = [...permissionChecks]
-  permissionModalVisible.value = false
-  alert('权限已保存')
 }
 
 function openMembersModal(id) {
-  const role = roleList.find(r => r.id === id)
+  const role = roleList.value.find(r => r.id === id)
   if (!role) return
   membersRoleName.value = role.name
-  membersList.value = roleMemberMock.slice(0, Math.max(1, Math.min(role.users, roleMemberMock.length)))
+  membersList.value = []
   membersModalVisible.value = true
 }
+
+// ===== 生命周期 =====
+onMounted(() => {
+  loadRoles()
+})
 </script>

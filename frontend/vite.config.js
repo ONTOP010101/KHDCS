@@ -40,7 +40,28 @@ export default defineConfig(async () => {
         '/chat': { target: 'http://localhost:8080', timeout: 120000 },
         '/galleries': { target: 'http://localhost:8080', timeout: 120000 },
         '/manufacturers': { target: 'http://localhost:8080', timeout: 120000 },
-        '/upload': { target: 'http://localhost:8080', timeout: 120000 }
+        '/upload': { target: 'http://localhost:8080', timeout: 120000 },
+        '/report-templates': { target: 'http://localhost:8080', timeout: 120000 },
+        '/product-categories': { target: 'http://localhost:8080', timeout: 120000 },
+        '/packaging-methods': { target: 'http://localhost:8080', timeout: 120000 },
+        '/api': { target: 'http://localhost:8080', timeout: 120000 }
+      }
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules/vxe-table') || id.includes('node_modules/vxe-pc-ui')) {
+              return 'vxe-table'
+            }
+            if (id.includes('node_modules/exceljs')) {
+              return 'excel'
+            }
+            if (id.includes('node_modules/vue') || id.includes('node_modules/vue-router')) {
+              return 'vue-vendor'
+            }
+          }
+        }
       }
     }
   }

@@ -9,8 +9,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/manufacturers")
@@ -69,5 +71,11 @@ public class ManufacturerController {
             log.error("批量导入厂商失败: {}", e.getMessage(), e);
             return Result.error(500, "批量导入失败: " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
         }
+    }
+
+    @PostMapping("/{id}/certificate")
+    public Result<Map<String, String>> uploadCertificate(@PathVariable Long id,
+                                                         @RequestParam("file") MultipartFile file) {
+        return manufacturerService.uploadCertificate(id, file);
     }
 }

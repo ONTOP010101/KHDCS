@@ -20,6 +20,15 @@
         <Plus class="w-[18px] h-[18px]" />
       </button>
 
+      <button
+        class="top-btn glass-toggle-btn"
+        :class="{ off: !glassOn }"
+        :title="glassOn ? '关闭毛玻璃特效' : '开启毛玻璃特效'"
+        @click="toggleGlass"
+      >
+        <Sparkles class="w-[18px] h-[18px]" />
+      </button>
+
       <div class="top-avatar" :title="displayName">
         <div class="top-avatar-inner">{{ userInitials }}</div>
       </div>
@@ -28,9 +37,9 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { Search, Bell, Plus } from 'lucide-vue-next'
+import { Search, Bell, Plus, Sparkles } from 'lucide-vue-next'
 import { useAuth } from '@/stores/auth'
 
 const route = useRoute()
@@ -51,4 +60,34 @@ const pageTitle = computed(() => pageMeta[route.name]?.title || route.meta.title
 const pageSubtitle = computed(() => pageMeta[route.name]?.subtitle || route.meta.subtitle || '')
 const displayName = computed(() => state.userInfo?.realName || state.userInfo?.username || 'Admin')
 const userInitials = computed(() => getUserInitials())
+
+// 毛玻璃开关
+const glassOn = ref(true)
+onMounted(() => {
+  const saved = localStorage.getItem('glassEffect')
+  if (saved === 'off') {
+    glassOn.value = false
+    document.documentElement.classList.add('no-glass')
+  }
+})
+const toggleGlass = () => {
+  glassOn.value = !glassOn.value
+  if (glassOn.value) {
+    document.documentElement.classList.remove('no-glass')
+    localStorage.setItem('glassEffect', 'on')
+  } else {
+    document.documentElement.classList.add('no-glass')
+    localStorage.setItem('glassEffect', 'off')
+  }
+}
 </script>
+
+<style scoped>
+.glass-toggle-btn {
+  opacity: 1;
+  transition: opacity 0.2s;
+}
+.glass-toggle-btn.off {
+  opacity: 0.4;
+}
+</style>

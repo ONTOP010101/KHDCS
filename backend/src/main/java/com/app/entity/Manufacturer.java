@@ -15,6 +15,7 @@ public class Manufacturer extends BaseEntity {
     private String phone2;
     private String mobile2;
     private String contact2;
+    private String contact3;
     private String address;
     private String phone3;
     private String mobile3;
@@ -33,6 +34,8 @@ public class Manufacturer extends BaseEntity {
     private String registrant;
     private String modifier;
     private String remark;
+    private String television;
+    private String canInvoice;
     private Long createBy;
     private Long updateBy;
 
@@ -56,6 +59,8 @@ public class Manufacturer extends BaseEntity {
     public void setMobile2(String mobile2) { this.mobile2 = mobile2; }
     public String getContact2() { return contact2; }
     public void setContact2(String contact2) { this.contact2 = contact2; }
+    public String getContact3() { return contact3; }
+    public void setContact3(String contact3) { this.contact3 = contact3; }
     public String getAddress() { return address; }
     public void setAddress(String address) { this.address = address; }
     public String getPhone3() { return phone3; }
@@ -92,6 +97,10 @@ public class Manufacturer extends BaseEntity {
     public void setModifier(String modifier) { this.modifier = modifier; }
     public String getRemark() { return remark; }
     public void setRemark(String remark) { this.remark = remark; }
+    public String getTelevision() { return television; }
+    public void setTelevision(String television) { this.television = television; }
+    public String getCanInvoice() { return canInvoice; }
+    public void setCanInvoice(String canInvoice) { this.canInvoice = canInvoice; }
     public Long getCreateBy() { return createBy; }
     public void setCreateBy(Long createBy) { this.createBy = createBy; }
     public Long getUpdateBy() { return updateBy; }

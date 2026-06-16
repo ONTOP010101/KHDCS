@@ -1,6 +1,5 @@
 package com.app.service;
 
-import com.app.entity.Image;
 import com.pgvector.PGvector;
 import com.zaxxer.hikari.HikariDataSource;
 import org.slf4j.Logger;
@@ -12,8 +11,6 @@ import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import javax.sql.DataSource;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -51,8 +48,8 @@ public class PgVectorService {
         pgDataSource.setUsername(pgVectorConfig.getUsername());
         pgDataSource.setPassword(pgVectorConfig.getPassword());
         pgDataSource.setAutoCommit(true);
-        pgDataSource.setMaximumPoolSize(20);
-        pgDataSource.setMinimumIdle(2);
+        pgDataSource.setMaximumPoolSize(5);
+        pgDataSource.setMinimumIdle(1);
         pgDataSource.setConnectionTimeout(10000);
         pgDataSource.setIdleTimeout(300000);
         pgDataSource.setMaxLifetime(600000);
@@ -90,19 +87,18 @@ public class PgVectorService {
         return available;
     }
 
-    public int upsert(long imageId, String shardPrefix, float[] embedding) {
+    public int upsert(long imageId, float[] embedding) {
         if (!isAvailable() || embedding == null || embedding.length == 0) return 0;
-        String prefix = (shardPrefix == null || shardPrefix.isEmpty()) ? "00" : shardPrefix;
         try {
             PGvector vec = new PGvector(embedding);
-            log.debug("Upserting image_id={}, shard={}, embedding_len={}", imageId, prefix, embedding.length);
+            log.debug("Upserting image_id={}, embedding_len={}", imageId, embedding.length);
             int rows = pgJdbcTemplate.update(
-                    "INSERT INTO image_vectors (image_id, shard_prefix, embedding) VALUES (?, ?, ?) ON CONFLICT (image_id, shard_prefix) DO UPDATE SET embedding = EXCLUDED.embedding",
-                    imageId, prefix, vec);
-            log.debug("Upsert result: image_id={}, shard={}, rows={}", imageId, prefix, rows);
+                    "INSERT INTO image_vectors (image_id, embedding) VALUES (?, ?) ON CONFLICT (image_id) DO UPDATE SET embedding = EXCLUDED.embedding",
+                    imageId, vec);
+            log.debug("Upsert result: image_id={}, rows={}", imageId, rows);
             return rows;
         } catch (Exception e) {
-            log.error("Failed to upsert vector for image_id={}, shard={}, error={}", imageId, shardPrefix, e.getMessage(), e);
+            log.error("Failed to upsert vector for image_id={}, error={}", imageId, e.getMessage(), e);
             return 0;
         }
     }
@@ -118,13 +114,12 @@ public class PgVectorService {
         }
     }
 
-    public void delete(long imageId, String shardPrefix) {
+    public void delete(long imageId) {
         if (!isAvailable()) return;
-        String prefix = (shardPrefix == null || shardPrefix.isEmpty()) ? "00" : shardPrefix;
         try {
-            pgJdbcTemplate.update("DELETE FROM image_vectors WHERE image_id = ? AND shard_prefix = ?", imageId, prefix);
+            pgJdbcTemplate.update("DELETE FROM image_vectors WHERE image_id = ?", imageId);
         } catch (Exception e) {
-            log.warn("Failed to delete vector for image {} shard {}: {}", imageId, prefix, e.getMessage());
+            log.warn("Failed to delete vector for image {}: {}", imageId, e.getMessage());
         }
     }
 
@@ -135,13 +130,12 @@ public class PgVectorService {
         try {
             PGvector vec = new PGvector(queryEmbedding);
             return pgJdbcTemplate.query(
-                    "SELECT image_id, shard_prefix, 1.0 - (embedding <=> ?) AS similarity " +
+                    "SELECT image_id, 1.0 - (embedding <=> ?) AS similarity " +
                             "FROM image_vectors WHERE embedding <=> ? <= ? " +
                             "ORDER BY embedding <=> ? LIMIT ?",
                     (rs, rowNum) -> {
                         Map<String, Object> row = new LinkedHashMap<>();
                         row.put("imageId", rs.getLong("image_id"));
-                        row.put("shardPrefix", rs.getString("shard_prefix"));
                         row.put("similarity", rs.getDouble("similarity"));
                         return row;
                     },
@@ -152,16 +146,13 @@ public class PgVectorService {
         }
     }
 
-
-    public boolean exists(long imageId, String shardPrefix) {
+    public boolean exists(long imageId) {
         if (!isAvailable()) return false;
         try {
-            Integer count = pgJdbcTemplate.queryForObject("SELECT COUNT(*) FROM image_vectors WHERE image_id = ? AND shard_prefix = ?", Integer.class, imageId, shardPrefix);
+            Integer count = pgJdbcTemplate.queryForObject("SELECT COUNT(*) FROM image_vectors WHERE image_id = ?", Integer.class, imageId);
             return count != null && count > 0;
         } catch (Exception e) {
             return false;
         }
     }
-
-
 }

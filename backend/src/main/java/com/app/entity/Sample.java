@@ -12,17 +12,16 @@ public class Sample extends BaseEntity {
     private String sampleName;
     private String englishName;
     private String category;
+    private String categoryCode;
     private String factoryCode;
     private String sampleUnit;
     private String sampleUnitEn;
     private String packagingCn;
     private String packagingEn;
     private String packageCode;
-    private String material;
     private String color;
     private String colorEn;
     private String size;
-    private String weight;
     private String origin;
     private String supplier;
     private String boothNo;
@@ -53,7 +52,6 @@ public class Sample extends BaseEntity {
     private BigDecimal packageHeight;
     private String certification;
     private Integer certificationCount;
-    private String description;
     private String remark;
     private String remarkEn;
     private String registrant;
@@ -61,6 +59,7 @@ public class Sample extends BaseEntity {
     private Integer status;
     private String infringement;
     private String batteryInfo;
+    private String hideFromXzx;
     private Long createBy;
     private Long updateBy;
 
@@ -90,6 +89,8 @@ public class Sample extends BaseEntity {
     public void setEnglishName(String englishName) { this.englishName = englishName; }
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }
+    public String getCategoryCode() { return categoryCode; }
+    public void setCategoryCode(String categoryCode) { this.categoryCode = categoryCode; }
     public String getFactoryCode() { return factoryCode; }
     public void setFactoryCode(String factoryCode) { this.factoryCode = factoryCode; }
     public String getSampleUnit() { return sampleUnit; }
@@ -102,16 +103,12 @@ public class Sample extends BaseEntity {
     public void setPackagingEn(String packagingEn) { this.packagingEn = packagingEn; }
     public String getPackageCode() { return packageCode; }
     public void setPackageCode(String packageCode) { this.packageCode = packageCode; }
-    public String getMaterial() { return material; }
-    public void setMaterial(String material) { this.material = material; }
     public String getColor() { return color; }
     public void setColor(String color) { this.color = color; }
     public String getColorEn() { return colorEn; }
     public void setColorEn(String colorEn) { this.colorEn = colorEn; }
     public String getSize() { return size; }
     public void setSize(String size) { this.size = size; }
-    public String getWeight() { return weight; }
-    public void setWeight(String weight) { this.weight = weight; }
     public String getOrigin() { return origin; }
     public void setOrigin(String origin) { this.origin = origin; }
     public String getSupplier() { return supplier; }
@@ -172,8 +169,6 @@ public class Sample extends BaseEntity {
     public void setCertification(String certification) { this.certification = certification; }
     public Integer getCertificationCount() { return certificationCount; }
     public void setCertificationCount(Integer certificationCount) { this.certificationCount = certificationCount; }
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
     public String getRemark() { return remark; }
     public void setRemark(String remark) { this.remark = remark; }
     public String getRemarkEn() { return remarkEn; }
@@ -188,6 +183,8 @@ public class Sample extends BaseEntity {
     public void setInfringement(String infringement) { this.infringement = infringement; }
     public String getBatteryInfo() { return batteryInfo; }
     public void setBatteryInfo(String batteryInfo) { this.batteryInfo = batteryInfo; }
+    public String getHideFromXzx() { return hideFromXzx; }
+    public void setHideFromXzx(String hideFromXzx) { this.hideFromXzx = hideFromXzx; }
     public Long getCreateBy() { return createBy; }
     public void setCreateBy(Long createBy) { this.createBy = createBy; }
     public Long getUpdateBy() { return updateBy; }

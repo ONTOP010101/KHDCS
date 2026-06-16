@@ -20,11 +20,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {
@@ -64,6 +61,29 @@ public class UserService {
 
         IPage<User> page = userMapper.selectPage(new Page<>(current, size), wrapper);
 
+        if (page.getRecords().isEmpty()) {
+            return new PageResult<>(List.of(), page.getTotal(), current, size);
+        }
+
+        // 批量查询所有用户的角色，避免N+1问题
+        List<Long> userIds = page.getRecords().stream().map(User::getId).collect(Collectors.toList());
+
+        LambdaQueryWrapper<UserRole> urWrapper = new LambdaQueryWrapper<>();
+        urWrapper.in(UserRole::getUserId, userIds);
+        List<UserRole> allUserRoles = userRoleMapper.selectList(urWrapper);
+
+        // 批量查询所有相关角色
+        List<Long> roleIds = allUserRoles.stream()
+                .map(UserRole::getRoleId).distinct().collect(Collectors.toList());
+        Map<Long, Role> roleMap = new HashMap<>();
+        if (!roleIds.isEmpty()) {
+            roleMapper.selectBatchIds(roleIds).forEach(r -> roleMap.put(r.getId(), r));
+        }
+
+        // 按userId分组
+        Map<Long, UserRole> urByUser = allUserRoles.stream()
+                .collect(Collectors.toMap(UserRole::getUserId, ur -> ur, (a, b) -> a));
+
         List<Map<String, Object>> records = new ArrayList<>();
         for (User user : page.getRecords()) {
             Map<String, Object> record = new HashMap<>();
@@ -77,11 +97,9 @@ public class UserService {
             record.put("lastLoginTime", user.getLastLoginTime());
             record.put("createTime", user.getCreateTime());
 
-            LambdaQueryWrapper<UserRole> urWrapper = new LambdaQueryWrapper<>();
-            urWrapper.eq(UserRole::getUserId, user.getId());
-            UserRole userRole = userRoleMapper.selectOne(urWrapper);
+            UserRole userRole = urByUser.get(user.getId());
             if (userRole != null) {
-                Role role = roleMapper.selectById(userRole.getRoleId());
+                Role role = roleMap.get(userRole.getRoleId());
                 record.put("roleId", userRole.getRoleId());
                 record.put("role", role != null ? role.getName() : null);
             } else {

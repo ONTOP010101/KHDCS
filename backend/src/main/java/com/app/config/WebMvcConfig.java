@@ -37,20 +37,26 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/logs/**",
                         "/images/upload/**",
                         "/images/gallery/**",
-                        "/images/batch-delete"
+                        "/images/batch-delete",
+                        "/report-templates/**"
                 )
                 .excludePathPatterns(
                         "/auth/login",
                         "/auth/register",
                         "/images/view/**",
                         "/images/thumbnail/**",
+                        "/photos/**",
                         "/samples/template",
-                        "/samples/export"
+                        "/samples/export",
+                        "/samples/vendor-confirm-report",
+                        "/samples/vendor-confirm-session"
                 );
     }
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        registry.addResourceHandler("/photos/**")
+                .addResourceLocations(new FileSystemResource(imagePath + "/"));
         registry.addResourceHandler("/images/**")
                 .addResourceLocations(new FileSystemResource(imagePath + "/"));
         registry.addResourceHandler("/thumbnails/**")

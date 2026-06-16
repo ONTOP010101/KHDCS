@@ -5,28 +5,28 @@
         <div class="admin-stat-icon blue"><UsersRound :size="22" /></div>
         <div class="admin-stat-info">
           <span>用户总数</span>
-          <strong>{{ users.length }}</strong>
+          <strong>{{ totalRecords }}</strong>
         </div>
       </div>
       <div class="admin-card admin-stat-card">
         <div class="admin-stat-icon green"><CheckCircle :size="22" /></div>
         <div class="admin-stat-info">
           <span>正常用户</span>
-          <strong>{{ users.filter(u => u.status === '正常').length }}</strong>
+          <strong>{{ enabledCount }}</strong>
         </div>
       </div>
       <div class="admin-card admin-stat-card">
         <div class="admin-stat-icon orange"><PauseCircle :size="22" /></div>
         <div class="admin-stat-info">
           <span>禁用用户</span>
-          <strong>{{ users.filter(u => u.status === '禁用').length }}</strong>
+          <strong>{{ disabledCount }}</strong>
         </div>
       </div>
       <div class="admin-card admin-stat-card">
         <div class="admin-stat-icon purple"><Wifi :size="22" /></div>
         <div class="admin-stat-info">
           <span>在线用户</span>
-          <strong>{{ users.filter(u => u.online).length }}</strong>
+          <strong>-</strong>
         </div>
       </div>
     </div>
@@ -34,7 +34,7 @@
     <div class="admin-card admin-toolbar">
       <div class="admin-search">
         <Search :size="16" />
-        <input v-model="searchKeyword" placeholder="姓名/账号/手机号" @keyup.enter="onSearch" />
+        <input v-model="searchKeyword" placeholder="姓名/账号/手机号" @keyup.enter="handleQuery" />
       </div>
       <select v-model="filterDept" class="admin-select">
         <option value="">全部部门</option>
@@ -42,10 +42,10 @@
       </select>
       <select v-model="filterStatus" class="admin-select">
         <option value="">全部状态</option>
-        <option value="正常">正常</option>
-        <option value="禁用">禁用</option>
+        <option value="enabled">正常</option>
+        <option value="disabled">禁用</option>
       </select>
-      <button class="admin-btn admin-btn-primary" @click="onSearch">
+      <button class="admin-btn admin-btn-primary" @click="handleQuery">
         <Search :size="16" /> 查询
       </button>
       <span></span>
@@ -61,7 +61,7 @@
       <div class="admin-table-head">
         <div class="admin-table-title">
           <strong>用户列表</strong>
-          <span>共 {{ filteredUsers.length }} 条</span>
+          <span>共 {{ totalRecords }} 条</span>
         </div>
       </div>
       <div class="admin-table-wrap">
@@ -80,39 +80,38 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="user in filteredUsers" :key="user.id">
+            <tr v-for="user in users" :key="user.id">
               <td><input type="checkbox" class="admin-check" :checked="selectedIds.includes(user.id)" @change="toggleSelect(user.id)" /></td>
               <td>
                 <div class="admin-user-main">
-                  <div class="admin-avatar">{{ user.name.charAt(0) }}</div>
+                  <div class="admin-avatar">{{ (user.realName || '?').charAt(0) }}</div>
                   <div class="admin-main-text">
-                    <strong>{{ user.name }}</strong>
-                    <span>{{ user.online ? '🟢 在线' : '⚫ 离线' }}</span>
+                    <strong>{{ user.realName }}</strong>
                   </div>
                 </div>
               </td>
-              <td>{{ user.account }}</td>
-              <td>{{ user.dept }}</td>
-              <td><span class="admin-badge blue">{{ user.role }}</span></td>
+              <td>{{ user.username }}</td>
+              <td>{{ user.department }}</td>
+              <td><span class="admin-badge blue">{{ user.role || '未分配' }}</span></td>
               <td>{{ user.phone }}</td>
               <td>
-                <span class="admin-badge" :class="user.status === '正常' ? 'green' : 'gray'">{{ user.status }}</span>
+                <span class="admin-badge" :class="user.status === 1 ? 'green' : 'gray'">{{ user.status === 1 ? '正常' : '禁用' }}</span>
               </td>
-              <td>{{ user.lastLogin }}</td>
+              <td>{{ formatTime(user.lastLoginTime) }}</td>
               <td>
                 <div class="admin-row-actions">
                   <button class="admin-row-btn" @click="openEditModal(user)"><Pencil :size="14" /> 编辑</button>
                   <button class="admin-row-btn" @click="openRoleModal(user)"><ShieldCheck :size="14" /> 角色</button>
                   <button class="admin-row-btn warning" @click="resetPassword(user)"><KeyRound :size="14" /> 重置</button>
                   <button class="admin-row-btn warning" @click="toggleStatus(user)">
-                    <component :is="user.status === '正常' ? PauseCircle : PlayCircle" :size="14" />
-                    {{ user.status === '正常' ? '禁用' : '启用' }}
+                    <component :is="user.status === 1 ? PauseCircle : PlayCircle" :size="14" />
+                    {{ user.status === 1 ? '禁用' : '启用' }}
                   </button>
                   <button class="admin-row-btn danger" @click="deleteUser(user)"><Trash2 :size="14" /> 删除</button>
                 </div>
               </td>
             </tr>
-            <tr v-if="filteredUsers.length === 0">
+            <tr v-if="users.length === 0 && !tableLoading">
               <td colspan="9">
                 <div class="admin-empty">暂无数据</div>
               </td>
@@ -132,44 +131,49 @@
           <div class="admin-form-grid">
             <div class="admin-form-item">
               <label>用户姓名</label>
-              <input v-model="formData.name" class="admin-input" placeholder="用户姓名" />
+              <input v-model="formData.realName" class="admin-input" placeholder="用户姓名" />
             </div>
             <div class="admin-form-item">
               <label>登录账号</label>
-              <input v-model="formData.account" class="admin-input" placeholder="登录账号" />
+              <input v-model="formData.username" class="admin-input" placeholder="登录账号" :disabled="formMode === 'edit'" />
+            </div>
+            <div class="admin-form-item" v-if="formMode === 'add'">
+              <label>初始密码</label>
+              <input v-model="formData.password" type="password" class="admin-input" placeholder="初始密码" />
             </div>
             <div class="admin-form-item">
               <label>手机号</label>
               <input v-model="formData.phone" class="admin-input" placeholder="手机号" />
             </div>
             <div class="admin-form-item">
+              <label>邮箱</label>
+              <input v-model="formData.email" class="admin-input" placeholder="邮箱" />
+            </div>
+            <div class="admin-form-item">
               <label>部门</label>
-              <select v-model="formData.dept" class="admin-select">
+              <select v-model="formData.department" class="admin-select">
                 <option v-for="d in deptOptions" :key="d" :value="d">{{ d }}</option>
               </select>
             </div>
             <div class="admin-form-item">
               <label>角色</label>
-              <select v-model="formData.role" class="admin-select">
-                <option v-for="r in roleOptions" :key="r" :value="r">{{ r }}</option>
+              <select v-model="formData.roleId" class="admin-select">
+                <option :value="null">未分配</option>
+                <option v-for="r in roleOptions" :key="r.id" :value="r.id">{{ r.name }}</option>
               </select>
             </div>
             <div class="admin-form-item">
               <label>状态</label>
               <select v-model="formData.status" class="admin-select">
-                <option value="正常">正常</option>
-                <option value="禁用">禁用</option>
+                <option :value="1">正常</option>
+                <option :value="0">禁用</option>
               </select>
-            </div>
-            <div class="admin-form-item full">
-              <label>备注</label>
-              <textarea v-model="formData.remark" class="admin-textarea" placeholder="备注"></textarea>
             </div>
           </div>
         </div>
         <div class="admin-modal-foot">
           <button class="admin-btn admin-btn-ghost" @click="showFormModal = false"><X :size="16" /> 取消</button>
-          <button class="admin-btn admin-btn-primary" @click="saveUser"><Save :size="16" /> 保存</button>
+          <button class="admin-btn admin-btn-primary" @click="saveUser" :disabled="formLoading"><Save :size="16" /> 保存</button>
         </div>
       </div>
     </div>
@@ -183,8 +187,9 @@
         <div class="admin-modal-body">
           <div class="admin-form-item">
             <label>角色</label>
-            <select v-model="roleFormData.role" class="admin-select">
-              <option v-for="r in roleOptions" :key="r" :value="r">{{ r }}</option>
+            <select v-model="roleFormData.roleId" class="admin-select">
+              <option :value="null">未分配</option>
+              <option v-for="r in roleOptions" :key="r.id" :value="r.id">{{ r.name }}</option>
             </select>
           </div>
         </div>
@@ -198,54 +203,114 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import '@/styles/users.css'
 import {
   UsersRound, CheckCircle, PauseCircle, Wifi, Search, Trash2, UserPlus,
   RefreshCw, Pencil, ShieldCheck, KeyRound, PlayCircle, X, Check, Save
 } from 'lucide-vue-next'
+import { api } from '@/api'
+import { appAlert, appConfirm, appPrompt, appToast } from '@/utils/dialog'
 
-const deptOptions = ['设计部', '摄影部', '运营部', '数据部', '技术部']
-const roleOptions = ['系统管理员', '设计主管', '摄影师', '数据审核员', '普通用户']
-
-const users = ref([
-  { id: 1, name: 'Alex', account: 'alex01', phone: '13800001001', dept: '设计部', role: '设计主管', status: '正常', online: true, lastLogin: '2026-05-23 09:15', remark: '' },
-  { id: 2, name: 'Bella', account: 'bella02', phone: '13800001002', dept: '摄影部', role: '摄影师', status: '正常', online: true, lastLogin: '2026-05-23 08:42', remark: '' },
-  { id: 3, name: 'Chris', account: 'chris03', phone: '13800001003', dept: '运营部', role: '普通用户', status: '禁用', online: false, lastLogin: '2026-05-20 17:30', remark: '账号异常' },
-  { id: 4, name: 'Diana', account: 'diana04', phone: '13800001004', dept: '数据部', role: '数据审核员', status: '正常', online: false, lastLogin: '2026-05-22 14:10', remark: '' },
-  { id: 5, name: 'Eric', account: 'eric05', phone: '13800001005', dept: '技术部', role: '系统管理员', status: '正常', online: true, lastLogin: '2026-05-23 10:05', remark: '' }
-])
-
-let nextId = 6
+// ===== 数据状态 =====
+const users = ref([])
+const totalRecords = ref(0)
+const currentPage = ref(1)
+const pageSize = ref(20)
+const tableLoading = ref(false)
 
 const searchKeyword = ref('')
 const filterDept = ref('')
 const filterStatus = ref('')
 const selectedIds = ref([])
 
-const filteredUsers = computed(() => {
-  return users.value.filter(u => {
-    const kw = searchKeyword.value.toLowerCase()
-    const matchKw = !kw || u.name.toLowerCase().includes(kw) || u.account.toLowerCase().includes(kw) || u.phone.includes(kw)
-    const matchDept = !filterDept.value || u.dept === filterDept.value
-    const matchStatus = !filterStatus.value || u.status === filterStatus.value
-    return matchKw && matchDept && matchStatus
-  })
+// ===== 选项数据 =====
+const deptOptions = ['设计部', '摄影部', '运营部', '数据部', '技术部']
+const roleOptions = ref([]) // 从后端加载
+
+// ===== 弹窗状态 =====
+const showFormModal = ref(false)
+const formMode = ref('add')
+const formLoading = ref(false)
+const formData = reactive({
+  id: null,
+  realName: '',
+  username: '',
+  password: '',
+  phone: '',
+  email: '',
+  department: '设计部',
+  roleId: null,
+  status: 1
 })
+
+const showRoleModal = ref(false)
+const roleFormData = reactive({ id: null, roleId: null })
+
+// ===== 计算属性 =====
+const enabledCount = computed(() => users.value.filter(u => u.status === 1).length)
+const disabledCount = computed(() => users.value.filter(u => u.status === 0).length)
 
 const isAllSelected = computed(() => {
-  return filteredUsers.value.length > 0 && filteredUsers.value.every(u => selectedIds.value.includes(u.id))
+  return users.value.length > 0 && users.value.every(u => selectedIds.value.includes(u.id))
 })
 
-const toggleSelectAll = () => {
-  if (isAllSelected.value) {
-    selectedIds.value = []
-  } else {
-    selectedIds.value = filteredUsers.value.map(u => u.id)
+// ===== 工具方法 =====
+function formatTime(val) {
+  if (!val) return '-'
+  if (typeof val === 'string') return val.replace('T', ' ').slice(0, 16)
+  return val
+}
+
+// ===== 数据加载 =====
+const loadUsers = async () => {
+  tableLoading.value = true
+  try {
+    const params = new URLSearchParams({
+      current: currentPage.value,
+      size: pageSize.value
+    })
+    if (searchKeyword.value) params.set('keyword', searchKeyword.value)
+    if (filterDept.value) params.set('department', filterDept.value)
+    if (filterStatus.value) params.set('status', filterStatus.value)
+    const res = await api(`/users?${params.toString()}`)
+    const data = res.data || res
+    users.value = data.records || []
+    totalRecords.value = data.total || 0
+  } catch (e) {
+    console.error('加载用户列表失败:', e)
+    users.value = []
+  } finally {
+    tableLoading.value = false
   }
 }
 
-const toggleSelect = (id) => {
+const loadRoles = async () => {
+  if (roleOptions.value.length > 0) return // 缓存
+  try {
+    const res = await api('/roles?current=1&size=100')
+    const data = res.data || res
+    roleOptions.value = data.records || []
+  } catch (e) {
+    console.error('加载角色列表失败:', e)
+  }
+}
+
+// ===== 操作方法 =====
+function handleQuery() {
+  currentPage.value = 1
+  loadUsers()
+}
+
+function toggleSelectAll() {
+  if (isAllSelected.value) {
+    selectedIds.value = []
+  } else {
+    selectedIds.value = users.value.map(u => u.id)
+  }
+}
+
+function toggleSelect(id) {
   const idx = selectedIds.value.indexOf(id)
   if (idx >= 0) {
     selectedIds.value.splice(idx, 1)
@@ -254,125 +319,157 @@ const toggleSelect = (id) => {
   }
 }
 
-const onSearch = () => {}
-
-const showFormModal = ref(false)
-const formMode = ref('add')
-const formData = reactive({
-  id: null,
-  name: '',
-  account: '',
-  phone: '',
-  dept: '设计部',
-  role: '普通用户',
-  status: '正常',
-  remark: ''
-})
-
-const openAddModal = () => {
+function openAddModal() {
   formMode.value = 'add'
   formData.id = null
-  formData.name = ''
-  formData.account = ''
+  formData.realName = ''
+  formData.username = ''
+  formData.password = ''
   formData.phone = ''
-  formData.dept = '设计部'
-  formData.role = '普通用户'
-  formData.status = '正常'
-  formData.remark = ''
+  formData.email = ''
+  formData.department = '设计部'
+  formData.roleId = null
+  formData.status = 1
   showFormModal.value = true
 }
 
-const openEditModal = (user) => {
+function openEditModal(user) {
   formMode.value = 'edit'
   formData.id = user.id
-  formData.name = user.name
-  formData.account = user.account
-  formData.phone = user.phone
-  formData.dept = user.dept
-  formData.role = user.role
+  formData.realName = user.realName || ''
+  formData.username = user.username || ''
+  formData.password = ''
+  formData.phone = user.phone || ''
+  formData.email = user.email || ''
+  formData.department = user.department || ''
+  formData.roleId = user.roleId || null
   formData.status = user.status
-  formData.remark = user.remark
   showFormModal.value = true
 }
 
-const saveUser = () => {
-  if (!formData.name.trim()) { alert('请输入用户姓名'); return }
-  if (!formData.account.trim()) { alert('请输入登录账号'); return }
-  if (!formData.phone.trim()) { alert('请输入手机号'); return }
+async function saveUser() {
+  const realName = formData.realName.trim()
+  const username = formData.username.trim()
+  if (!realName) { appAlert('请输入用户姓名', '表单验证', 'warning'); return }
+  if (!username) { appAlert('请输入登录账号', '表单验证', 'warning'); return }
 
-  const accountExists = users.value.some(u => u.account === formData.account.trim() && u.id !== formData.id)
-  if (accountExists) { alert('登录账号已存在'); return }
-
-  if (formMode.value === 'add') {
-    users.value.push({
-      id: nextId++,
-      name: formData.name.trim(),
-      account: formData.account.trim(),
-      phone: formData.phone.trim(),
-      dept: formData.dept,
-      role: formData.role,
-      status: formData.status,
-      online: false,
-      lastLogin: '-',
-      remark: formData.remark
-    })
-  } else {
-    const user = users.value.find(u => u.id === formData.id)
-    if (user) {
-      user.name = formData.name.trim()
-      user.account = formData.account.trim()
-      user.phone = formData.phone.trim()
-      user.dept = formData.dept
-      user.role = formData.role
-      user.status = formData.status
-      user.remark = formData.remark
+  formLoading.value = true
+  try {
+    if (formMode.value === 'add') {
+      if (!formData.password) { appAlert('请输入初始密码', '表单验证', 'warning'); formLoading.value = false; return }
+      await api('/users', {
+        method: 'POST',
+        body: JSON.stringify({
+          username,
+          password: formData.password,
+          realName,
+          phone: formData.phone.trim(),
+          email: formData.email.trim(),
+          department: formData.department,
+          status: formData.status,
+          roleId: formData.roleId
+        })
+      })
+      appToast('用户已添加')
+    } else {
+      await api(`/users/${formData.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          realName,
+          phone: formData.phone.trim(),
+          email: formData.email.trim(),
+          department: formData.department,
+          status: formData.status
+        })
+      })
+      appToast('用户已更新')
     }
+    showFormModal.value = false
+    loadUsers()
+  } catch (e) {
+    appAlert(e.message || '操作失败', '操作失败', 'danger')
+  } finally {
+    formLoading.value = false
   }
-  showFormModal.value = false
 }
 
-const showRoleModal = ref(false)
-const roleFormData = reactive({ id: null, role: '普通用户' })
+async function toggleStatus(user) {
+  const nextStatus = user.status === 1 ? 0 : 1
+  const actionText = nextStatus === 1 ? '启用' : '禁用'
+  const ok = await appConfirm(`确认${actionText}用户「${user.realName}」？`, `${actionText}用户`, 'warning')
+  if (!ok) return
+  try {
+    await api(`/users/${user.id}/status?status=${nextStatus}`, { method: 'PUT' })
+    user.status = nextStatus
+  } catch (e) {
+    appAlert(e.message || '操作失败', '操作失败', 'danger')
+  }
+}
 
-const openRoleModal = (user) => {
+async function deleteUser(user) {
+  const ok = await appConfirm(`确认删除用户「${user.realName}」？<br/><small style="color:rgba(29,29,31,0.45)">删除后不可恢复</small>`, '删除用户', 'danger')
+  if (!ok) return
+  try {
+    await api(`/users/${user.id}`, { method: 'DELETE' })
+    loadUsers()
+  } catch (e) {
+    appAlert(e.message || '删除失败', '删除失败', 'danger')
+  }
+}
+
+async function onBatchDelete() {
+  if (selectedIds.value.length === 0) return
+  const ok = await appConfirm(`确认删除选中的 ${selectedIds.value.length} 个用户？<br/><small style="color:rgba(29,29,31,0.45)">删除后不可恢复</small>`, '批量删除', 'danger')
+  if (!ok) return
+  try {
+    await api('/users/batch', {
+      method: 'DELETE',
+      body: JSON.stringify(selectedIds.value)
+    })
+    selectedIds.value = []
+    loadUsers()
+  } catch (e) {
+    appAlert(e.message || '批量删除失败', '批量删除失败', 'danger')
+  }
+}
+
+async function resetPassword(user) {
+  const newPassword = await appPrompt(`请输入用户「${user.realName}」的新密码：`, '', '重置密码', 'warning')
+  if (!newPassword) return
+  try {
+    await api(`/users/${user.id}/password`, {
+      method: 'PUT',
+      body: JSON.stringify({ password: newPassword })
+    })
+    appToast('密码已重置')
+  } catch (e) {
+    appAlert(e.message || '重置失败', '重置失败', 'danger')
+  }
+}
+
+function openRoleModal(user) {
   roleFormData.id = user.id
-  roleFormData.role = user.role
+  roleFormData.roleId = user.roleId || null
   showRoleModal.value = true
 }
 
-const saveRole = () => {
-  const user = users.value.find(u => u.id === roleFormData.id)
-  if (user) {
-    user.role = roleFormData.role
-  }
-  showRoleModal.value = false
-}
-
-const resetPassword = (user) => {
-  if (!confirm(`确认重置用户 ${user.name} 的密码？`)) return
-  alert(`用户 ${user.name} 的密码已重置`)
-}
-
-const toggleStatus = (user) => {
-  const action = user.status === '正常' ? '禁用' : '启用'
-  if (!confirm(`确认${action}用户 ${user.name}？`)) return
-  user.status = user.status === '正常' ? '禁用' : '正常'
-  if (user.status === '禁用') {
-    user.online = false
+async function saveRole() {
+  try {
+    await api(`/users/${roleFormData.id}/roles`, {
+      method: 'PUT',
+      body: JSON.stringify({ roleId: roleFormData.roleId })
+    })
+    showRoleModal.value = false
+    loadUsers()
+    appToast('角色已分配')
+  } catch (e) {
+    appAlert(e.message || '分配角色失败', '分配角色失败', 'danger')
   }
 }
 
-const deleteUser = (user) => {
-  if (!confirm(`确认删除用户 ${user.name}？`)) return
-  const idx = users.value.findIndex(u => u.id === user.id)
-  if (idx >= 0) users.value.splice(idx, 1)
-  selectedIds.value = selectedIds.value.filter(id => id !== user.id)
-}
-
-const onBatchDelete = () => {
-  if (selectedIds.value.length === 0) return
-  if (!confirm(`确认删除选中的 ${selectedIds.value.length} 个用户？`)) return
-  users.value = users.value.filter(u => !selectedIds.value.includes(u.id))
-  selectedIds.value = []
-}
+// ===== 生命周期 =====
+onMounted(() => {
+  loadUsers()
+  loadRoles()
+})
 </script>

@@ -54,11 +54,15 @@ public class RoleController {
         return Result.ok("删除成功");
     }
 
+    @PostMapping("/batch-delete")
+    public Result<Void> batchDelete(@RequestBody List<Long> ids) {
+        roleService.batchDelete(ids);
+        return Result.ok("批量删除成功");
+    }
+
     @GetMapping("/{id}/permissions")
     public Result<List<Long>> getPermissions(@PathVariable Long id) {
-        Map<String, Object> role = roleService.getById(id);
-        @SuppressWarnings("unchecked")
-        List<Long> permissionIds = (List<Long>) role.get("permissionIds");
+        List<Long> permissionIds = roleService.getPermissionIdsByRoleId(id);
         return Result.success(permissionIds);
     }
 

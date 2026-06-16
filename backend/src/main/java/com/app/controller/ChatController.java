@@ -1,6 +1,5 @@
 package com.app.controller;
 
-import com.app.common.PageResult;
 import com.app.common.Result;
 import com.app.service.ChatService;
 import org.springframework.beans.factory.annotation.Autowired;

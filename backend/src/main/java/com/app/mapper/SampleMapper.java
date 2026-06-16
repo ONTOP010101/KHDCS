@@ -21,6 +21,12 @@ public interface SampleMapper extends BaseMapper<Sample> {
                                    @Param("sortField") String sortField,
                                    @Param("sortOrder") String sortOrder);
 
+    IPage<Sample> searchByKeyword(Page<Sample> page,
+                                  @Param("ftTerms") List<String> ftTerms,
+                                  @Param("likeTerms") List<String> likeTerms,
+                                  @Param("sortField") String sortField,
+                                  @Param("sortOrder") String sortOrder);
+
     @Select("SELECT * FROM samples WHERE sample_code = #{code} LIMIT 1")
     Sample findByCodeIncludeDeleted(@Param("code") String code);
 
@@ -33,6 +39,5 @@ public interface SampleMapper extends BaseMapper<Sample> {
     @Select("SELECT * FROM samples WHERE deleted = 1")
     List<Sample> selectAllDeleted();
 
-    @org.apache.ibatis.annotations.Update("UPDATE samples SET deleted = 0 WHERE id IN (${ids})")
-    int restoreByIds(@Param("ids") String ids);
+    int restoreByIds(@Param("ids") List<Long> ids);
 }

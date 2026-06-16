@@ -12,21 +12,21 @@ import com.app.mapper.ImageMapper;
 import com.app.mapper.SampleMapper;
 import com.app.mapper.SampleThumbnailMapper;
 import com.app.util.ImageHashUtil;
-import com.app.util.ImageShardContext;
 import com.app.util.FeatureExtractor;
 import com.app.util.DeepFeatureExtractor;
 import com.app.util.ScreenshotPreprocessor;
 import com.app.util.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
@@ -39,6 +39,7 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -103,13 +104,11 @@ public class ImageService {
             log.error("[ImageService] Sample not found for id: {}", sampleId);
             return null;
         }
-        String code = s.getSampleCode();
-        return code;
+        return s.getSampleCode();
     }
 
-    private static final String SHARD_HEX = "0123456789abcdef";
-
-    private final ExecutorService searchExecutor = Executors.newFixedThreadPool(32);
+    private final ExecutorService searchExecutor = Executors.newFixedThreadPool(
+            Runtime.getRuntime().availableProcessors());
 
     @PreDestroy
     public void shutdown() {
@@ -141,132 +140,132 @@ public class ImageService {
         try {
             byte[] fileBytes = file.getBytes();
 
-            boolean compressed = false;
             if (fileBytes.length > 1024 * 1024) {
                 try {
                     byte[] compressedBytes = compressImage(fileBytes);
                     if (compressedBytes.length < fileBytes.length) {
                         fileBytes = compressedBytes;
                         ext = "jpg";
-                        compressed = true;
                     }
                 } catch (Exception ignored) {}
             }
 
             String hash = DigestUtil.sha256Hex(fileBytes);
-            String hashPrefix = hash.substring(0, 2).toLowerCase();
 
-            ImageShardContext.setHashPrefix(hashPrefix);
-            try {
-                LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-                wrapper.eq(Image::getHash, hash);
-                wrapper.last("LIMIT 1");
-                Image existing = imageMapper.selectOne(wrapper);
-                if (existing != null) {
-                    String existFilePath = existing.getFilePath();
+            // 单表去重检查
+            LambdaQueryWrapper<Image> dupWrapper = new LambdaQueryWrapper<>();
+            dupWrapper.eq(Image::getHash, hash);
+            dupWrapper.last("LIMIT 1");
+            Image existing = imageMapper.selectOne(dupWrapper);
+            if (existing != null) {
+                String existFilePath = existing.getFilePath();
 
-                    String dateDir = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
-                    String hashDir = hash.substring(0, 2) + "/" + hash.substring(2, 4);
-                    String codePrefix = getSampleCode(sampleId);
-                    if (codePrefix != null) {
-                        String newStoreName = codePrefix + "_" + hash + "." + ext;
-                        String newRelativePath = dateDir + "/" + hashDir + "/" + newStoreName;
-                        Path newFullPath = Paths.get(imagePath, newRelativePath);
-                        Path existFullPath = Paths.get(imagePath, existFilePath);
-                        if (!newFullPath.toFile().exists()) {
-                            newFullPath.getParent().toFile().mkdirs();
-                            try {
-                                java.nio.file.Files.copy(existFullPath, newFullPath);
-                            } catch (java.io.IOException e) {
-                                log.error("[ImageService] Copy failed: {}", e.getMessage());
-                            }
-                        }
-                        if (!newFullPath.toFile().exists()) {
-                            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(newFullPath.toFile())) {
-                                fos.write(fileBytes);
-                                fos.flush();
-                            }
-                        }
-                        if (newFullPath.toFile().exists()) {
-                            existFilePath = newRelativePath;
+                String dateDir = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
+                String hashDir = hash.substring(0, 2) + "/" + hash.substring(2, 4);
+                String codePrefix = getSampleCode(sampleId);
+                if (codePrefix != null) {
+                    String newStoreName = codePrefix + "_" + hash + "." + ext;
+                    String newRelativePath = dateDir + "/" + hashDir + "/" + newStoreName;
+                    Path newFullPath = Paths.get(imagePath, newRelativePath);
+                    Path existFullPath = Paths.get(imagePath, existFilePath);
+                    if (!newFullPath.toFile().exists()) {
+                        newFullPath.getParent().toFile().mkdirs();
+                        try {
+                            Files.copy(existFullPath, newFullPath);
+                        } catch (IOException e) {
+                            log.error("[ImageService] Copy failed: {}", e.getMessage());
                         }
                     }
+                    if (!newFullPath.toFile().exists()) {
+                        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(newFullPath.toFile())) {
+                            fos.write(fileBytes);
+                            fos.flush();
+                        }
+                    }
+                    if (newFullPath.toFile().exists()) {
+                        existFilePath = newRelativePath;
+                    }
+                }
 
-                    String thumbDir = hash.substring(0, 2) + "/" + hash.substring(2, 4);
+                String thumbDir = hash.substring(0, 2) + "/" + hash.substring(2, 4);
 
-                    BufferedImage bi = ImageIO.read(new ByteArrayInputStream(fileBytes));
-                    int tw = Math.min(bi.getWidth(), 300);
-                    int th = (int) ((double) bi.getHeight() / bi.getWidth() * tw);
-                    if (th > 300) { th = 300; tw = (int) ((double) bi.getWidth() / bi.getHeight() * th); }
-                    BufferedImage thumb = new BufferedImage(tw, th, BufferedImage.TYPE_INT_RGB);
-                    Graphics2D tg = thumb.createGraphics();
-                    tg.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-                    tg.drawImage(bi, 0, 0, tw, th, null);
-                    tg.dispose();
+                BufferedImage bi = ImageIO.read(new ByteArrayInputStream(fileBytes));
+                int tw = Math.min(bi.getWidth(), 300);
+                int th = (int) ((double) bi.getHeight() / bi.getWidth() * tw);
+                if (th > 300) { th = 300; tw = (int) ((double) bi.getWidth() / bi.getHeight() * th); }
+                BufferedImage thumb = new BufferedImage(tw, th, BufferedImage.TYPE_INT_RGB);
+                Graphics2D tg = thumb.createGraphics();
+                tg.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                tg.drawImage(bi, 0, 0, tw, th, null);
+                tg.dispose();
 
-                    ByteArrayOutputStream tbos = new ByteArrayOutputStream();
-                    ImageIO.write(thumb, "jpg", tbos);
-                    byte[] thumbBytes = tbos.toByteArray();
-                    String thumbHash = DigestUtil.md5Hex(thumbBytes);
-                    String thumbName = thumbHash + "_" + System.currentTimeMillis() + ".jpg";
-                    String thumbRelPath = thumbDir + "/" + thumbName;
-                    Path thumbFullPath = Paths.get(thumbnailPath, thumbRelPath);
-                    thumbFullPath.getParent().toFile().mkdirs();
-                    java.io.FileOutputStream thumbFos = new java.io.FileOutputStream(thumbFullPath.toFile());
+                ByteArrayOutputStream tbos = new ByteArrayOutputStream();
+                ImageIO.write(thumb, "webp", tbos);
+                byte[] thumbBytes = tbos.toByteArray();
+                String thumbHash = DigestUtil.md5Hex(thumbBytes);
+                String thumbName = thumbHash + "_" + System.currentTimeMillis() + ".webp";
+                String thumbRelPath = thumbDir + "/" + thumbName;
+                Path thumbFullPath = Paths.get(thumbnailPath, thumbRelPath);
+                thumbFullPath.getParent().toFile().mkdirs();
+                try (java.io.FileOutputStream thumbFos = new java.io.FileOutputStream(thumbFullPath.toFile())) {
                     thumbFos.write(thumbBytes);
                     thumbFos.flush();
-                    thumbFos.close();
-
-                    Image newImage = new Image();
-                    newImage.setGalleryId(galleryId);
-                    newImage.setSampleId(sampleId);
-                    newImage.setFileName(originalName);
-                    newImage.setFilePath(existFilePath);
-                    newImage.setThumbnailPath(thumbRelPath);
-                    newImage.setFileSize((long) fileBytes.length);
-                    newImage.setFileType(ext);
-                    newImage.setWidth(bi.getWidth());
-                    newImage.setHeight(bi.getHeight());
-                    newImage.setHash(hash);
-                    newImage.setDescription(description);
-                    newImage.setTags(tags);
-                    newImage.setSortOrder(0);
-                    applyDhashBuckets(newImage, ImageHashUtil.computeDHashFromBytes(fileBytes));
-                    newImage.setFeatureVector(FeatureExtractor.toBytes(
-                            FeatureExtractor.extract(javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(fileBytes)))));
-                    try {
-                        java.awt.image.BufferedImage deepBi = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(fileBytes));
-                        if (deepBi != null) {
-                            newImage.setDeepFeatureVector(DeepFeatureExtractor.toBytes(
-                                    DeepFeatureExtractor.extractSafe(deepBi)));
-                        }
-                    } catch (Exception de) {
-                        log.warn("Deep feature extraction failed during upload: {}", de.getMessage());
-                    }
-                    Long userId = UserContext.getUserId();
-                    newImage.setCreateBy(userId);
-
-                    imageMapper.insert(newImage);
-
-                    if (sampleId != null) {
-                        syncSampleThumbnail(sampleId, hash);
-                    }
-
-                    try {
-                        float[] deepFv = DeepFeatureExtractor.fromBytes(newImage.getDeepFeatureVector());
-                        if (deepFv != null && pgVectorService != null) {
-                            pgVectorService.upsert(newImage.getId(), hashPrefix, deepFv);
-                        }
-                    } catch (Exception pe) {
-                        log.warn("PgVector upsert failed during upload: {}", pe.getMessage());
-                    }
-
-                    return newImage;
                 }
-            } finally {
-                ImageShardContext.clear();
+
+                Image newImage = new Image();
+                newImage.setGalleryId(galleryId);
+                newImage.setSampleId(sampleId);
+                newImage.setFileName(originalName);
+                newImage.setFilePath(existFilePath);
+                newImage.setThumbnailPath(thumbRelPath);
+                newImage.setFileSize((long) fileBytes.length);
+                newImage.setFileType(ext);
+                newImage.setWidth(bi.getWidth());
+                newImage.setHeight(bi.getHeight());
+                newImage.setHash(hash);
+                newImage.setDescription(description);
+                newImage.setTags(tags);
+                newImage.setSortOrder(0);
+                applyDhashBuckets(newImage, ImageHashUtil.computeDHashFromBytes(fileBytes));
+                try {
+                    java.awt.image.BufferedImage featBi = ImageIO.read(new ByteArrayInputStream(fileBytes));
+                    if (featBi != null) {
+                        newImage.setFeatureVector(FeatureExtractor.toBytes(FeatureExtractor.extract(featBi)));
+                    }
+                } catch (Exception fe) {
+                    log.warn("Feature extraction failed during upload: {}", fe.getMessage());
+                }
+                try {
+                    java.awt.image.BufferedImage deepBi = ImageIO.read(new ByteArrayInputStream(fileBytes));
+                    if (deepBi != null) {
+                        newImage.setDeepFeatureVector(DeepFeatureExtractor.toBytes(
+                                DeepFeatureExtractor.extractSafe(deepBi)));
+                    }
+                } catch (Exception de) {
+                    log.warn("Deep feature extraction failed during upload: {}", de.getMessage());
+                }
+                Long userId = UserContext.getUserId();
+                newImage.setCreateBy(userId);
+
+                imageMapper.insert(newImage);
+
+                if (sampleId != null) {
+                    syncSampleThumbnail(sampleId, hash);
+                }
+
+                try {
+                    float[] deepFv = DeepFeatureExtractor.fromBytes(newImage.getDeepFeatureVector());
+                    if (deepFv != null && pgVectorService != null) {
+                        pgVectorService.upsert(newImage.getId(), deepFv);
+                    }
+                } catch (Exception pe) {
+                    log.warn("PgVector upsert failed during upload: {}", pe.getMessage());
+                }
+
+                return newImage;
             }
 
+            // 新图片上传
             String dateDir = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
             String hashDir = hash.substring(0, 2) + "/" + hash.substring(2, 4);
             String codePrefix = sampleId != null ? getSampleCode(sampleId) : null;
@@ -315,10 +314,16 @@ public class ImageService {
             image.setTags(tags);
             image.setSortOrder(0);
             applyDhashBuckets(image, ImageHashUtil.computeDHashFromBytes(fileBytes));
-            image.setFeatureVector(FeatureExtractor.toBytes(
-                    FeatureExtractor.extract(javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(fileBytes)))));
             try {
-                java.awt.image.BufferedImage deepBi = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(fileBytes));
+                java.awt.image.BufferedImage featBi = ImageIO.read(new ByteArrayInputStream(fileBytes));
+                if (featBi != null) {
+                    image.setFeatureVector(FeatureExtractor.toBytes(FeatureExtractor.extract(featBi)));
+                }
+            } catch (Exception fe) {
+                log.warn("Feature extraction failed during upload: {}", fe.getMessage());
+            }
+            try {
+                java.awt.image.BufferedImage deepBi = ImageIO.read(new ByteArrayInputStream(fileBytes));
                 if (deepBi != null) {
                     image.setDeepFeatureVector(DeepFeatureExtractor.toBytes(
                             DeepFeatureExtractor.extractSafe(deepBi)));
@@ -328,17 +333,12 @@ public class ImageService {
             }
             image.setCreateBy(UserContext.getUserId());
 
-            ImageShardContext.setHashPrefix(hashPrefix);
-            try {
-                imageMapper.insert(image);
-            } finally {
-                ImageShardContext.clear();
-            }
+            imageMapper.insert(image);
 
             try {
                 float[] deepFv = DeepFeatureExtractor.fromBytes(image.getDeepFeatureVector());
                 if (deepFv != null && pgVectorService != null) {
-                    pgVectorService.upsert(image.getId(), hash.substring(0, 2).toLowerCase(), deepFv);
+                    pgVectorService.upsert(image.getId(), deepFv);
                 }
             } catch (Exception pe) {
                 log.warn("PgVector upsert failed during upload: {}", pe.getMessage());
@@ -359,7 +359,7 @@ public class ImageService {
             return image;
         } catch (BusinessException e) { throw e; }
         catch (Exception e) {
-            System.err.println("[ImageService] 上传异常详情: " + e.getClass().getName() + " - " + e.getMessage());
+            System.err.println("[ImageService] \u4e0a\u4f20\u5f02\u5e38\u8be6\u60c5: " + e.getClass().getName() + " - " + e.getMessage());
             e.printStackTrace();
             throw new BusinessException(500, "\u4e0a\u4f20\u5931\u8d25: [" + e.getClass().getSimpleName() + "] " + e.getMessage());
         }
@@ -375,38 +375,44 @@ public class ImageService {
     }
 
     public String getImageExtByHash(String hash) {
-        String hashPrefix = hash.substring(0, 2).toLowerCase();
-        ImageShardContext.setHashPrefix(hashPrefix);
-        try {
-            LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-            wrapper.eq(Image::getHash, hash).select(Image::getFilePath);
-            Image image = imageMapper.selectOne(wrapper);
-            if (image != null && image.getFilePath() != null) {
-                String name = image.getFilePath();
-                int dot = name.lastIndexOf('.');
-                return dot > 0 ? name.substring(dot + 1) : "jpg";
-            }
-            return "jpg";
-        } finally {
-            ImageShardContext.clear();
+        LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Image::getHash, hash).select(Image::getFilePath);
+        Image image = imageMapper.selectOne(wrapper);
+        if (image != null && image.getFilePath() != null) {
+            String name = image.getFilePath();
+            int dot = name.lastIndexOf('.');
+            return dot > 0 ? name.substring(dot + 1) : "jpg";
         }
+        return "jpg";
     }
 
     public byte[] loadImage(String hash) {
-        String hashPrefix = hash.substring(0, 2).toLowerCase();
-        ImageShardContext.setHashPrefix(hashPrefix);
-        try {
-            LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-            wrapper.eq(Image::getHash, hash);
-            Image image = imageMapper.selectOne(wrapper);
-            if (image == null) throw new BusinessException(404, "\u56fe\u7247\u4e0d\u5b58\u5728");
+        LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Image::getHash, hash);
+        Image image = imageMapper.selectOne(wrapper);
+        if (image == null) throw new BusinessException(404, "\u56fe\u7247\u4e0d\u5b58\u5728");
 
+        try {
             Path fullPath = Paths.get(imagePath, image.getFilePath());
             return Files.readAllBytes(fullPath);
-        } catch (BusinessException e) { throw e; }
-        catch (IOException e) { throw new BusinessException(500, "\u8bfb\u53d6\u56fe\u7247\u5931\u8d25"); }
-        catch (Exception e) { throw new BusinessException(404, "\u56fe\u7247\u4e0d\u5b58\u5728"); }
-        finally { ImageShardContext.clear(); }
+        } catch (IOException e) {
+            throw new BusinessException(500, "\u8bfb\u53d6\u56fe\u7247\u5931\u8d25");
+        }
+    }
+
+    public Resource loadImageAsResource(String hash) {
+        LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Image::getHash, hash);
+        Image image = imageMapper.selectOne(wrapper);
+        if (image == null) throw new BusinessException(404, "\u56fe\u7247\u4e0d\u5b58\u5728");
+
+        try {
+            Path fullPath = Paths.get(imagePath, image.getFilePath());
+            InputStream is = Files.newInputStream(fullPath);
+            return new InputStreamResource(is);
+        } catch (IOException e) {
+            throw new BusinessException(500, "\u8bfb\u53d6\u56fe\u7247\u5931\u8d25");
+        }
     }
 
     public byte[] loadImageById(Long id) {
@@ -416,6 +422,19 @@ public class ImageService {
         try {
             Path fullPath = Paths.get(imagePath, image.getFilePath());
             return Files.readAllBytes(fullPath);
+        } catch (IOException e) {
+            throw new BusinessException(500, "\u8bfb\u53d6\u56fe\u7247\u5931\u8d25");
+        }
+    }
+
+    public Resource loadImageByIdAsResource(Long id) {
+        Image image = findImageById(id);
+        if (image == null) throw new BusinessException(404, "\u56fe\u7247\u4e0d\u5b58\u5728");
+
+        try {
+            Path fullPath = Paths.get(imagePath, image.getFilePath());
+            InputStream is = Files.newInputStream(fullPath);
+            return new InputStreamResource(is);
         } catch (IOException e) {
             throw new BusinessException(500, "\u8bfb\u53d6\u56fe\u7247\u5931\u8d25");
         }
@@ -440,61 +459,35 @@ public class ImageService {
         return loadImageById(id);
     }
 
-    public List<Image> listByGallery(Long galleryId) {
-        List<Image> allImages = new ArrayList<>();
-        for (int i = 0; i < SHARD_HEX.length(); i++) {
-            for (int j = 0; j < SHARD_HEX.length(); j++) {
-                String prefix = "" + SHARD_HEX.charAt(i) + SHARD_HEX.charAt(j);
-                ImageShardContext.setHashPrefix(prefix);
-                try {
-                    LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-                    wrapper.eq(Image::getGalleryId, galleryId)
-                            .orderByAsc(Image::getSortOrder)
-                            .orderByDesc(Image::getCreateTime);
-                    allImages.addAll(imageMapper.selectList(wrapper));
-                } finally {
-                    ImageShardContext.clear();
-                }
-            }
+    public Resource loadThumbnailAsResource(Long id) {
+        Image image = findImageById(id);
+        if (image == null) return null;
+
+        if (image.getThumbnailPath() != null) {
+            try {
+                Path fullPath = Paths.get(thumbnailPath, image.getThumbnailPath());
+                InputStream is = Files.newInputStream(fullPath);
+                return new InputStreamResource(is);
+            } catch (IOException ignored) {}
         }
-        allImages.sort((a, b) -> {
-            int so1 = a.getSortOrder() != null ? a.getSortOrder() : 0;
-            int so2 = b.getSortOrder() != null ? b.getSortOrder() : 0;
-            if (so1 != so2) return Integer.compare(so1, so2);
-            if (a.getCreateTime() == null) return 1;
-            if (b.getCreateTime() == null) return -1;
-            return b.getCreateTime().compareTo(a.getCreateTime());
-        });
-        return allImages;
+        return loadImageByIdAsResource(id);
+    }
+
+    public List<Image> listByGallery(Long galleryId) {
+        LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Image::getGalleryId, galleryId)
+                .orderByAsc(Image::getSortOrder)
+                .orderByDesc(Image::getCreateTime);
+        return imageMapper.selectList(wrapper);
     }
 
     public List<Image> listBySampleId(Long sampleId) {
         if (sampleId == null) return new ArrayList<>();
-        List<Image> allImages = new ArrayList<>();
-        for (int i = 0; i < SHARD_HEX.length(); i++) {
-            for (int j = 0; j < SHARD_HEX.length(); j++) {
-                String prefix = "" + SHARD_HEX.charAt(i) + SHARD_HEX.charAt(j);
-                ImageShardContext.setHashPrefix(prefix);
-                try {
-                    LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-                    wrapper.eq(Image::getSampleId, sampleId)
-                            .orderByAsc(Image::getSortOrder)
-                            .orderByDesc(Image::getCreateTime);
-                    allImages.addAll(imageMapper.selectList(wrapper));
-                } finally {
-                    ImageShardContext.clear();
-                }
-            }
-        }
-        allImages.sort((a, b) -> {
-            int so1 = a.getSortOrder() != null ? a.getSortOrder() : 0;
-            int so2 = b.getSortOrder() != null ? b.getSortOrder() : 0;
-            if (so1 != so2) return Integer.compare(so1, so2);
-            if (a.getCreateTime() == null) return 1;
-            if (b.getCreateTime() == null) return -1;
-            return b.getCreateTime().compareTo(a.getCreateTime());
-        });
-        return allImages;
+        LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Image::getSampleId, sampleId)
+                .orderByAsc(Image::getSortOrder)
+                .orderByDesc(Image::getCreateTime);
+        return imageMapper.selectList(wrapper);
     }
 
     public List<Map<String, Object>> searchByImage(MultipartFile file, int maxDistance) {
@@ -502,7 +495,7 @@ public class ImageService {
         try {
             fileBytes = file.getBytes();
         } catch (Exception e) {
-            throw new BusinessException(400, "无法读取上传的图片");
+            throw new BusinessException(400, "\u65e0\u6cd5\u8bfb\u53d6\u4e0a\u4f20\u7684\u56fe\u7247");
         }
 
         String fileHash = DigestUtil.sha256Hex(fileBytes);
@@ -510,12 +503,12 @@ public class ImageService {
 
         java.awt.image.BufferedImage image;
         try {
-            image = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(fileBytes));
+            image = ImageIO.read(new ByteArrayInputStream(fileBytes));
         } catch (Exception e) {
-            throw new BusinessException(400, "无法解析图片");
+            throw new BusinessException(400, "\u65e0\u6cd5\u89e3\u6790\u56fe\u7247");
         }
         if (image == null) {
-            throw new BusinessException(400, "无法解析图片");
+            throw new BusinessException(400, "\u65e0\u6cd5\u89e3\u6790\u56fe\u7247");
         }
 
         if ("deep".equals(searchEngine) && DeepFeatureExtractor.isAvailable()) {
@@ -585,7 +578,7 @@ public class ImageService {
         }
 
         if (queryDHash == 0 && queryFeature.length == 0) {
-            throw new BusinessException(400, "无法计算图片哈希值");
+            throw new BusinessException(400, "\u65e0\u6cd5\u8ba1\u7b97\u56fe\u7247\u54c8\u5e0c\u503c");
         }
 
         Map<String, Map<String, Object>> merged = new ConcurrentHashMap<>();
@@ -698,39 +691,32 @@ public class ImageService {
 
     private Map<String, Object> findByHash(String hash) {
         if (hash == null || hash.isEmpty()) return null;
-        String hashPrefix = hash.substring(0, 2).toLowerCase();
-        ImageShardContext.setHashPrefix(hashPrefix);
-        try {
-            LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-            wrapper.eq(Image::getHash, hash)
-                    .select(Image::getId, Image::getSampleId, Image::getFilePath,
-                            Image::getThumbnailPath, Image::getFileName);
-            Image img = imageMapper.selectOne(wrapper);
-            if (img == null || img.getSampleId() == null) return null;
-            Sample s = sampleMapper.selectById(img.getSampleId());
-            if (s == null) return null;
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("imageId", img.getId());
-            item.put("sampleId", img.getSampleId());
-            item.put("thumbnailPath", img.getThumbnailPath());
-            item.put("filePath", img.getFilePath());
-            item.put("fileName", img.getFileName());
-            item.put("distance", 0);
-            item.put("similarity", 1.0);
-            item.put("sampleCode", s.getSampleCode());
-            item.put("sampleName", s.getSampleName());
-            item.put("category", s.getCategory());
-            item.put("_exactMatch", true);
-            return item;
-        } finally {
-            ImageShardContext.clear();
-        }
+        LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Image::getHash, hash)
+                .select(Image::getId, Image::getSampleId, Image::getFilePath,
+                        Image::getThumbnailPath, Image::getFileName);
+        Image img = imageMapper.selectOne(wrapper);
+        if (img == null || img.getSampleId() == null) return null;
+        Sample s = sampleMapper.selectById(img.getSampleId());
+        if (s == null) return null;
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("imageId", img.getId());
+        item.put("sampleId", img.getSampleId());
+        item.put("thumbnailPath", img.getThumbnailPath());
+        item.put("filePath", img.getFilePath());
+        item.put("fileName", img.getFileName());
+        item.put("distance", 0);
+        item.put("similarity", 1.0);
+        item.put("sampleCode", s.getSampleCode());
+        item.put("sampleName", s.getSampleName());
+        item.put("category", s.getCategory());
+        item.put("_exactMatch", true);
+        return item;
     }
 
     private List<Map<String, Object>> mergeExactMatch(List<Map<String, Object>> results, Map<String, Object> exactMatch) {
         if (exactMatch == null) return results;
         if (results == null) results = new ArrayList<>();
-
         Long exactId = (Long) exactMatch.get("imageId");
         boolean alreadyPresent = false;
         for (int i = 0; i < results.size(); i++) {
@@ -759,72 +745,62 @@ public class ImageService {
         double dhashWeight = isScreenshot ? 0.05 : 0.1;
         double featureWeight = 1.0 - dhashWeight;
 
-        for (int i = 0; i < SHARD_HEX.length(); i++) {
-            for (int j = 0; j < SHARD_HEX.length(); j++) {
-                final String prefix = "" + SHARD_HEX.charAt(i) + SHARD_HEX.charAt(j);
-                allTasks.add(() -> {
-                    ImageShardContext.setHashPrefix(prefix);
-                    try {
-                        LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-                        wrapper.isNotNull(Image::getDhash)
-                                .isNotNull(Image::getFeatureVector)
-                                .apply(bucketWhere)
-                                .select(Image::getId, Image::getSampleId, Image::getFilePath,
-                                        Image::getThumbnailPath, Image::getFileName,
-                                        Image::getDhash, Image::getFeatureVector);
-                        List<Image> images = imageMapper.selectList(wrapper);
-                        log.debug("Bucket search in images_{}: found {} candidates", prefix, images.size());
-                        for (Image img : images) {
-                            byte[] fvBytes = img.getFeatureVector();
-                            if (fvBytes == null || fvBytes.length == 0) continue;
+        allTasks.add(() -> {
+            LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
+            wrapper.isNotNull(Image::getDhash)
+                    .isNotNull(Image::getFeatureVector)
+                    .apply(bucketWhere)
+                    .select(Image::getId, Image::getSampleId, Image::getFilePath,
+                            Image::getThumbnailPath, Image::getFileName,
+                            Image::getDhash, Image::getFeatureVector);
+            List<Image> images = imageMapper.selectList(wrapper);
+            log.debug("Bucket search in images: found {} candidates", images.size());
+            for (Image img : images) {
+                byte[] fvBytes = img.getFeatureVector();
+                if (fvBytes == null || fvBytes.length == 0) continue;
 
-                            Long imgDhash = img.getDhash();
-                            int dDist = (imgDhash != null) ? ImageHashUtil.hammingDistance(queryDHash, imgDhash) : 99;
-                            if (dDist > maxDistance) continue;
+                Long imgDhash = img.getDhash();
+                int dDist = (imgDhash != null) ? ImageHashUtil.hammingDistance(queryDHash, imgDhash) : 99;
+                if (dDist > maxDistance) continue;
 
-                            float[] dbFeature = FeatureExtractor.fromBytes(fvBytes);
-                            double sim = FeatureExtractor.cosineSimilarity(queryFeature, dbFeature);
-                            double dhashScore = Math.max(0, 1.0 - dDist / 64.0);
-                            double score = sim * featureWeight + dhashScore * dhashWeight;
+                float[] dbFeature = FeatureExtractor.fromBytes(fvBytes);
+                double sim = FeatureExtractor.cosineSimilarity(queryFeature, dbFeature);
+                double dhashScore = Math.max(0, 1.0 - dDist / 64.0);
+                double score = sim * featureWeight + dhashScore * dhashWeight;
 
-                            Long imgId = img.getId();
-                            String mergeKey = prefix + "_" + imgId;
-                            Map<String, Object> existing = merged.get(mergeKey);
-                            if (existing != null && ((Number) existing.getOrDefault("similarity", 0.0)).doubleValue() >= score) {
-                                continue;
-                            }
+                Long imgId = img.getId();
+                String mergeKey = String.valueOf(imgId);
+                Map<String, Object> existing = merged.get(mergeKey);
+                if (existing != null && ((Number) existing.getOrDefault("similarity", 0.0)).doubleValue() >= score) {
+                    continue;
+                }
 
-                            Map<String, Object> item = new LinkedHashMap<>();
-                            item.put("imageId", imgId);
-                            item.put("sampleId", img.getSampleId());
-                            item.put("thumbnailPath", img.getThumbnailPath());
-                            item.put("filePath", img.getFilePath());
-                            item.put("fileName", img.getFileName());
-                            item.put("distance", dDist);
-                            item.put("similarity", score);
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("imageId", imgId);
+                item.put("sampleId", img.getSampleId());
+                item.put("thumbnailPath", img.getThumbnailPath());
+                item.put("filePath", img.getFilePath());
+                item.put("fileName", img.getFileName());
+                item.put("distance", dDist);
+                item.put("similarity", score);
 
-                            if (img.getSampleId() != null) {
-                                Sample s = sampleMapper.selectById(img.getSampleId());
-                                if (s != null) {
-                                    item.put("sampleCode", s.getSampleCode());
-                                    item.put("sampleName", s.getSampleName());
-                                    item.put("category", s.getCategory());
-                                } else {
-                                    continue;
-                                }
-                            } else {
-                                continue;
-                            }
-
-                            merged.put(mergeKey, item);
-                        }
-                    } finally {
-                        ImageShardContext.clear();
+                if (img.getSampleId() != null) {
+                    Sample s = sampleMapper.selectById(img.getSampleId());
+                    if (s != null) {
+                        item.put("sampleCode", s.getSampleCode());
+                        item.put("sampleName", s.getSampleName());
+                        item.put("category", s.getCategory());
+                    } else {
+                        continue;
                     }
-                    return null;
-                });
+                } else {
+                    continue;
+                }
+
+                merged.put(mergeKey, item);
             }
-        }
+            return null;
+        });
     }
 
     private void addFallbackSearchTasks(List<Callable<Void>> allTasks, float[] queryFeature,
@@ -833,85 +809,75 @@ public class ImageService {
                                          boolean isScreenshot) {
         if (queryFeature == null || queryFeature.length == 0) return;
 
-        for (int i = 0; i < SHARD_HEX.length(); i++) {
-            for (int j = 0; j < SHARD_HEX.length(); j++) {
-                final String prefix = "" + SHARD_HEX.charAt(i) + SHARD_HEX.charAt(j);
-                allTasks.add(() -> {
-                    ImageShardContext.setHashPrefix(prefix);
+        allTasks.add(() -> {
+            LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
+            wrapper.select(Image::getId, Image::getSampleId, Image::getFilePath,
+                            Image::getThumbnailPath, Image::getFileName,
+                            Image::getDhash, Image::getFeatureVector);
+            List<Image> images = imageMapper.selectList(wrapper);
+            for (Image img : images) {
+                byte[] fvBytes = img.getFeatureVector();
+                if (fvBytes == null || fvBytes.length == 0) {
+                    java.awt.image.BufferedImage imgFile = null;
                     try {
-                        LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-                        wrapper.select(Image::getId, Image::getSampleId, Image::getFilePath,
-                                        Image::getThumbnailPath, Image::getFileName,
-                                        Image::getDhash, Image::getFeatureVector);
-                        List<Image> images = imageMapper.selectList(wrapper);
-                        for (Image img : images) {
-                            byte[] fvBytes = img.getFeatureVector();
-                            if (fvBytes == null || fvBytes.length == 0) {
-                                java.awt.image.BufferedImage imgFile = null;
-                                try {
-                                    java.nio.file.Path fullPath = java.nio.file.Paths.get(imagePath, img.getFilePath());
-                                    if (java.nio.file.Files.exists(fullPath)) {
-                                        imgFile = javax.imageio.ImageIO.read(fullPath.toFile());
-                                    }
-                                } catch (Exception ee) {
-                                    continue;
-                                }
-                                if (imgFile == null) continue;
-                                float[] feat = FeatureExtractor.extract(imgFile);
-                                fvBytes = FeatureExtractor.toBytes(feat);
-                            }
-
-                            float[] dbFeature = FeatureExtractor.fromBytes(fvBytes);
-                            double sim = FeatureExtractor.cosineSimilarity(queryFeature, dbFeature);
-                            if (sim < 0.55) continue;
-
-                            Long imgDhash = img.getDhash();
-                            int dDist = 99;
-                            double dhashScore = 0.0;
-                            if (imgDhash != null && imgDhash != 0 && queryDHash != 0) {
-                                dDist = Long.bitCount(queryDHash ^ imgDhash);
-                                dhashScore = Math.max(0, 1.0 - dDist / 64.0);
-                            }
-                            double score = sim * 0.95 + dhashScore * 0.05;
-
-                            Long imgId = img.getId();
-                            String mergeKey = prefix + "_" + imgId;
-                            Map<String, Object> existing = merged.get(mergeKey);
-                            if (existing != null && ((Number) existing.getOrDefault("similarity", 0.0)).doubleValue() >= score) {
-                                continue;
-                            }
-
-                            Map<String, Object> item = new LinkedHashMap<>();
-                            item.put("imageId", imgId);
-                            item.put("sampleId", img.getSampleId());
-                            item.put("thumbnailPath", img.getThumbnailPath());
-                            item.put("filePath", img.getFilePath());
-                            item.put("fileName", img.getFileName());
-                            item.put("distance", dDist);
-                            item.put("similarity", score);
-
-                            if (img.getSampleId() != null) {
-                                Sample s = sampleMapper.selectById(img.getSampleId());
-                                if (s != null) {
-                                    item.put("sampleCode", s.getSampleCode());
-                                    item.put("sampleName", s.getSampleName());
-                                    item.put("category", s.getCategory());
-                                } else {
-                                    continue;
-                                }
-                            } else {
-                                continue;
-                            }
-
-                            merged.put(mergeKey, item);
+                        Path fullPath = Paths.get(imagePath, img.getFilePath());
+                        if (Files.exists(fullPath)) {
+                            imgFile = ImageIO.read(fullPath.toFile());
                         }
-                    } finally {
-                        ImageShardContext.clear();
+                    } catch (Exception ee) {
+                        continue;
                     }
-                    return null;
-                });
+                    if (imgFile == null) continue;
+                    float[] feat = FeatureExtractor.extract(imgFile);
+                    fvBytes = FeatureExtractor.toBytes(feat);
+                }
+
+                float[] dbFeature = FeatureExtractor.fromBytes(fvBytes);
+                double sim = FeatureExtractor.cosineSimilarity(queryFeature, dbFeature);
+                if (sim < 0.55) continue;
+
+                Long imgDhash = img.getDhash();
+                int dDist = 99;
+                double dhashScore = 0.0;
+                if (imgDhash != null && imgDhash != 0 && queryDHash != 0) {
+                    dDist = Long.bitCount(queryDHash ^ imgDhash);
+                    dhashScore = Math.max(0, 1.0 - dDist / 64.0);
+                }
+                double score = sim * 0.95 + dhashScore * 0.05;
+
+                Long imgId = img.getId();
+                String mergeKey = String.valueOf(imgId);
+                Map<String, Object> existing = merged.get(mergeKey);
+                if (existing != null && ((Number) existing.getOrDefault("similarity", 0.0)).doubleValue() >= score) {
+                    continue;
+                }
+
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("imageId", imgId);
+                item.put("sampleId", img.getSampleId());
+                item.put("thumbnailPath", img.getThumbnailPath());
+                item.put("filePath", img.getFilePath());
+                item.put("fileName", img.getFileName());
+                item.put("distance", dDist);
+                item.put("similarity", score);
+
+                if (img.getSampleId() != null) {
+                    Sample s = sampleMapper.selectById(img.getSampleId());
+                    if (s != null) {
+                        item.put("sampleCode", s.getSampleCode());
+                        item.put("sampleName", s.getSampleName());
+                        item.put("category", s.getCategory());
+                    } else {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+
+                merged.put(mergeKey, item);
             }
-        }
+            return null;
+        });
     }
 
     private List<Map<String, Object>> searchByDeepFeatureMultiCrop(java.awt.image.BufferedImage sourceImage) {
@@ -920,7 +886,6 @@ public class ImageService {
 
     private List<Map<String, Object>> searchByDeepFeature(java.awt.image.BufferedImage queryImage) {
         log.info("searchByDeepFeature: searchEngine={}, DeepFeatureExtractor.isAvailable={}", searchEngine, DeepFeatureExtractor.isAvailable());
-        // Use single-crop feature extraction
         float[] queryFeature = DeepFeatureExtractor.extractSafe(queryImage);
         if (queryFeature == null || queryFeature.length == 0) {
             return new ArrayList<>();
@@ -933,9 +898,7 @@ public class ImageService {
         if (pgAvailable && pgCount > 0) {
             return searchByPgVector(queryFeature);
         }
-        // When pgvector is unavailable, return empty to let searchByImage fall back to dHash search
-        // instead of triggering searchByDeepFeatureScan (full table scan on 256 shard tables)
-        log.info("PgVector unavailable (available={}, count={}), skipping deep feature scan to avoid full table scan", pgAvailable, pgCount);
+        log.info("PgVector unavailable (available={}, count={}), skipping deep feature scan", pgAvailable, pgCount);
         return new ArrayList<>();
     }
 
@@ -945,25 +908,28 @@ public class ImageService {
         if (candidates.isEmpty()) return new ArrayList<>();
 
         // Collect image IDs with their pgvector similarity
-        Map<String, Long> mergeKeyToImgId = new LinkedHashMap<>();
-        Map<String, Double> pgSimilarityMap = new LinkedHashMap<>();
+        Map<Long, Long> imageIdToImgId = new LinkedHashMap<>();
+        Map<Long, Double> pgSimilarityMap = new LinkedHashMap<>();
         for (Map<String, Object> candidate : candidates) {
             Long imageId = (Long) candidate.get("imageId");
-            String shardPrefix = (String) candidate.get("shardPrefix");
             Object simObj = candidate.get("similarity");
-            if (imageId != null && shardPrefix != null) {
-                String mergeKey = shardPrefix + "_" + imageId;
-                if (!mergeKeyToImgId.containsKey(mergeKey)) {
-                    mergeKeyToImgId.put(mergeKey, imageId);
-                    double sim = simObj instanceof Number ? ((Number) simObj).doubleValue() : 0.0;
-                    pgSimilarityMap.put(mergeKey, sim);
-                }
+            if (imageId != null && !imageIdToImgId.containsKey(imageId)) {
+                imageIdToImgId.put(imageId, imageId);
+                double sim = simObj instanceof Number ? ((Number) simObj).doubleValue() : 0.0;
+                pgSimilarityMap.put(imageId, sim);
             }
         }
-        log.info("Extracted {} unique mergeKeys from pgvector results", mergeKeyToImgId.size());
+        log.info("Extracted {} unique imageIds from pgvector results", imageIdToImgId.size());
 
-        Map<String, Image> imageMap = batchFindImagesByIds(mergeKeyToImgId);
-        log.info("batchFindImagesByIds found {} images", imageMap.size());
+        // Batch load images from single table
+        Map<Long, Image> imageMap = new LinkedHashMap<>();
+        if (!imageIdToImgId.isEmpty()) {
+            List<Image> foundImages = imageMapper.selectBatchIds(imageIdToImgId.keySet());
+            for (Image img : foundImages) {
+                imageMap.put(img.getId(), img);
+            }
+        }
+        log.info("Batch loaded {} images from single table", imageMap.size());
 
         // Collect unique sampleIds and batch load
         Map<Long, Sample> sampleMap = new LinkedHashMap<>();
@@ -978,18 +944,12 @@ public class ImageService {
         log.info("Loaded {} unique samples", sampleMap.size());
 
         Map<String, Map<String, Object>> results = new LinkedHashMap<>();
-        for (Map.Entry<String, Long> entry : mergeKeyToImgId.entrySet()) {
-            String mergeKey = entry.getKey();
-            Image img = imageMap.get(mergeKey);
-            if (img == null || img.getSampleId() == null) {
-                continue;
-            }
+        for (Image img : imageMap.values()) {
+            if (img.getSampleId() == null) continue;
             Sample s = sampleMap.get(img.getSampleId());
-            if (s == null) {
-                continue;
-            }
+            if (s == null) continue;
 
-            Double sim = pgSimilarityMap.getOrDefault(mergeKey, 0.0);
+            Double sim = pgSimilarityMap.getOrDefault(img.getId(), 0.0);
 
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("imageId", img.getId());
@@ -1003,7 +963,7 @@ public class ImageService {
             item.put("sampleName", s.getSampleName());
             item.put("category", s.getCategory());
 
-            results.put(mergeKey, item);
+            results.put(String.valueOf(img.getId()), item);
         }
 
         List<Map<String, Object>> sorted = new ArrayList<>(results.values());
@@ -1015,177 +975,46 @@ public class ImageService {
         return sorted;
     }
 
-    private Map<String, Image> batchFindImagesByIds(Map<String, Long> mergeKeyToImgId) {
-        Map<String, Image> result = new LinkedHashMap<>();
-        if (mergeKeyToImgId.isEmpty()) return result;
-
-        for (Map.Entry<String, Long> entry : mergeKeyToImgId.entrySet()) {
-            String mergeKey = entry.getKey();
-            Long id = entry.getValue();
-            int sepPos = mergeKey.indexOf('_');
-            if (sepPos < 0) continue;
-            String prefix = mergeKey.substring(0, sepPos);
-            if (prefix == null || prefix.length() != 2) continue;
-            ImageShardContext.setHashPrefix(prefix);
-            try {
-                LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-                wrapper.eq(Image::getId, id)
-                        .select(Image::getId, Image::getSampleId, Image::getFilePath,
-                                Image::getThumbnailPath, Image::getFileName,
-                                Image::getDeepFeatureVector);
-                Image img = imageMapper.selectOne(wrapper);
-                if (img != null) {
-                    result.put(mergeKey, img);
-                }
-            } finally {
-                ImageShardContext.clear();
-            }
-        }
-        return result;
-    }
-
     private List<Map<String, Object>> searchByDeepFeatureScan(float[] queryFeature) {
-        List<Callable<Void>> allTasks = new ArrayList<>();
-        Map<String, Map<String, Object>> merged = new ConcurrentHashMap<>();
-
-        for (int i = 0; i < SHARD_HEX.length(); i++) {
-            for (int j = 0; j < SHARD_HEX.length(); j++) {
-                final String prefix = "" + SHARD_HEX.charAt(i) + SHARD_HEX.charAt(j);
-                allTasks.add(() -> {
-                    ImageShardContext.setHashPrefix(prefix);
-                    try {
-                        LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-                        wrapper.isNotNull(Image::getDeepFeatureVector)
-                                .select(Image::getId, Image::getSampleId, Image::getFilePath,
-                                        Image::getThumbnailPath, Image::getFileName,
-                                        Image::getDeepFeatureVector);
-                        List<Image> images = imageMapper.selectList(wrapper);
-                        for (Image img : images) {
-                            byte[] dfvBytes = img.getDeepFeatureVector();
-                            if (dfvBytes == null || dfvBytes.length == 0) continue;
-
-                            float[] dbFeature = DeepFeatureExtractor.fromBytes(dfvBytes);
-                            if (dbFeature == null || dbFeature.length == 0) continue;
-
-                            double sim = DeepFeatureExtractor.cosineSimilarity(queryFeature, dbFeature);
-                            if (sim < 0.5) continue;
-
-                            Long imgId = img.getId();
-                            String mergeKey = prefix + "_" + imgId;
-                            Map<String, Object> existing = merged.get(mergeKey);
-                            if (existing != null && ((Number) existing.getOrDefault("similarity", 0.0)).doubleValue() >= sim) {
-                                continue;
-                            }
-
-                            Map<String, Object> item = new LinkedHashMap<>();
-                            item.put("imageId", imgId);
-                            item.put("sampleId", img.getSampleId());
-                            item.put("thumbnailPath", img.getThumbnailPath());
-                            item.put("filePath", img.getFilePath());
-                            item.put("fileName", img.getFileName());
-                            item.put("distance", 0);
-                            item.put("similarity", sim);
-
-                            if (img.getSampleId() != null) {
-                                Sample s = sampleMapper.selectById(img.getSampleId());
-                                if (s != null) {
-                                    item.put("sampleCode", s.getSampleCode());
-                                    item.put("sampleName", s.getSampleName());
-                                    item.put("category", s.getCategory());
-                                } else {
-                                    continue;
-                                }
-                            } else {
-                                continue;
-                            }
-
-                            merged.put(mergeKey, item);
-                        }
-                    } finally {
-                        ImageShardContext.clear();
-                    }
-                    return null;
-                });
-            }
-        }
-
-        try {
-            searchExecutor.invokeAll(allTasks, 60, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-
-        List<Map<String, Object>> results = new ArrayList<>(merged.values());
-        results.sort((a, b) -> {
-            double s1 = ((Number) a.getOrDefault("similarity", 0.0)).doubleValue();
-            double s2 = ((Number) b.getOrDefault("similarity", 0.0)).doubleValue();
-            return Double.compare(s2, s1);
-        });
-
-        if (results.size() > 500) {
-            return results.subList(0, 500);
-        }
-        return results;
+        // Deprecated: full table scan on single table - use pgvector instead
+        return new ArrayList<>();
     }
 
     public Map<String, Object> backfillDhash() {
-        int total = 0;
-        int updated = 0;
-        int skipped = 0;
-        int errors = 0;
+        int total = 0, updated = 0, skipped = 0, errors = 0;
 
-        for (int i = 0; i < SHARD_HEX.length(); i++) {
-            for (int j = 0; j < SHARD_HEX.length(); j++) {
-                String prefix = "" + SHARD_HEX.charAt(i) + SHARD_HEX.charAt(j);
-                String tableName = "images_" + prefix;
-                try {
-                    List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                            "SELECT id, file_path FROM " + tableName + " WHERE dhash IS NULL");
-                    for (Map<String, Object> row : rows) {
-                        total++;
-                        try {
-                            Long imgId = ((Number) row.get("id")).longValue();
-                            String filePath = (String) row.get("file_path");
-                            Path fullPath = Paths.get(imagePath, filePath);
-                            if (!Files.exists(fullPath)) {
-                                skipped++;
-                                continue;
-                            }
-                            long dhash = ImageHashUtil.computeDHash(fullPath);
-                            if (dhash == 0) {
-                                errors++;
-                                continue;
-                            }
-                            int[] buckets = ImageHashUtil.computeBuckets(dhash);
-                            java.awt.image.BufferedImage buf = javax.imageio.ImageIO.read(fullPath.toFile());
-                            byte[] featureBytes = (buf != null) ? FeatureExtractor.toBytes(FeatureExtractor.extract(buf)) : null;
-                            byte[] deepBytes = null;
-                            if (buf != null) {
-                                try {
-                                    deepBytes = DeepFeatureExtractor.toBytes(DeepFeatureExtractor.extractSafe(buf));
-                                } catch (Exception ignored) {}
-                            }
-                            jdbcTemplate.update(
-                                    "UPDATE " + tableName + " SET dhash = ?, dh_bucket0 = ?, dh_bucket1 = ?, dh_bucket2 = ?, dh_bucket3 = ?, feature_vector = ?, deep_feature_vector = ? WHERE id = ?",
-                                    dhash, buckets[0], buckets[1], buckets[2], buckets[3], featureBytes, deepBytes, imgId
-                            );
-                            updated++;
-                            if (deepBytes != null) {
-                                try {
-                                    if (pgVectorService != null) {
-                                        pgVectorService.upsert(imgId, tableName.substring(7), DeepFeatureExtractor.fromBytes(deepBytes));
-                                    }
-                                } catch (Exception pe) {
-                                    log.warn("PgVector upsert failed during dhash backfill: {}", pe.getMessage());
-                                }
-                            }
-                        } catch (Exception e) {
-                            errors++;
-                        }
-                    }
-                } finally {
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "SELECT id, file_path FROM images WHERE dhash IS NULL");
+        for (Map<String, Object> row : rows) {
+            total++;
+            try {
+                Long imgId = ((Number) row.get("id")).longValue();
+                String filePath = (String) row.get("file_path");
+                Path fullPath = Paths.get(imagePath, filePath);
+                if (!Files.exists(fullPath)) { skipped++; continue; }
+                long dhash = ImageHashUtil.computeDHash(fullPath);
+                if (dhash == 0) { errors++; continue; }
+                int[] buckets = ImageHashUtil.computeBuckets(dhash);
+                java.awt.image.BufferedImage buf = ImageIO.read(fullPath.toFile());
+                byte[] featureBytes = (buf != null) ? FeatureExtractor.toBytes(FeatureExtractor.extract(buf)) : null;
+                byte[] deepBytes = null;
+                if (buf != null) {
+                    try {
+                        deepBytes = DeepFeatureExtractor.toBytes(DeepFeatureExtractor.extractSafe(buf));
+                    } catch (Exception ignored) {}
                 }
-            }
+                jdbcTemplate.update(
+                        "UPDATE images SET dhash = ?, dh_bucket0 = ?, dh_bucket1 = ?, dh_bucket2 = ?, dh_bucket3 = ?, feature_vector = ?, deep_feature_vector = ? WHERE id = ?",
+                        dhash, buckets[0], buckets[1], buckets[2], buckets[3], featureBytes, deepBytes, imgId);
+                updated++;
+                if (deepBytes != null && pgVectorService != null) {
+                    try {
+                        pgVectorService.upsert(imgId, DeepFeatureExtractor.fromBytes(deepBytes));
+                    } catch (Exception pe) {
+                        log.warn("PgVector upsert failed during dhash backfill: {}", pe.getMessage());
+                    }
+                }
+            } catch (Exception e) { errors++; }
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -1197,39 +1026,22 @@ public class ImageService {
     }
 
     public Map<String, Object> backfillBuckets() {
-        int total = 0;
-        int updated = 0;
-        int skipped = 0;
+        int total = 0, updated = 0, skipped = 0;
 
-        for (int i = 0; i < SHARD_HEX.length(); i++) {
-            for (int j = 0; j < SHARD_HEX.length(); j++) {
-                String prefix = "" + SHARD_HEX.charAt(i) + SHARD_HEX.charAt(j);
-                ImageShardContext.setHashPrefix(prefix);
-                try {
-                    LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-                    wrapper.isNotNull(Image::getDhash)
-                            .isNull(Image::getDhBucket0)
-                            .select(Image::getId, Image::getDhash);
-                    List<Image> images = imageMapper.selectList(wrapper);
-                    for (Image img : images) {
-                        total++;
-                        Long dhash = img.getDhash();
-                        if (dhash == null || dhash == 0) {
-                            skipped++;
-                            continue;
-                        }
-                        int[] buckets = ImageHashUtil.computeBuckets(dhash);
-                        String tableName = "images_" + prefix;
-                        jdbcTemplate.update(
-                                "UPDATE " + tableName + " SET dh_bucket0 = ?, dh_bucket1 = ?, dh_bucket2 = ?, dh_bucket3 = ? WHERE id = ?",
-                                buckets[0], buckets[1], buckets[2], buckets[3], img.getId()
-                        );
-                        updated++;
-                    }
-                } finally {
-                    ImageShardContext.clear();
-                }
-            }
+        LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
+        wrapper.isNotNull(Image::getDhash)
+                .isNull(Image::getDhBucket0)
+                .select(Image::getId, Image::getDhash);
+        List<Image> images = imageMapper.selectList(wrapper);
+        for (Image img : images) {
+            total++;
+            Long dhash = img.getDhash();
+            if (dhash == null || dhash == 0) { skipped++; continue; }
+            int[] buckets = ImageHashUtil.computeBuckets(dhash);
+            jdbcTemplate.update(
+                    "UPDATE images SET dh_bucket0 = ?, dh_bucket1 = ?, dh_bucket2 = ?, dh_bucket3 = ? WHERE id = ?",
+                    buckets[0], buckets[1], buckets[2], buckets[3], img.getId());
+            updated++;
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -1240,24 +1052,8 @@ public class ImageService {
     }
 
     public Map<String, Object> resetFeatures() {
-        int nulled = 0;
-        int deepNulled = 0;
-        for (int i = 0; i < SHARD_HEX.length(); i++) {
-            for (int j = 0; j < SHARD_HEX.length(); j++) {
-                String prefix = "" + SHARD_HEX.charAt(i) + SHARD_HEX.charAt(j);
-                String tableName = "images_" + prefix;
-                ImageShardContext.setHashPrefix(prefix);
-                try {
-                    int n = jdbcTemplate.update("UPDATE " + tableName + " SET feature_vector = NULL WHERE feature_vector IS NOT NULL");
-                    nulled += n;
-                    int dn = jdbcTemplate.update("UPDATE " + tableName + " SET deep_feature_vector = NULL WHERE deep_feature_vector IS NOT NULL");
-                    deepNulled += dn;
-                } catch (Exception e) {
-                } finally {
-                    ImageShardContext.clear();
-                }
-            }
-        }
+        int nulled = jdbcTemplate.update("UPDATE images SET feature_vector = NULL WHERE feature_vector IS NOT NULL");
+        int deepNulled = jdbcTemplate.update("UPDATE images SET deep_feature_vector = NULL WHERE deep_feature_vector IS NOT NULL");
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("nulled", nulled);
         result.put("deepNulled", deepNulled);
@@ -1265,43 +1061,24 @@ public class ImageService {
     }
 
     public Map<String, Object> backfillFeatures() {
-        int total = 0;
-        int updated = 0;
-        int skipped = 0;
+        int total = 0, updated = 0, skipped = 0;
 
-        for (int i = 0; i < SHARD_HEX.length(); i++) {
-            for (int j = 0; j < SHARD_HEX.length(); j++) {
-                String prefix = "" + SHARD_HEX.charAt(i) + SHARD_HEX.charAt(j);
-                ImageShardContext.setHashPrefix(prefix);
-                try {
-                    LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-                    wrapper.isNotNull(Image::getDhash)
-                            .isNull(Image::getFeatureVector)
-                            .select(Image::getId, Image::getFilePath);
-                    List<Image> images = imageMapper.selectList(wrapper);
-                    for (Image img : images) {
-                        total++;
-                        try {
-                            Path fullPath = Paths.get(imagePath, img.getFilePath());
-                            if (!Files.exists(fullPath)) { skipped++; continue; }
-                            java.awt.image.BufferedImage buf = javax.imageio.ImageIO.read(fullPath.toFile());
-                            if (buf == null) { skipped++; continue; }
-                            byte[] featureBytes = FeatureExtractor.toBytes(FeatureExtractor.extract(buf));
-                            String tableName = "images_" + prefix;
-                            jdbcTemplate.update(
-                                    "UPDATE " + tableName + " SET feature_vector = ? WHERE id = ?",
-                                    featureBytes, img.getId()
-                            );
-                            updated++;
-                        } catch (Exception e) {
-                            skipped++;
-                        }
-                    }
-                } catch (Exception e) {
-                } finally {
-                    ImageShardContext.clear();
-                }
-            }
+        LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
+        wrapper.isNotNull(Image::getDhash)
+                .isNull(Image::getFeatureVector)
+                .select(Image::getId, Image::getFilePath);
+        List<Image> images = imageMapper.selectList(wrapper);
+        for (Image img : images) {
+            total++;
+            try {
+                Path fullPath = Paths.get(imagePath, img.getFilePath());
+                if (!Files.exists(fullPath)) { skipped++; continue; }
+                java.awt.image.BufferedImage buf = ImageIO.read(fullPath.toFile());
+                if (buf == null) { skipped++; continue; }
+                byte[] featureBytes = FeatureExtractor.toBytes(FeatureExtractor.extract(buf));
+                jdbcTemplate.update("UPDATE images SET feature_vector = ? WHERE id = ?", featureBytes, img.getId());
+                updated++;
+            } catch (Exception e) { skipped++; }
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -1315,54 +1092,36 @@ public class ImageService {
         if (!DeepFeatureExtractor.isAvailable()) {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("error", "DeepFeatureExtractor model not available");
-            result.put("total", 0);
-            result.put("updated", 0);
-            result.put("skipped", 0);
+            result.put("total", 0); result.put("updated", 0); result.put("skipped", 0);
             return result;
         }
 
-        int total = 0;
-        int updated = 0;
-        int skipped = 0;
+        int total = 0, updated = 0, skipped = 0;
 
-        for (int i = 0; i < SHARD_HEX.length(); i++) {
-            for (int j = 0; j < SHARD_HEX.length(); j++) {
-                String prefix = "" + SHARD_HEX.charAt(i) + SHARD_HEX.charAt(j);
-                String tableName = "images_" + prefix;
-                try {
-                    List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                            "SELECT id, file_path FROM " + tableName + " WHERE dhash IS NOT NULL");
-                    for (Map<String, Object> row : rows) {
-                        total++;
-                        try {
-                            Long imgId = ((Number) row.get("id")).longValue();
-                            String filePath = (String) row.get("file_path");
-                            Path fullPath = Paths.get(imagePath, filePath);
-                            if (!Files.exists(fullPath)) { skipped++; continue; }
-                            java.awt.image.BufferedImage buf = javax.imageio.ImageIO.read(fullPath.toFile());
-                            if (buf == null) { skipped++; continue; }
-                            float[] deepFeatures = DeepFeatureExtractor.extractSafe(buf);
-                            if (deepFeatures == null) { skipped++; continue; }
-                            byte[] deepBytes = DeepFeatureExtractor.toBytes(deepFeatures);
-                            jdbcTemplate.update(
-                                    "UPDATE " + tableName + " SET deep_feature_vector = ? WHERE id = ?",
-                                    deepBytes, imgId
-                            );
-                            updated++;
-                            try {
-                                if (pgVectorService != null) {
-                                    pgVectorService.upsert(imgId, tableName.substring(7), deepFeatures);
-                                }
-                            } catch (Exception pe) {
-                                log.warn("PgVector upsert failed during backfill: {}", pe.getMessage());
-                            }
-                        } catch (Exception e) {
-                            skipped++;
-                        }
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "SELECT id, file_path FROM images WHERE dhash IS NOT NULL");
+        for (Map<String, Object> row : rows) {
+            total++;
+            try {
+                Long imgId = ((Number) row.get("id")).longValue();
+                String filePath = (String) row.get("file_path");
+                Path fullPath = Paths.get(imagePath, filePath);
+                if (!Files.exists(fullPath)) { skipped++; continue; }
+                java.awt.image.BufferedImage buf = ImageIO.read(fullPath.toFile());
+                if (buf == null) { skipped++; continue; }
+                float[] deepFeatures = DeepFeatureExtractor.extractSafe(buf);
+                if (deepFeatures == null) { skipped++; continue; }
+                byte[] deepBytes = DeepFeatureExtractor.toBytes(deepFeatures);
+                jdbcTemplate.update("UPDATE images SET deep_feature_vector = ? WHERE id = ?", deepBytes, imgId);
+                updated++;
+                if (pgVectorService != null) {
+                    try {
+                        pgVectorService.upsert(imgId, deepFeatures);
+                    } catch (Exception pe) {
+                        log.warn("PgVector upsert failed during backfill: {}", pe.getMessage());
                     }
-                } catch (Exception e) {
                 }
-            }
+            } catch (Exception e) { skipped++; }
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -1383,71 +1142,41 @@ public class ImageService {
         int beforeCount = pgVectorService.count();
         log.info("PgVector count BEFORE backfill: {}", beforeCount);
 
-        int upserted = 0;
-        int total = 0;
+        int total = 0, upserted = 0;
         java.util.Set<Long> uniqueImageIds = new java.util.HashSet<>();
-        int insertCount = 0;
-        int updateCount = 0;
+        int insertCount = 0, updateCount = 0;
 
-        List<String> tablesWithData = new ArrayList<>();
-        for (int i = 0; i < SHARD_HEX.length(); i++) {
-            for (int j = 0; j < SHARD_HEX.length(); j++) {
-                String prefix = "" + SHARD_HEX.charAt(i) + SHARD_HEX.charAt(j);
-                String tableName = "images_" + prefix;
-                try {
-                    Integer count = jdbcTemplate.queryForObject(
-                            "SELECT COUNT(*) FROM " + tableName + " WHERE deep_feature_vector IS NOT NULL",
-                            Integer.class);
-                    if (count != null && count > 0) {
-                        tablesWithData.add(tableName);
-                    }
-                } catch (Exception ignored) {}
-            }
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM images WHERE deep_feature_vector IS NOT NULL", Integer.class);
+        if (count == null || count == 0) {
+            result.put("error", "No deep features found");
+            return result;
         }
+        log.info("Found {} images with deep features", count);
 
-        log.info("Found {} tables with deep features: {}", tablesWithData.size(), tablesWithData);
-
-        for (String tableName : tablesWithData) {
+        List<Map<String, Object>> dataRows = jdbcTemplate.queryForList(
+                "SELECT id, deep_feature_vector FROM images WHERE deep_feature_vector IS NOT NULL");
+        for (Map<String, Object> row : dataRows) {
+            total++;
             try {
-                log.info("Processing table {}", tableName);
-                List<Map<String, Object>> dataRows = jdbcTemplate.queryForList(
-                        "SELECT id, deep_feature_vector FROM " + tableName + " WHERE deep_feature_vector IS NOT NULL");
-                log.info("Table {} has {} rows, first_id={}, last_id={}, bytes_len={}",
-                        tableName, dataRows.size(),
-                        dataRows.isEmpty() ? 0 : ((Number)dataRows.get(0).get("id")).longValue(),
-                        dataRows.isEmpty() ? 0 : ((Number)dataRows.get(dataRows.size()-1).get("id")).longValue(),
-                        dataRows.isEmpty() ? 0 : ((byte[])dataRows.get(0).get("deep_feature_vector")).length);
-                for (Map<String, Object> row : dataRows) {
-                    total++;
-                    try {
-                        Long imgId = ((Number) row.get("id")).longValue();
-                        uniqueImageIds.add(imgId);
-                        byte[] bytes = row.get("deep_feature_vector") instanceof byte[] ? (byte[]) row.get("deep_feature_vector") : null;
-                        if (bytes == null) { log.warn("bytes null for imgId={}", imgId); continue; }
-                        float[] features = DeepFeatureExtractor.fromBytes(bytes);
-                        if (features == null) { log.warn("fromBytes null for imgId={}, bytes_len={}", imgId, bytes.length); continue; }
-                        if (features.length == 0) { log.warn("features empty for imgId={}", imgId); continue; }
-                        boolean existedBefore = pgVectorService.exists(imgId, tableName.substring(7));
-                        int rows = pgVectorService.upsert(imgId, tableName.substring(7), features);
-                        upserted += rows;
-                        if (existedBefore) { updateCount++; } else { insertCount++; }
-                        if (total % 500 == 0) {
-                            int currentPgCount = pgVectorService.count();
-                            log.info("Progress: total={}, unique_ids={}, insert={}, update={}, pgvector_count_now={}", 
-                                    total, uniqueImageIds.size(), insertCount, updateCount, currentPgCount);
-                        }
-                    } catch (Exception e) {
-                        log.warn("PgVector backfill failed for image in {}: {}", tableName, e.getMessage());
-                    }
-                }
+                Long imgId = ((Number) row.get("id")).longValue();
+                uniqueImageIds.add(imgId);
+                byte[] bytes = row.get("deep_feature_vector") instanceof byte[] ? (byte[]) row.get("deep_feature_vector") : null;
+                if (bytes == null) continue;
+                float[] features = DeepFeatureExtractor.fromBytes(bytes);
+                if (features == null || features.length == 0) continue;
+                boolean existedBefore = pgVectorService.exists(imgId);
+                int rows = pgVectorService.upsert(imgId, features);
+                upserted += rows;
+                if (existedBefore) updateCount++; else insertCount++;
             } catch (Exception e) {
-                log.warn("PgVector backfill table {} failed: {}", tableName, e.getMessage());
+                log.warn("PgVector backfill failed: {}", e.getMessage());
             }
         }
 
         int afterCount = pgVectorService.count();
-        log.info("Backfill complete: total_rows={}, unique_ids={}, insert={}, update={}, upserted={}, pgvector_before={}, pgvector_after={}, delta={}", 
-                total, uniqueImageIds.size(), insertCount, updateCount, upserted, beforeCount, afterCount, afterCount - beforeCount);
+        log.info("Backfill complete: total={}, unique_ids={}, insert={}, update={}, before={}, after={}, delta={}",
+                total, uniqueImageIds.size(), insertCount, updateCount, beforeCount, afterCount, afterCount - beforeCount);
         result.put("total", total);
         result.put("unique_ids", uniqueImageIds.size());
         result.put("insert_count", insertCount);
@@ -1467,12 +1196,10 @@ public class ImageService {
         }
         try {
             int before = pgVectorService.count();
-
             int dim = deepFeatureExtractor != null ? deepFeatureExtractor.getFeatureDim() : 1280;
             float[] testVec = new float[dim];
             for (int i = 0; i < dim; i++) testVec[i] = (float) Math.random();
-            int upserted = pgVectorService.upsert(88888888L, "00", testVec);
-
+            int upserted = pgVectorService.upsert(88888888L, testVec);
             int after = pgVectorService.count();
 
             result.put("before", before);
@@ -1480,22 +1207,21 @@ public class ImageService {
             result.put("after", after);
             result.put("delta", after - before);
 
-            pgVectorService.delete(88888888L, "00");
+            pgVectorService.delete(88888888L);
         } catch (Exception e) {
             result.put("error", e.getMessage());
         }
         return result;
     }
 
-    public Map<String, Object> pgVectorCheck(long imageId, String shardPrefix) {
+    public Map<String, Object> pgVectorCheck(long imageId) {
         Map<String, Object> result = new LinkedHashMap<>();
         if (pgVectorService == null || !pgVectorService.isAvailable()) {
             result.put("error", "PgVectorService not available");
             return result;
         }
         result.put("imageId", imageId);
-        result.put("shardPrefix", shardPrefix);
-        result.put("existsInPgVector", pgVectorService.exists(imageId, shardPrefix != null ? shardPrefix : "00"));
+        result.put("existsInPgVector", pgVectorService.exists(imageId));
 
         Image img = findImageById(imageId);
         result.put("foundInMysql", img != null);
@@ -1508,83 +1234,35 @@ public class ImageService {
     }
 
     public boolean hasDhashData() {
-        for (int i = 0; i < SHARD_HEX.length(); i++) {
-            for (int j = 0; j < SHARD_HEX.length(); j++) {
-                String prefix = "" + SHARD_HEX.charAt(i) + SHARD_HEX.charAt(j);
-                ImageShardContext.setHashPrefix(prefix);
-                try {
-                    LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-                    wrapper.isNotNull(Image::getDhash);
-                    wrapper.last("LIMIT 1");
-                    if (imageMapper.selectCount(wrapper) > 0) {
-                        return true;
-                    }
-                } finally {
-                    ImageShardContext.clear();
-                }
-            }
-        }
-        return false;
+        LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
+        wrapper.isNotNull(Image::getDhash);
+        wrapper.last("LIMIT 1");
+        return imageMapper.selectCount(wrapper) > 0;
     }
 
     public Image findFirstBySampleId(Long sampleId) {
         if (sampleId == null) return null;
-        for (int i = 0; i < SHARD_HEX.length(); i++) {
-            for (int j = 0; j < SHARD_HEX.length(); j++) {
-                String prefix = "" + SHARD_HEX.charAt(i) + SHARD_HEX.charAt(j);
-                ImageShardContext.setHashPrefix(prefix);
-                try {
-                    LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-                    wrapper.eq(Image::getSampleId, sampleId)
-                            .orderByAsc(Image::getSortOrder)
-                            .last("LIMIT 1");
-                    List<Image> list = imageMapper.selectList(wrapper);
-                    if (list != null && !list.isEmpty()) {
-                        return list.get(0);
-                    }
-                } finally {
-                    ImageShardContext.clear();
-                }
-            }
-        }
-        return null;
+        LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Image::getSampleId, sampleId)
+                .orderByAsc(Image::getSortOrder)
+                .last("LIMIT 1");
+        List<Image> list = imageMapper.selectList(wrapper);
+        return (list != null && !list.isEmpty()) ? list.get(0) : null;
     }
-
-
 
     public Map<Long, Map<String, Object>> findFirstImageIdAndThumbBySampleIds(List<Long> sampleIds) {
         Map<Long, Map<String, Object>> result = new LinkedHashMap<>();
         if (sampleIds == null || sampleIds.isEmpty()) return result;
 
-        int totalNeeded = sampleIds.size();
-        int found = 0;
-
-        for (int i = 0; i < SHARD_HEX.length() && found < totalNeeded; i++) {
-            for (int j = 0; j < SHARD_HEX.length() && found < totalNeeded; j++) {
-                String prefix = "" + SHARD_HEX.charAt(i) + SHARD_HEX.charAt(j);
-                ImageShardContext.setHashPrefix(prefix);
-                try {
-                    LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-                    wrapper.in(Image::getSampleId, sampleIds)
-                            .select(Image::getId, Image::getSampleId, Image::getThumbnailPath, Image::getHash, Image::getFileName)
-                            .orderByAsc(Image::getSortOrder);
-                    List<Image> list = imageMapper.selectList(wrapper);
-                    for (Image img : list) {
-                        Long sid = img.getSampleId();
-                        if (!result.containsKey(sid)) {
-                            Map<String, Object> info = new HashMap<>();
-                            info.put("id", img.getId());
-                            info.put("thumbnailPath", img.getThumbnailPath());
-                            info.put("hash", img.getHash());
-                            info.put("fileName", img.getFileName());
-                            result.put(sid, info);
-                            found++;
-                        }
-                    }
-                } finally {
-                    ImageShardContext.clear();
-                }
-            }
+        // 直接查 sample_thumbnail 索引表
+        List<SampleThumbnail> thumbnails = sampleThumbnailMapper.selectBatchIds(sampleIds);
+        for (SampleThumbnail st : thumbnails) {
+            Map<String, Object> info = new HashMap<>();
+            info.put("id", st.getImageId());
+            info.put("thumbnailPath", st.getThumbnail());
+            info.put("hash", st.getHash());
+            info.put("fileName", st.getFileName());
+            result.put(st.getSampleId(), info);
         }
         for (Long sid : sampleIds) {
             result.putIfAbsent(sid, null);
@@ -1632,10 +1310,10 @@ public class ImageService {
             String relativePath = dateDir + "/" + hashDir + "/" + storeName;
             Path fullPath = Paths.get(imagePath, relativePath);
             fullPath.getParent().toFile().mkdirs();
-            java.io.FileOutputStream replaceFos = new java.io.FileOutputStream(fullPath.toFile());
-            replaceFos.write(fileBytes);
-            replaceFos.flush();
-            replaceFos.close();
+            try (java.io.FileOutputStream replaceFos = new java.io.FileOutputStream(fullPath.toFile())) {
+                replaceFos.write(fileBytes);
+                replaceFos.flush();
+            }
 
             int width = 0, height = 0;
             try {
@@ -1648,7 +1326,6 @@ public class ImageService {
                 thumbnailRelPath = generateThumbnail(fileBytes, hash, ext, width, height);
             } catch (Exception ignored) {}
 
-            String oldHashForShard = existing.getHash();
             existing.setFileName(originalName);
             existing.setFilePath(relativePath);
             existing.setThumbnailPath(thumbnailRelPath);
@@ -1669,26 +1346,12 @@ public class ImageService {
                 log.warn("Feature extraction failed during replace: {}", fe.getMessage());
             }
 
-            if (oldHashForShard != null && !oldHashForShard.isEmpty()) {
-                ImageShardContext.setHashPrefix(oldHashForShard.substring(0, 2).toLowerCase());
-                try {
-                    imageMapper.deleteById(id);
-                } finally {
-                    ImageShardContext.clear();
-                }
-            }
-            String newHashPrefix = hash.substring(0, 2).toLowerCase();
-            ImageShardContext.setHashPrefix(newHashPrefix);
-            try {
-                imageMapper.insert(existing);
-            } finally {
-                ImageShardContext.clear();
-            }
+            imageMapper.updateById(existing);
 
             try {
                 float[] deepFv = DeepFeatureExtractor.fromBytes(existing.getDeepFeatureVector());
                 if (deepFv != null && pgVectorService != null) {
-                    pgVectorService.upsert(existing.getId(), newHashPrefix, deepFv);
+                    pgVectorService.upsert(existing.getId(), deepFv);
                 }
             } catch (Exception pe) {
                 log.warn("PgVector upsert failed during replace: {}", pe.getMessage());
@@ -1712,8 +1375,8 @@ public class ImageService {
 
     @Transactional
     public void delete(Long id, String hash) {
-        if (id == null || hash == null || hash.length() < 2) return;
-        Image image = findImageByIdAndHash(id, hash);
+        if (id == null) return;
+        Image image = findImageById(id);
         if (image == null) return;
         doDelete(image);
     }
@@ -1727,44 +1390,27 @@ public class ImageService {
             }
         }
 
-        String hashPrefix = image.getHash() != null ? image.getHash().substring(0, 2).toLowerCase() : null;
-        if (hashPrefix != null) {
-            ImageShardContext.setHashPrefix(hashPrefix);
-            try {
-                imageMapper.deleteById(image.getId());
-            } finally {
-                ImageShardContext.clear();
-            }
-        }
+        imageMapper.deleteById(image.getId());
 
         if (image.getSampleId() != null) {
             syncSampleThumbnail(image.getSampleId(), image.getHash());
         }
 
-        try {
-            if (pgVectorService != null) {
-                pgVectorService.delete(image.getId(), hashPrefix);
+        if (pgVectorService != null) {
+            try {
+                pgVectorService.delete(image.getId());
+            } catch (Exception pe) {
+                log.warn("PgVector delete failed: {}", pe.getMessage());
             }
-        } catch (Exception pe) {
-            log.warn("PgVector delete failed: {}", pe.getMessage());
         }
     }
 
     @Transactional
     public void deleteBySampleId(Long sampleId) {
-        for (int i = 0; i < SHARD_HEX.length(); i++) {
-            for (int j = 0; j < SHARD_HEX.length(); j++) {
-                String prefix = "" + SHARD_HEX.charAt(i) + SHARD_HEX.charAt(j);
-                ImageShardContext.setHashPrefix(prefix);
-                try {
-                    LambdaQueryWrapper<Image> qw = new LambdaQueryWrapper<>();
-                    qw.eq(Image::getSampleId, sampleId);
-                    imageMapper.delete(qw);
-                } finally {
-                    ImageShardContext.clear();
-                }
-            }
-        }
+        LambdaQueryWrapper<Image> qw = new LambdaQueryWrapper<>();
+        qw.eq(Image::getSampleId, sampleId);
+        imageMapper.delete(qw);
+
         SampleThumbnail st = sampleThumbnailMapper.selectById(sampleId);
         if (st != null) {
             sampleThumbnailMapper.deleteById(sampleId);
@@ -1777,13 +1423,12 @@ public class ImageService {
         Long sampleId = null;
         for (Map<String, Object> item : items) {
             Long id = item.get("id") != null ? ((Number) item.get("id")).longValue() : null;
-            String hash = (String) item.get("hash");
-            if (id != null && hash != null && hash.length() >= 2) {
+            if (id != null) {
                 if (sampleId == null) {
-                    Image img = findImageByIdAndHash(id, hash);
+                    Image img = findImageById(id);
                     if (img != null) sampleId = img.getSampleId();
                 }
-                delete(id, hash);
+                delete(id);
             }
         }
         if (sampleId != null) {
@@ -1795,64 +1440,47 @@ public class ImageService {
         if (items == null || items.isEmpty()) return;
         log.info("[ImageService] reorder called with {} items", items.size());
         Long sampleId = null;
-        String sampleHash = null;
         for (int i = 0; i < items.size(); i++) {
             Map<String, Object> item = items.get(i);
             Long id = item.get("id") != null ? ((Number) item.get("id")).longValue() : null;
-            String hash = (String) item.get("hash");
-            if (id == null || hash == null || hash.length() < 2) {
-                log.warn("[ImageService] reorder: invalid item at index {}, id={}, hash={}", i, id, hash);
-                continue;
-            }
-            String prefix = hash.substring(0, 2).toLowerCase();
-            String tableName = "images_" + prefix;
+            if (id == null) continue;
             int rows = jdbcTemplate.update(
-                "UPDATE " + tableName + " SET sort_order=? WHERE id=? AND deleted=0", i, id);
+                "UPDATE images SET sort_order=? WHERE id=? AND deleted=0", i, id);
             if (rows > 0) {
-                log.info("[ImageService] reorder: {} set sort_order={} for id={}, hash={}", tableName, i, id, hash);
-                if (sampleId == null || sampleHash == null) {
+                log.info("[ImageService] reorder: set sort_order={} for id={}", i, id);
+                if (sampleId == null) {
                     List<Map<String, Object>> row = jdbcTemplate.queryForList(
-                        "SELECT sample_id, hash FROM " + tableName + " WHERE id=? AND deleted=0", id);
+                        "SELECT sample_id, hash FROM images WHERE id=? AND deleted=0", id);
                     if (!row.isEmpty()) {
                         sampleId = ((Number) row.get(0).get("sample_id")).longValue();
-                        sampleHash = (String) row.get(0).get("hash");
                     }
                 }
-            } else {
-                log.warn("[ImageService] reorder: update affected 0 rows for id={}, hash={}, table={}", id, hash, tableName);
             }
         }
-        log.info("[ImageService] reorder complete, sampleId={}, sampleHash={}", sampleId, sampleHash);
-        if (sampleId != null && sampleHash != null) {
-            syncSampleThumbnail(sampleId, sampleHash);
+        log.info("[ImageService] reorder complete, sampleId={}", sampleId);
+        if (sampleId != null) {
+            syncSampleThumbnailAllShards(sampleId);
         }
     }
 
     public boolean setPosition(Long imageId, int position) {
         if (imageId == null) return false;
         log.info("[ImageService] setPosition: imageId={}, position={}", imageId, position);
-        for (int si = 0; si < SHARD_HEX.length(); si++) {
-            for (int sj = 0; sj < SHARD_HEX.length(); sj++) {
-                String prefix = "" + SHARD_HEX.charAt(si) + SHARD_HEX.charAt(sj);
-                String tableName = "images_" + prefix;
-                int rows = jdbcTemplate.update(
-                    "UPDATE " + tableName + " SET sort_order=? WHERE id=? AND deleted=0", position, imageId);
-                if (rows > 0) {
-                    log.info("[ImageService] setPosition: updated {} sort_order={}", tableName, position);
-                    if (position == 0) {
-                        List<Map<String, Object>> result = jdbcTemplate.queryForList(
-                            "SELECT sample_id, hash FROM " + tableName + " WHERE id=? AND deleted=0", imageId);
-                        if (!result.isEmpty()) {
-                            Long sampleId = ((Number) result.get(0).get("sample_id")).longValue();
-                            String hash = (String) result.get(0).get("hash");
-                            syncSampleThumbnail(sampleId, hash);
-                        }
-                    }
-                    return true;
+        int rows = jdbcTemplate.update(
+            "UPDATE images SET sort_order=? WHERE id=? AND deleted=0", position, imageId);
+        if (rows > 0) {
+            log.info("[ImageService] setPosition: updated sort_order={}", position);
+            if (position == 0) {
+                List<Map<String, Object>> result = jdbcTemplate.queryForList(
+                    "SELECT sample_id, hash FROM images WHERE id=? AND deleted=0", imageId);
+                if (!result.isEmpty()) {
+                    Long sampleId = ((Number) result.get(0).get("sample_id")).longValue();
+                    String hash = (String) result.get(0).get("hash");
+                    syncSampleThumbnail(sampleId, hash);
                 }
             }
+            return true;
         }
-        log.warn("[ImageService] setPosition: image not found for id={}", imageId);
         return false;
     }
 
@@ -1861,17 +1489,12 @@ public class ImageService {
         log.info("[ImageService] swapSortOrder: {} <-> {}", id1, id2);
         Image img1 = findImageById(id1);
         Image img2 = findImageById(id2);
-        if (img1 == null || img2 == null) {
-            log.warn("[ImageService] swapSortOrder: image not found, id1={}, id2={}", id1, id2);
-            return;
-        }
+        if (img1 == null || img2 == null) return;
         int so1 = img1.getSortOrder() != null ? img1.getSortOrder() : 0;
         int so2 = img2.getSortOrder() != null ? img2.getSortOrder() : 0;
-        String p1 = img1.getHash().substring(0, 2).toLowerCase();
-        String p2 = img2.getHash().substring(0, 2).toLowerCase();
-        jdbcTemplate.update("UPDATE images_" + p1 + " SET sort_order=? WHERE id=? AND deleted=0", so2, id1);
-        jdbcTemplate.update("UPDATE images_" + p2 + " SET sort_order=? WHERE id=? AND deleted=0", so1, id2);
-        log.info("[ImageService] swapSortOrder: done, id1={} sort={}->{}, id2={} sort={}->{}", id1, so1, so2, id2, so2, so1);
+        jdbcTemplate.update("UPDATE images SET sort_order=? WHERE id=? AND deleted=0", so2, id1);
+        jdbcTemplate.update("UPDATE images SET sort_order=? WHERE id=? AND deleted=0", so1, id2);
+        log.info("[ImageService] swapSortOrder: done");
         Long sampleId = img1.getSampleId();
         if (sampleId != null) {
             syncSampleThumbnail(sampleId, so2 == 0 ? img1.getHash() : img2.getHash());
@@ -1879,23 +1502,21 @@ public class ImageService {
     }
 
     private void syncSampleThumbnail(Long sampleId, String hash) {
-        if (hash == null || hash.length() < 2) return;
-        String hashPrefix = hash.substring(0, 2).toLowerCase();
-        ImageShardContext.setHashPrefix(hashPrefix);
-        try {
-            LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-            wrapper.eq(Image::getSampleId, sampleId)
-                    .orderByAsc(Image::getSortOrder)
-                    .orderByDesc(Image::getCreateTime)
-                    .last("LIMIT 1");
-            Image firstImage = imageMapper.selectOne(wrapper);
-            if (firstImage != null) {
-                SampleThumbnail st = new SampleThumbnail();
-                st.setSampleId(sampleId);
-                st.setImageId(firstImage.getId());
-                st.setThumbnail(firstImage.getThumbnailPath());
-                st.setHash(firstImage.getHash());
-                st.setFileName(firstImage.getFileName());
+        if (sampleId == null) return;
+        LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Image::getSampleId, sampleId)
+                .orderByAsc(Image::getSortOrder)
+                .orderByDesc(Image::getCreateTime)
+                .last("LIMIT 1");
+        Image firstImage = imageMapper.selectOne(wrapper);
+        if (firstImage != null) {
+            SampleThumbnail st = new SampleThumbnail();
+            st.setSampleId(sampleId);
+            st.setImageId(firstImage.getId());
+            st.setThumbnail(firstImage.getThumbnailPath());
+            st.setHash(firstImage.getHash());
+            st.setFileName(firstImage.getFileName());
+            try {
                 SampleThumbnail existing = sampleThumbnailMapper.selectById(sampleId);
                 if (existing != null) {
                     st.setCreateTime(existing.getCreateTime());
@@ -1903,13 +1524,17 @@ public class ImageService {
                 } else {
                     sampleThumbnailMapper.insert(st);
                 }
-            } else {
-                LambdaQueryWrapper<SampleThumbnail> w = new LambdaQueryWrapper<>();
-                w.eq(SampleThumbnail::getSampleId, sampleId);
-                sampleThumbnailMapper.delete(w);
+            } catch (DuplicateKeyException e) {
+                SampleThumbnail existing = sampleThumbnailMapper.selectById(sampleId);
+                if (existing != null) {
+                    st.setCreateTime(existing.getCreateTime());
+                }
+                sampleThumbnailMapper.updateById(st);
             }
-        } finally {
-            ImageShardContext.clear();
+        } else {
+            LambdaQueryWrapper<SampleThumbnail> w = new LambdaQueryWrapper<>();
+            w.eq(SampleThumbnail::getSampleId, sampleId);
+            sampleThumbnailMapper.delete(w);
         }
     }
 
@@ -1924,12 +1549,20 @@ public class ImageService {
             st.setThumbnail(firstImage.getThumbnailPath());
             st.setHash(firstImage.getHash());
             st.setFileName(firstImage.getFileName());
-            SampleThumbnail existing = sampleThumbnailMapper.selectById(sampleId);
-            if (existing != null) {
-                st.setCreateTime(existing.getCreateTime());
+            try {
+                SampleThumbnail existing = sampleThumbnailMapper.selectById(sampleId);
+                if (existing != null) {
+                    st.setCreateTime(existing.getCreateTime());
+                    sampleThumbnailMapper.updateById(st);
+                } else {
+                    sampleThumbnailMapper.insert(st);
+                }
+            } catch (DuplicateKeyException e) {
+                SampleThumbnail existing = sampleThumbnailMapper.selectById(sampleId);
+                if (existing != null) {
+                    st.setCreateTime(existing.getCreateTime());
+                }
                 sampleThumbnailMapper.updateById(st);
-            } else {
-                sampleThumbnailMapper.insert(st);
             }
         } else {
             LambdaQueryWrapper<SampleThumbnail> w = new LambdaQueryWrapper<>();
@@ -1939,30 +1572,11 @@ public class ImageService {
     }
 
     private Image findImageById(Long id) {
-        for (int i = 0; i < SHARD_HEX.length(); i++) {
-            for (int j = 0; j < SHARD_HEX.length(); j++) {
-                String prefix = "" + SHARD_HEX.charAt(i) + SHARD_HEX.charAt(j);
-                ImageShardContext.setHashPrefix(prefix);
-                try {
-                    Image image = imageMapper.selectById(id);
-                    if (image != null) return image;
-                } finally {
-                    ImageShardContext.clear();
-                }
-            }
-        }
-        return null;
+        return imageMapper.selectById(id);
     }
 
     private Image findImageByIdAndHash(Long id, String hash) {
-        if (hash == null || hash.length() < 2) return null;
-        String prefix = hash.substring(0, 2).toLowerCase();
-        ImageShardContext.setHashPrefix(prefix);
-        try {
-            return imageMapper.selectById(id);
-        } finally {
-            ImageShardContext.clear();
-        }
+        return imageMapper.selectById(id);
     }
 
     private String generateThumbnail(byte[] imageBytes, String hash, String ext, int origWidth, int origHeight) throws IOException {
@@ -1982,12 +1596,11 @@ public class ImageService {
         g.drawImage(source, 0, 0, thumbWidth, thumbHeight, null);
         g.dispose();
 
-        String relPath = hash.substring(0, 2) + "/" + hash.substring(2, 4) + "/" + hash + "_thumb.jpg";
+        String relPath = hash.substring(0, 2) + "/" + hash.substring(2, 4) + "/" + hash + "_thumb.webp";
         Path fullPath = Paths.get(thumbnailPath, relPath);
         fullPath.getParent().toFile().mkdirs();
 
-        ImageIO.write(thumb, "jpg", fullPath.toFile());
-
+        ImageIO.write(thumb, "webp", fullPath.toFile());
         return relPath;
     }
 
@@ -2027,5 +1640,92 @@ public class ImageService {
         ext = ext.toLowerCase();
         return "jpg".equals(ext) || "jpeg".equals(ext) || "png".equals(ext)
                 || "gif".equals(ext) || "bmp".equals(ext) || "webp".equals(ext);
+    }
+
+    /**
+     * 批量重新生成所有缩略图为 WebP 格式
+     */
+    public java.util.Map<String, Object> regenerateAllThumbnails() {
+        long start = System.currentTimeMillis();
+        int total = 0, success = 0, skipped = 0, failed = 0;
+
+        List<Image> allImages = imageMapper.selectList(new LambdaQueryWrapper<Image>()
+                .eq(Image::getDeleted, 0)
+                .isNotNull(Image::getFilePath));
+
+        total = allImages.size();
+        log.info("[REGEN] 开始重新生成 {} 张缩略图...", total);
+
+        for (Image image : allImages) {
+            try {
+                // 如果已经是 webp 缩略图，跳过
+                if (image.getThumbnailPath() != null && image.getThumbnailPath().endsWith(".webp")) {
+                    skipped++;
+                    continue;
+                }
+
+                // 读取原图
+                Path originalPath = Paths.get(imagePath, image.getFilePath());
+                if (!Files.exists(originalPath)) {
+                    log.warn("[REGEN] 原图不存在: {}", originalPath);
+                    failed++;
+                    continue;
+                }
+
+                byte[] imageBytes = Files.readAllBytes(originalPath);
+                BufferedImage source = ImageIO.read(new ByteArrayInputStream(imageBytes));
+                if (source == null) {
+                    log.warn("[REGEN] 无法读取原图: id={}", image.getId());
+                    failed++;
+                    continue;
+                }
+
+                // 生成 WebP 缩略图
+                int tw = Math.min(source.getWidth(), 300);
+                int th = (int) ((double) source.getHeight() / source.getWidth() * tw);
+                if (th > 300) { th = 300; tw = (int) ((double) source.getWidth() / source.getHeight() * th); }
+
+                BufferedImage thumb = new BufferedImage(tw, th, BufferedImage.TYPE_INT_RGB);
+                Graphics2D tg = thumb.createGraphics();
+                tg.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                tg.drawImage(source, 0, 0, tw, th, null);
+                tg.dispose();
+
+                String hash = image.getHash();
+                String thumbDir = hash.substring(0, 2) + "/" + hash.substring(2, 4);
+                String thumbName = hash + "_thumb.webp";
+                String thumbRelPath = thumbDir + "/" + thumbName;
+                Path thumbFullPath = Paths.get(thumbnailPath, thumbRelPath);
+                thumbFullPath.getParent().toFile().mkdirs();
+
+                ImageIO.write(thumb, "webp", thumbFullPath.toFile());
+
+                // 更新数据库记录
+                image.setThumbnailPath(thumbRelPath);
+                imageMapper.updateById(image);
+
+                // 同步更新 sample_thumbnail 表
+                SampleThumbnail st = sampleThumbnailMapper.selectById(image.getSampleId());
+                if (st != null && st.getImageId() != null && st.getImageId().equals(image.getId())) {
+                    st.setThumbnail(thumbRelPath);
+                    sampleThumbnailMapper.updateById(st);
+                }
+
+                success++;
+            } catch (Exception e) {
+                log.error("[REGEN] 缩略图生成失败 id={}: {}", image.getId(), e.getMessage());
+                failed++;
+            }
+        }
+
+        long elapsed = System.currentTimeMillis() - start;
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("total", total);
+        result.put("success", success);
+        result.put("skipped", skipped);
+        result.put("failed", failed);
+        result.put("elapsedMs", elapsed);
+        log.info("[REGEN] 完成 total={} success={} skipped={} failed={} elapsed={}ms", total, success, skipped, failed, elapsed);
+        return result;
     }
 }

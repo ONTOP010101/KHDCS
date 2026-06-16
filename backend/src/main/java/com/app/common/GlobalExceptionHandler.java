@@ -25,7 +25,11 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public Result<Void> handleException(Exception e) {
         log.error("系统异常: ", e);
-        return Result.error(e.getMessage());
+        Throwable cause = e;
+        while (cause.getCause() != null && cause.getCause() != cause) {
+            cause = cause.getCause();
+        }
+        return Result.error(cause.toString());
     }
 
     @ExceptionHandler(BusinessException.class)

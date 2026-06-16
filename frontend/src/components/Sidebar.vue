@@ -1,5 +1,5 @@
 <template>
-  <aside class="sidebar">
+  <aside class="sidebar" :class="{ collapsed }">
     <div class="sidebar-shell">
       <div class="brand-area">
         <div class="brand-card">
@@ -53,6 +53,81 @@
 
             <div
               class="sidebar-item"
+              :class="{ active: currentRoute === 'Manufacturer' }"
+              @click="navigateTo('Manufacturer')"
+            >
+              <Store class="w-[18px] h-[18px]" />
+              <span>厂商资料</span>
+              <span class="item-badge">56</span>
+            </div>
+
+            <div
+              class="sidebar-item"
+              :class="{ active: currentRoute === 'StallInfo' }"
+              @click="navigateTo('StallInfo')"
+            >
+              <Store class="w-[18px] h-[18px]" />
+              <span>摊位资料</span>
+            </div>
+
+            <div
+              class="sidebar-item"
+              :class="{ active: currentRoute === 'StallOverview' }"
+              @click="navigateTo('StallOverview')"
+            >
+              <ChartBar class="w-[18px] h-[18px]" />
+              <span>摊位概况</span>
+            </div>
+
+            <div
+              class="sidebar-item"
+              :class="{ active: currentRoute === 'CustomerInfo' }"
+              @click="navigateTo('CustomerInfo')"
+            >
+              <Contact class="w-[18px] h-[18px]" />
+              <span>客户资料</span>
+            </div>
+
+            <div
+              class="sidebar-item"
+              :class="{ active: currentRoute === 'RemovedManufacturer' }"
+              @click="navigateTo('RemovedManufacturer')"
+            >
+              <ArchiveX class="w-[18px] h-[18px]" />
+              <span>下架厂商资料</span>
+            </div>
+
+            <div
+              class="sidebar-item"
+              :class="{ active: currentRoute === 'RemovedSample' }"
+              @click="navigateTo('RemovedSample')"
+            >
+              <ArchiveX class="w-[18px] h-[18px]" />
+              <span>下架样品资料</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="nav-section">
+          <div class="section-title">Business</div>
+          <button class="sidebar-item" @click="businessOpen = !businessOpen">
+            <Briefcase class="w-5 h-5" />
+            <span class="flex-1 text-left">业务管理</span>
+            <ChevronDown class="chevron" :style="{ transform: businessOpen ? 'rotate(180deg)' : 'rotate(0deg)' }" />
+          </button>
+
+          <div class="sub-menu sidebar-sub" :class="{ open: businessOpen }">
+            <div
+              class="sidebar-item"
+              :class="{ active: currentRoute === 'ClientSample' }"
+              @click="navigateTo('ClientSample')"
+            >
+              <ClipboardCheck class="w-[18px] h-[18px]" />
+              <span>客户择样</span>
+            </div>
+
+            <div
+              class="sidebar-item"
               :class="{ active: currentRoute === 'Gallery' }"
               @click="navigateTo('Gallery')"
             >
@@ -63,12 +138,11 @@
 
             <div
               class="sidebar-item"
-              :class="{ active: currentRoute === 'Manufacturer' }"
-              @click="navigateTo('Manufacturer')"
+              :class="{ active: currentRoute === 'ManufacturerExport' }"
+              @click="navigateTo('ManufacturerExport')"
             >
-              <Store class="w-[18px] h-[18px]" />
-              <span>厂商资料</span>
-              <span class="item-badge">56</span>
+              <FileText class="w-[18px] h-[18px]" />
+              <span>厂商带出记录</span>
             </div>
           </div>
         </div>
@@ -130,6 +204,14 @@
         </div>
       </nav>
 
+      <div class="sidebar-collapse-area">
+        <button class="collapse-toggle" @click="collapsed = !collapsed" title="折叠侧栏">
+          <ChevronLeft v-if="!collapsed" class="w-5 h-5" />
+          <ChevronRight v-else class="w-5 h-5" />
+          <span>折叠侧栏</span>
+        </button>
+      </div>
+
       <div class="sidebar-footer">
         <div class="user-card">
           <div class="user-avatar">
@@ -153,16 +235,21 @@
 import { ref, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
-  Home, Folder, ChevronDown, Database, Image as ImageIcon, Store,
-  Users, UsersRound, Settings, ShieldCheck, FileClock, LogOut
+  Home, Folder, ChevronDown, ChevronLeft, ChevronRight, Database, Image as ImageIcon, Store,
+  Users, UsersRound, Settings, ShieldCheck, FileClock, LogOut,
+  Briefcase, ClipboardCheck, ChartBar, Contact, ArchiveX, FileText, ListChecks
 } from 'lucide-vue-next'
 import { useAuth } from '@/stores/auth'
+import { useSidebar } from '@/composables/useSidebar'
 
 const router = useRouter()
 const route = useRoute()
 const { state, clearAuth, getUserInitials } = useAuth()
 
+const { collapsed } = useSidebar()
+
 const dataOpen = ref(true)
+const businessOpen = ref(false)
 const systemOpen = ref(false)
 
 const currentRoute = computed(() => route.name)
@@ -181,9 +268,11 @@ function handleLogout() {
 }
 
 watch(currentRoute, (name) => {
-  const dataRoutes = ['Sample', 'Gallery', 'Manufacturer']
+  const dataRoutes = ['Sample', 'Manufacturer', 'StallInfo', 'StallOverview', 'CustomerInfo', 'RemovedManufacturer', 'RemovedSample', 'ReferenceData']
+  const businessRoutes = ['ClientSample', 'Gallery', 'ManufacturerExport']
   const systemRoutes = ['Users', 'Roles', 'Logs']
   if (dataRoutes.includes(name)) dataOpen.value = true
+  if (businessRoutes.includes(name)) businessOpen.value = true
   if (systemRoutes.includes(name)) systemOpen.value = true
 }, { immediate: true })
 </script>

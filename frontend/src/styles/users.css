@@ -517,7 +517,7 @@
 .admin-form-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
+  gap: 16px 20px;
 }
 
 .admin-form-item.full {
@@ -527,9 +527,69 @@
 .admin-form-item label {
   display: block;
   margin-bottom: 7px;
-  color: rgba(29,29,31,0.58);
+  color: rgba(29,29,31,0.55);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 820;
+  letter-spacing: 0.02em;
+}
+
+.admin-form-item .admin-input,
+.admin-form-item .admin-select,
+.admin-form-item .admin-textarea {
+  transition: all 0.25s cubic-bezier(.4,0,.2,1);
+}
+
+/* ===== 角色分配弹窗 ===== */
+.admin-role-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15,23,42,0.36);
+  backdrop-filter: blur(10px) saturate(160%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+}
+
+.admin-role-mask.show { display: flex; }
+
+.admin-role-dialog {
+  width: min(480px, calc(100vw - 42px));
+  overflow: hidden;
+  border-radius: 28px;
+  background:
+    linear-gradient(155deg, rgba(255,255,255,0.98), rgba(242,248,255,0.94));
+  border: 1px solid rgba(0,122,255,0.13);
+  box-shadow:
+    0 40px 120px rgba(0,60,140,0.18),
+    0 16px 48px rgba(15,23,42,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.98),
+    inset 0 -1px 0 rgba(0,122,255,0.04);
+  animation: adminDialogIn 0.3s cubic-bezier(.22,1,.36,1);
+}
+
+@keyframes adminDialogIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.admin-role-head {
+  padding: 22px 24px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.admin-role-head strong {
+  color: #1d1d1f;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.admin-role-body {
+  padding: 8px 24px 18px;
 }
 
 .admin-detail-list {
@@ -545,6 +605,12 @@
   display: grid;
   grid-template-columns: 120px 1fr;
   gap: 12px;
+  transition: all 0.2s ease;
+}
+
+.admin-detail-item:hover {
+  background: rgba(255,255,255,0.82);
+  border-color: rgba(0,122,255,0.13);
 }
 
 .admin-detail-item span {

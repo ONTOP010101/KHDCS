@@ -1,40 +1,23 @@
 <template>
-  <div class="sample-page">
-    <div class="sample-card sample-form-card" :class="{ expanded: formExpanded }">
-      <div class="sample-form-top">
-        <div class="sample-form-title">
-          <div class="sample-form-title-icon">
-            <Store :size="16" />
-          </div>
-          <strong>厂商资料</strong>
-          <span>{{ formMode === 'add' ? '新增' : formMode === 'edit' ? '编辑' : '查看' }}</span>
-        </div>
-        <div class="sample-form-actions">
-          <span class="sample-mode-pill">{{ formMode === 'add' ? '新增模式' : formMode === 'edit' ? '编辑模式' : '只读模式' }}</span>
+  <div class="manufacturer-page">
+    <div class="manufacturer-card manufacturer-form-card" :class="{ expanded: formExpanded }">
+      <div class="manufacturer-form-top">
+        <div class="manufacturer-form-actions">
           <template v-if="formMode === 'readonly' && currentManufacturer">
-            <button class="sample-btn sample-btn-ghost" @click="resetForm">
-              <RotateCcw :size="14" /> 重置
+            <button class="manufacturer-btn manufacturer-btn-ghost" title="重置" @click="resetForm">
+              <RotateCcw :size="14" />
             </button>
           </template>
-          <button class="sample-btn sample-btn-ghost" @click="toggleFieldSettings">
-            <Settings :size="14" /> 字段设置
+          <button class="manufacturer-btn manufacturer-btn-ghost" title="字段设置" @click="toggleFieldSettings">
+            <Settings :size="14" />
           </button>
-          <button class="sample-btn sample-btn-ghost" @click="formExpanded = !formExpanded">
+          <button class="manufacturer-btn manufacturer-btn-ghost" :title="formExpanded ? '收起' : '展开'" @click="formExpanded = !formExpanded">
             <component :is="formExpanded ? ChevronsUp : ChevronsDown" :size="14" />
-            {{ formExpanded ? '收起' : '展开' }}
           </button>
-          <template v-if="formMode === 'edit' || formMode === 'add'">
-            <button class="sample-btn sample-btn-primary" @click="saveManufacturer">
-              <Save :size="14" /> 保存
-            </button>
-            <button class="sample-btn sample-btn-ghost" @click="cancelEdit">
-              <X :size="14" /> 取消
-            </button>
-          </template>
         </div>
       </div>
 
-      <div v-if="showFieldSettings" class="sample-field-settings">
+      <div v-if="showFieldSettings" class="manufacturer-field-settings">
         <div class="field-settings-header">
           <span class="field-settings-title">字段显示设置</span>
           <button class="field-settings-close" @click="showFieldSettings = false">
@@ -57,57 +40,88 @@
         </div>
       </div>
 
-      <div class="sample-form-body">
-        <div class="sample-form-scroll">
-          <div class="sample-form-grid">
+      <div class="manufacturer-form-body">
+        <div class="manufacturer-form-scroll">
+          <div class="manufacturer-form-grid">
             <div
               v-for="f in visibleFormFields"
               :key="f.key"
-              class="sample-form-field"
+              class="manufacturer-form-field"
+              :style="{ flex: '0 0 auto' }"
             >
-              <label class="sample-form-label">{{ f.label }}</label>
+              <label class="manufacturer-form-label" :style="{ flex: '0 0 84px', textAlign: 'justify', textAlignLast: 'justify' }">{{ f.label }}</label>
               <input
-                class="sample-form-input"
+                class="manufacturer-form-input"
                 v-model="formData[f.key]"
                 :readonly="formMode === 'readonly'"
                 :placeholder="formMode !== 'readonly' ? '请输入' + f.label : ''"
+                :style="{ flex: '0 0 ' + (f.key === 'smsNumber' || f.key === 'certificate' ? '470px' : '180px') }"
               />
             </div>
           </div>
         </div>
+
+        <div class="manufacturer-image-strip">
+          <template v-if="certificateImage">
+            <div class="manufacturer-image-strip-single">
+              <img
+                :src="certificateImage.startsWith('http') ? certificateImage : '/images/' + certificateImage"
+                @click="viewCertificate"
+                style="cursor:pointer"
+                @error="certificateImage = null"
+              />
+              <span class="spm-strip-counter">营业执照</span>
+            </div>
+          </template>
+          <template v-else>
+            <span class="manufacturer-image-strip-empty">暂无营业执照</span>
+          </template>
+          <label v-if="formMode === 'edit' || formMode === 'add'" class="manufacturer-image-upload-btn">
+            <Upload :size="14" /> 上传
+            <input type="file" accept="image/*" hidden @change="onCertificateUpload" />
+          </label>
+        </div>
       </div>
     </div>
 
-    <div class="sample-card sample-toolbar-card">
-      <div class="sample-toolbar-row">
-        <div class="sample-search">
+    <div class="manufacturer-card manufacturer-toolbar-card">
+      <div class="manufacturer-toolbar-row">
+        <div class="manufacturer-search">
           <Search :size="16" />
-          <input v-model="searchKeyword" placeholder="搜索厂商名称/编号/联系人" @keydown.enter="onSearch" />
+          <input v-model="searchKeyword" placeholder="搜索厂商名称/摊位号/手机号/短信号码" @keydown.enter="onSearch" />
         </div>
-        <button class="sample-btn sample-btn-primary" @click="onSearch">
+        <button class="manufacturer-btn manufacturer-btn-primary" @click="onSearch">
           <Search :size="14" /> 查询
         </button>
-        <button class="sample-btn sample-btn-ghost" @click="clearSearch">
+        <button class="manufacturer-btn manufacturer-btn-ghost" @click="clearSearch">
           <X :size="14" /> 清除
         </button>
         <span class="toolbar-sep"></span>
-        <button class="sample-btn sample-btn-primary" @click="startAdd">
+        <button class="manufacturer-btn manufacturer-btn-primary" @click="startAdd">
           <Plus :size="14" /> 添加厂商
         </button>
-        <button class="sample-btn sample-btn-ghost" :disabled="!currentManufacturer" @click="startEdit">
+        <template v-if="formMode === 'edit' || formMode === 'add'">
+          <button class="manufacturer-btn manufacturer-btn-primary" @click="saveManufacturer">
+            <Save :size="14" /> 保存
+          </button>
+          <button class="manufacturer-btn manufacturer-btn-ghost" @click="cancelEdit">
+            <X :size="14" /> 取消
+          </button>
+        </template>
+        <button v-else class="manufacturer-btn manufacturer-btn-ghost" :disabled="!currentManufacturer" @click="startEdit">
           <Pencil :size="14" /> 修改
         </button>
-        <button class="sample-btn sample-btn-danger" :disabled="!currentManufacturer" @click="deleteCurrent">
+        <button class="manufacturer-btn manufacturer-btn-danger" :disabled="!currentManufacturer" @click="deleteCurrent">
           <Trash2 :size="14" /> 删除
         </button>
-        <button class="sample-btn sample-btn-ghost" @click="importData">
+        <button class="manufacturer-btn manufacturer-btn-ghost" @click="importData">
           <Upload :size="14" /> 导入资料
         </button>
       </div>
     </div>
 
-    <div class="sample-card sample-table-card">
-      <div ref="tableWrapRef" class="sample-table-wrap">
+    <div class="manufacturer-card manufacturer-table-card">
+      <div ref="tableWrapRef" class="manufacturer-table-wrap">
         <vxe-grid
           ref="gridRef"
           :columns="allColumns"
@@ -133,27 +147,27 @@
           </template>
         </vxe-grid>
       </div>
-      <div class="sample-statusbar">
-        <div class="sample-status-info">
+      <div class="manufacturer-statusbar">
+        <div class="manufacturer-status-info">
           共 <strong>{{ totalRecords }}</strong> 条
         </div>
-        <div class="sample-pagination">
-          <span class="sample-page-size-label">每页</span>
-          <select class="sample-page-size-select" v-model.number="pageSize">
+        <div class="manufacturer-pagination">
+          <span class="manufacturer-page-size-label">每页</span>
+          <select class="manufacturer-page-size-select" v-model.number="pageSize">
             <option v-for="opt in pageSizeOptions" :key="opt" :value="opt">{{ opt }}</option>
           </select>
-          <span class="sample-page-size-label">条</span>
-          <button class="sample-btn sample-btn-ghost" :disabled="currentPage <= 1" @click="goPage(1)">
+          <span class="manufacturer-page-size-label">条</span>
+          <button class="manufacturer-btn manufacturer-btn-ghost" :disabled="currentPage <= 1" @click="goPage(1)">
             <ChevronsLeft :size="14" />
           </button>
-          <button class="sample-btn sample-btn-ghost" :disabled="currentPage <= 1" @click="goPage(currentPage - 1)">
+          <button class="manufacturer-btn manufacturer-btn-ghost" :disabled="currentPage <= 1" @click="goPage(currentPage - 1)">
             <ChevronLeft :size="14" />
           </button>
-          <span class="sample-page-text">{{ currentPage }} / {{ totalPages }}</span>
-          <button class="sample-btn sample-btn-ghost" :disabled="currentPage >= totalPages" @click="goPage(currentPage + 1)">
+          <span class="manufacturer-page-text">{{ currentPage }} / {{ totalPages }}</span>
+          <button class="manufacturer-btn manufacturer-btn-ghost" :disabled="currentPage >= totalPages" @click="goPage(currentPage + 1)">
             <ChevronRight :size="14" />
           </button>
-          <button class="sample-btn sample-btn-ghost" :disabled="currentPage >= totalPages" @click="goPage(totalPages)">
+          <button class="manufacturer-btn manufacturer-btn-ghost" :disabled="currentPage >= totalPages" @click="goPage(totalPages)">
             <ChevronsRight :size="14" />
           </button>
         </div>
@@ -185,7 +199,7 @@
         <template v-if="batchResult.failedRows && batchResult.failedRows.length > 0">
           <p class="br-section-title">
             异常记录 ({{ batchResult.failedRows.length }}条)
-            <button class="sample-btn sample-btn-ghost" style="font-size:11px;padding:1px 8px;height:22px;margin-left:8px" @click="exportImportFailedRows">
+            <button class="manufacturer-btn manufacturer-btn-ghost" style="font-size:11px;padding:1px 8px;height:22px;margin-left:8px" @click="exportImportFailedRows">
               <FileDown :size="12" /> 导出
             </button>
           </p>
@@ -218,7 +232,7 @@
         </template>
       </div>
       <div class="modal-footer">
-        <button class="sample-btn sample-btn-primary" @click="showBatchResultModal = false">知道了</button>
+        <button class="manufacturer-btn manufacturer-btn-primary" @click="showBatchResultModal = false">知道了</button>
       </div>
     </div>
   </div>
@@ -236,8 +250,8 @@
         <p class="import-confirm-hint">重复厂商编号的资料将被自动跳过</p>
       </div>
       <div class="import-confirm-footer">
-        <button class="sample-btn sample-btn-ghost" @click="showImportConfirmModal = false">取消</button>
-        <button class="sample-btn sample-btn-primary" @click="executeImport">确定</button>
+        <button class="manufacturer-btn manufacturer-btn-ghost" @click="showImportConfirmModal = false">取消</button>
+        <button class="manufacturer-btn manufacturer-btn-primary" @click="executeImport">确定</button>
       </div>
     </div>
   </div>
@@ -277,7 +291,7 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button class="sample-btn sample-btn-ghost" @click="showImportModal = false">取消</button>
+        <button class="manufacturer-btn manufacturer-btn-ghost" @click="showImportModal = false">取消</button>
       </div>
     </div>
   </div>
@@ -296,7 +310,7 @@
         <div class="import-preview-summary">
           <span class="import-stat">共 <strong>{{ importPreviewData.length }}</strong> 条数据</span>
           <span class="import-stat">已选 <strong>{{ importSelectedRows.length }}</strong> 条</span>
-          <button class="sample-btn sample-btn-ghost" style="font-size:11px;padding:2px 10px;height:26px" :disabled="importSelectedRows.length === 0" @click="deleteSelectedPreviewRows">
+          <button class="manufacturer-btn manufacturer-btn-ghost" style="font-size:11px;padding:2px 10px;height:26px" :disabled="importSelectedRows.length === 0" @click="deleteSelectedPreviewRows">
             <Trash2 :size="13" /> 批量删除
           </button>
         </div>
@@ -322,8 +336,8 @@
           >
             <template #import_action="{ row }">
               <div style="display:flex;gap:4px;justify-content:center">
-                <button class="sample-table-action" style="color:#007aff;font-size:11px;padding:2px 8px;height:24px" @click.stop="restorePreviewRow(row)">还原</button>
-                <button class="sample-table-action" style="color:#ff3b30;font-size:11px;padding:2px 8px;height:24px" @click.stop="deletePreviewRow(row)">删除</button>
+                <button class="manufacturer-table-action" style="color:#007aff;font-size:11px;padding:2px 8px;height:24px" @click.stop="restorePreviewRow(row)">还原</button>
+                <button class="manufacturer-table-action" style="color:#ff3b30;font-size:11px;padding:2px 8px;height:24px" @click.stop="deletePreviewRow(row)">删除</button>
               </div>
             </template>
           </vxe-grid>
@@ -331,10 +345,10 @@
       </div>
       <div class="modal-footer import-preview-footer">
         <div class="import-toolbar-left">
-          <button class="sample-btn sample-btn-ghost" @click="downloadTemplate">
+          <button class="manufacturer-btn manufacturer-btn-ghost" @click="downloadTemplate">
             <Download :size="14" /> 下载模板
           </button>
-          <button class="sample-btn sample-btn-ghost" :disabled="importSelectedRows.length === 0" @click="exportSelectedRows">
+          <button class="manufacturer-btn manufacturer-btn-ghost" :disabled="importSelectedRows.length === 0" @click="exportSelectedRows">
             <FileDown :size="14" /> 导入选中
           </button>
         </div>
@@ -343,13 +357,13 @@
             <input type="checkbox" v-model="importUpdateMode" :disabled="importUploading" />
             覆盖已有数据
           </label>
-          <button class="sample-btn sample-btn-ghost" @click="cancelImportPreview" :disabled="importUploading">
+          <button class="manufacturer-btn manufacturer-btn-ghost" @click="cancelImportPreview" :disabled="importUploading">
             取消导入
           </button>
-          <button class="sample-btn sample-btn-danger" :disabled="importPreviewData.length === 0 || importUploading" @click="doConfirmImport('all')">
+          <button class="manufacturer-btn manufacturer-btn-danger" :disabled="importPreviewData.length === 0 || importUploading" @click="doConfirmImport('all')">
             <Upload :size="14" /> {{ importUploading ? '导入中...' : `全选导入(${importPreviewData.length})` }}
           </button>
-          <button class="sample-btn sample-btn-primary" :disabled="importSelectedRows.length === 0 || importUploading" @click="doConfirmImport('selected')">
+          <button class="manufacturer-btn manufacturer-btn-primary" :disabled="importSelectedRows.length === 0 || importUploading" @click="doConfirmImport('selected')">
             <Upload :size="14" /> {{ importUploading ? '导入中...' : `确认导入(${importSelectedRows.length})` }}
           </button>
         </div>
@@ -376,8 +390,8 @@
         <p style="font-size:14px;color:#1d1d1f;line-height:1.6;white-space:pre-wrap">{{ confirmMessage }}</p>
       </div>
       <div class="modal-footer">
-        <button class="sample-btn sample-btn-ghost" @click="onConfirmCancel">取消</button>
-        <button class="sample-btn sample-btn-danger" @click="onConfirmOk">确定</button>
+        <button class="manufacturer-btn manufacturer-btn-ghost" @click="onConfirmCancel">取消</button>
+        <button class="manufacturer-btn manufacturer-btn-danger" @click="onConfirmOk">确定</button>
       </div>
     </div>
   </div>
@@ -395,7 +409,7 @@
         <p style="font-size:14px;color:#1d1d1f;line-height:1.6;white-space:pre-wrap">{{ alertMessage }}</p>
       </div>
       <div class="modal-footer">
-        <button class="sample-btn sample-btn-primary" @click="showAlert = false">知道了</button>
+        <button class="manufacturer-btn manufacturer-btn-primary" @click="showAlert = false">知道了</button>
       </div>
     </div>
   </div>
@@ -407,6 +421,7 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, onActivated, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api'
+import { useSidebar } from '@/composables/useSidebar'
 import {
   Store, Search, Plus, Pencil, Trash2, Save, X, Settings,
   ChevronsUp, ChevronsDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
@@ -414,75 +429,65 @@ import {
   AlertTriangle, Info
 } from 'lucide-vue-next'
 import * as XLSX from 'xlsx'
-import '@/styles/sample.css'
+import '@/styles/manufacturer.css'
 
 const router = useRouter()
+const { collapsed } = useSidebar()
 
 const allFormFields = [
   { key: 'manufacturerCode', label: '厂商编号' },
   { key: 'name', label: '厂商名称' },
   { key: 'boothNo', label: '摊位号' },
-  { key: 'phone1', label: '电话1' },
+  { key: 'boothType', label: '摊位类型' },
+  { key: 'boothMeters', label: '摊位米数' },
   { key: 'mobile1', label: '手机1' },
+  { key: 'phone1', label: '电话1' },
   { key: 'contact1', label: '联系人1' },
   { key: 'visitorMobile', label: '见客手机' },
-  { key: 'phone2', label: '电话2' },
-  { key: 'mobile2', label: '手机2' },
-  { key: 'contact2', label: '联系人2' },
-  { key: 'address', label: '地址' },
-  { key: 'phone3', label: '电话3' },
-  { key: 'mobile3', label: '手机3' },
   { key: 'qq', label: 'QQ' },
-  { key: 'otherRemark', label: '其他备注' },
-  { key: 'certificate', label: '厂商证书' },
+  { key: 'mobile2', label: '手机2' },
+  { key: 'phone2', label: '电话2' },
+  { key: 'contact2', label: '联系人2' },
   { key: 'smsNumber', label: '短信号码' },
-  { key: 'boothMeters', label: '摊位米数' },
-  { key: 'boothType', label: '摊位类型' },
-  { key: 'floorArea', label: '楼层区位' },
-  { key: 'boothArea', label: '摊位区位' },
-  { key: 'lastExpiry', label: '上次到期' },
-  { key: 'expiryDate', label: '到期日期' },
-  { key: 'mainCard', label: '主卡' },
-  { key: 'subCard', label: '副卡' },
+  { key: 'mobile3', label: '手机3' },
+  { key: 'phone3', label: '电话3' },
+  { key: 'contact3', label: '联系人3' },
+  { key: 'certificate', label: '厂家证书' },
   { key: 'registrant', label: '登记人' },
   { key: 'modifier', label: '修改人' },
+  { key: 'remark', label: '备注' },
+  { key: 'lastExpiry', label: '上次到期' },
+  { key: 'expiryDate', label: '到期日期' },
+  { key: 'floorArea', label: '楼层区位' },
+  { key: 'mainCard', label: '主卡ID' },
+  { key: 'subCard', label: '副卡ID' },
   { key: 'createTime', label: '登记日期' },
   { key: 'updateTime', label: '修改日期' },
-  { key: 'remark', label: '备注' }
+  { key: 'boothArea', label: '摊位区域' },
+  { key: 'television', label: '电视' },
+  { key: 'canInvoice', label: '能否发票' }
 ]
 
 const fieldVisible = reactive({})
 allFormFields.forEach(f => { fieldVisible[f.key] = true })
-fieldVisible.phone2 = false
-fieldVisible.mobile2 = false
-fieldVisible.contact2 = false
-fieldVisible.phone3 = false
-fieldVisible.mobile3 = false
-fieldVisible.otherRemark = false
-fieldVisible.certificate = false
-fieldVisible.smsNumber = true
-fieldVisible.lastExpiry = false
-fieldVisible.subCard = false
-fieldVisible.modifier = false
-fieldVisible.address = false
-fieldVisible.floorArea = false
-fieldVisible.boothArea = false
-fieldVisible.mainCard = false
 
 const fieldOrder = reactive({})
 allFormFields.forEach((f, i) => { fieldOrder[f.key] = i + 1 })
 
 const HEADER_TO_FIELD = {
   '厂商编号': 'manufacturerCode', '厂商名称': 'name', '摊位号': 'boothNo',
-  '电话1': 'phone1', '手机1': 'mobile1', '联系人1': 'contact1',
-  '见客手机': 'visitorMobile', '电话2': 'phone2', '手机2': 'mobile2',
-  '联系人2': 'contact2', '地址': 'address', '电话3': 'phone3',
-  '手机3': 'mobile3', 'QQ': 'qq', '其他备注': 'otherRemark',
-  '厂商证书': 'certificate', '短信号码': 'smsNumber', '摊位米数': 'boothMeters',
-  '摊位类型': 'boothType', '楼层区位': 'floorArea', '摊位区位': 'boothArea',
-  '上次到期': 'lastExpiry', '到期日期': 'expiryDate', '主卡': 'mainCard',
-  '副卡': 'subCard', '登记人': 'registrant', '修改人': 'modifier',
-  '登记日期': 'createTime', '修改日期': 'updateTime', '备注': 'remark'
+  '摊位类型': 'boothType', '摊位米数': 'boothMeters',
+  '手机1': 'mobile1', '电话1': 'phone1', '联系人1': 'contact1',
+  '见客手机': 'visitorMobile', 'QQ': 'qq',
+  '手机2': 'mobile2', '电话2': 'phone2', '联系人2': 'contact2',
+  '短信号码': 'smsNumber',
+  '手机3': 'mobile3', '电话3': 'phone3', '联系人3': 'contact3',
+  '厂家证书': 'certificate',
+  '楼层区位': 'floorArea', '摊位区域': 'boothArea', '备注': 'remark',
+  '上次到期': 'lastExpiry', '到期日期': 'expiryDate', '登记人': 'registrant',
+  '主卡ID': 'mainCard', '副卡ID': 'subCard',
+  '登记日期': 'createTime', '修改日期': 'updateTime', '修改人': 'modifier',
+  '电视': 'television', '能否发票': 'canInvoice'
 }
 
 const EDIT_RENDER = { name: 'input' }
@@ -493,40 +498,62 @@ const IMPORT_PREVIEW_ALL_COLUMNS = [
   { field: 'manufacturerCode', title: '厂商编号', width: 110, showOverflow: true, editRender: EDIT_RENDER, sortable: true, slots: { default: 'col_manufacturerCode' } },
   { field: 'name', title: '厂商名称', width: 140, showOverflow: true, editRender: EDIT_RENDER, sortable: true },
   { field: 'boothNo', title: '摊位号', width: 100, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'phone1', title: '电话1', width: 120, showOverflow: true, editRender: EDIT_RENDER },
+  { field: 'boothType', title: '摊位类型', width: 100, showOverflow: true, editRender: EDIT_RENDER },
+  { field: 'boothMeters', title: '摊位米数', width: 100, showOverflow: true, editRender: EDIT_RENDER },
   { field: 'mobile1', title: '手机1', width: 120, showOverflow: true, editRender: EDIT_RENDER },
+  { field: 'phone1', title: '电话1', width: 120, showOverflow: true, editRender: EDIT_RENDER },
   { field: 'contact1', title: '联系人1', width: 100, showOverflow: true, editRender: EDIT_RENDER },
   { field: 'visitorMobile', title: '见客手机', width: 120, showOverflow: true, editRender: EDIT_RENDER, visible: false },
-  { field: 'phone2', title: '电话2', width: 120, showOverflow: true, editRender: EDIT_RENDER, visible: false },
-  { field: 'mobile2', title: '手机2', width: 120, showOverflow: true, editRender: EDIT_RENDER, visible: false },
-  { field: 'contact2', title: '联系人2', width: 100, showOverflow: true, editRender: EDIT_RENDER, visible: false },
-  { field: 'address', title: '地址', width: 180, showOverflow: true, editRender: EDIT_RENDER, visible: false },
-  { field: 'phone3', title: '电话3', width: 120, showOverflow: true, editRender: EDIT_RENDER, visible: false },
-  { field: 'mobile3', title: '手机3', width: 120, showOverflow: true, editRender: EDIT_RENDER, visible: false },
   { field: 'qq', title: 'QQ', width: 100, showOverflow: true, editRender: EDIT_RENDER, visible: false },
-  { field: 'otherRemark', title: '其他备注', width: 140, showOverflow: true, editRender: EDIT_RENDER, visible: false },
-  { field: 'certificate', title: '厂商证书', width: 100, showOverflow: true, editRender: EDIT_RENDER, visible: false },
+  { field: 'mobile2', title: '手机2', width: 120, showOverflow: true, editRender: EDIT_RENDER, visible: false },
+  { field: 'phone2', title: '电话2', width: 120, showOverflow: true, editRender: EDIT_RENDER, visible: false },
+  { field: 'contact2', title: '联系人2', width: 100, showOverflow: true, editRender: EDIT_RENDER, visible: false },
   { field: 'smsNumber', title: '短信号码', width: 120, showOverflow: true, editRender: EDIT_RENDER, visible: false },
-  { field: 'boothMeters', title: '摊位米数', width: 100, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'boothType', title: '摊位类型', width: 100, showOverflow: true, editRender: EDIT_RENDER },
+  { field: 'mobile3', title: '手机3', width: 120, showOverflow: true, editRender: EDIT_RENDER, visible: false },
+  { field: 'phone3', title: '电话3', width: 120, showOverflow: true, editRender: EDIT_RENDER, visible: false },
+  { field: 'contact3', title: '联系人3', width: 100, showOverflow: true, editRender: EDIT_RENDER, visible: false },
+  { field: 'certificate', title: '厂家证书', width: 100, showOverflow: true, editRender: EDIT_RENDER, visible: false },
   { field: 'floorArea', title: '楼层区位', width: 100, showOverflow: true, editRender: EDIT_RENDER, visible: false },
-  { field: 'boothArea', title: '摊位区位', width: 100, showOverflow: true, editRender: EDIT_RENDER, visible: false },
+  { field: 'boothArea', title: '摊位区域', width: 100, showOverflow: true, editRender: EDIT_RENDER, visible: false },
+  { field: 'remark', title: '备注', width: 140, showOverflow: true, editRender: EDIT_RENDER },
   { field: 'lastExpiry', title: '上次到期', width: 110, showOverflow: true, editRender: EDIT_RENDER, visible: false },
   { field: 'expiryDate', title: '到期日期', width: 110, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'mainCard', title: '主卡', width: 80, showOverflow: true, editRender: EDIT_RENDER, visible: false },
-  { field: 'subCard', title: '副卡', width: 80, showOverflow: true, editRender: EDIT_RENDER, visible: false },
   { field: 'registrant', title: '登记人', width: 90, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'modifier', title: '修改人', width: 90, showOverflow: true, editRender: EDIT_RENDER, visible: false },
+  { field: 'mainCard', title: '主卡ID', width: 80, showOverflow: true, editRender: EDIT_RENDER, visible: false },
+  { field: 'subCard', title: '副卡ID', width: 80, showOverflow: true, editRender: EDIT_RENDER, visible: false },
   { field: 'createTime', title: '登记日期', width: 110, showOverflow: true, editRender: EDIT_RENDER },
   { field: 'updateTime', title: '修改日期', width: 110, showOverflow: true, editRender: EDIT_RENDER, visible: false },
-  { field: 'remark', title: '备注', width: 140, showOverflow: true, editRender: EDIT_RENDER },
+  { field: 'modifier', title: '修改人', width: 90, showOverflow: true, editRender: EDIT_RENDER, visible: false },
+  { field: 'television', title: '电视', width: 80, showOverflow: true, editRender: EDIT_RENDER, visible: false },
+  { field: 'canInvoice', title: '能否发票', width: 100, showOverflow: true, editRender: EDIT_RENDER, visible: false },
   { title: '操作', width: 120, fixed: 'right', slots: { default: 'import_action' } }
 ]
 
 const visibleFormFields = computed(() => {
-  return allFormFields
+  const sorted = allFormFields
     .filter(f => fieldVisible[f.key])
     .sort((a, b) => (fieldOrder[a.key] || 999) - (fieldOrder[b.key] || 999))
+
+  // 侧栏未折叠：保持原顺序
+  if (!collapsed.value) return sorted
+
+  // 侧栏折叠后：把摊位区域→QQ右侧、电视→短信号码右侧、能否发票→厂家证书右侧
+  const result = sorted.filter(f => !['boothArea', 'television', 'canInvoice'].includes(f.key))
+
+  const certIdx = result.findIndex(f => f.key === 'certificate')
+  const smsIdx = result.findIndex(f => f.key === 'smsNumber')
+  const qqIdx = result.findIndex(f => f.key === 'qq')
+
+  const canInvoice = sorted.find(f => f.key === 'canInvoice')
+  const television = sorted.find(f => f.key === 'television')
+  const boothArea = sorted.find(f => f.key === 'boothArea')
+
+  // 从后往前插入，避免索引偏移
+  if (canInvoice && certIdx >= 0) result.splice(certIdx + 1, 0, canInvoice)
+  if (television && smsIdx >= 0) result.splice(smsIdx + 1, 0, television)
+  if (boothArea && qqIdx >= 0) result.splice(qqIdx + 1, 0, boothArea)
+
+  return result
 })
 
 const showFieldSettings = ref(false)
@@ -544,6 +571,7 @@ let resizeRafId = null
 let lastObservedHeight = 0
 
 const searchKeyword = ref('')
+const certificateImage = ref('')
 const currentPage = ref(1)
 const pageSize = ref(2000)
 const pageSizeOptions = [500, 1000, 2000, 4000]
@@ -559,36 +587,37 @@ const filteredTableData = computed(() => list.value)
 const allColumns = [
   { type: 'checkbox', title: '#', width: 50, fixed: 'left', sortable: true },
   { type: 'seq', title: '序号', width: 60, fixed: 'left' },
-  { field: 'manufacturerCode', title: '厂商编号', minWidth: 140, showOverflow: true, sortable: true, slots: { default: 'col_manufacturerCode' } },
-  { field: 'name', title: '厂商名称', minWidth: 160, showOverflow: true },
-  { field: 'boothNo', title: '摊位号', minWidth: 100, showOverflow: true, sortable: true },
-  { field: 'phone1', title: '电话1', minWidth: 130, showOverflow: true },
-  { field: 'mobile1', title: '手机1', minWidth: 120, showOverflow: true },
-  { field: 'contact1', title: '联系人1', minWidth: 100, showOverflow: true },
+  { field: 'manufacturerCode', title: '厂商编号', width: 150, showOverflow: true, sortable: true, slots: { default: 'col_manufacturerCode' } },
+  { field: 'name', title: '厂商名称', width: 200, showOverflow: true },
+  { field: 'boothNo', title: '摊位号', width: 180, showOverflow: true, sortable: true },
+  { field: 'boothType', title: '摊位类型', minWidth: 100, sortable: true, visible: false },
+  { field: 'boothMeters', title: '摊位米数', width: 150, sortable: true },
+  { field: 'mobile1', title: '手机1', width: 200, showOverflow: true, sortable: true },
+  { field: 'phone1', title: '电话1', width: 150, showOverflow: true, sortable: true },
+  { field: 'contact1', title: '联系人1', width: 120, showOverflow: true },
   { field: 'visitorMobile', title: '见客手机', minWidth: 120, showOverflow: true, visible: false },
-  { field: 'phone2', title: '电话2', minWidth: 130, showOverflow: true, visible: false },
+  { field: 'qq', title: 'QQ', width: 200, showOverflow: true, sortable: true },
   { field: 'mobile2', title: '手机2', minWidth: 120, showOverflow: true, visible: false },
+  { field: 'phone2', title: '电话2', minWidth: 130, showOverflow: true, visible: false },
   { field: 'contact2', title: '联系人2', minWidth: 100, showOverflow: true, visible: false },
-  { field: 'address', title: '地址', minWidth: 200, showOverflow: true, visible: false },
-  { field: 'phone3', title: '电话3', minWidth: 130, showOverflow: true, visible: false },
+  { field: 'smsNumber', title: '短信号码', width: 300, showOverflow: true, sortable: true },
   { field: 'mobile3', title: '手机3', minWidth: 120, showOverflow: true, visible: false },
-  { field: 'qq', title: 'QQ', minWidth: 110, showOverflow: true, sortable: true },
-  { field: 'otherRemark', title: '其他备注', minWidth: 120, showOverflow: true, visible: false },
-  { field: 'certificate', title: '厂商证书', minWidth: 100, showOverflow: true, visible: false },
-  { field: 'smsNumber', title: '短信号码', minWidth: 300, showOverflow: true },
-  { field: 'boothMeters', title: '摊位米数', minWidth: 140, sortable: true },
-  { field: 'boothType', title: '摊位类型', minWidth: 140, sortable: true },
+  { field: 'phone3', title: '电话3', minWidth: 130, showOverflow: true, visible: false },
+  { field: 'contact3', title: '联系人3', minWidth: 100, showOverflow: true, visible: false },
+  { field: 'certificate', title: '厂家证书', minWidth: 100, showOverflow: true, visible: false },
   { field: 'floorArea', title: '楼层区位', minWidth: 100, visible: false },
-  { field: 'boothArea', title: '摊位区位', minWidth: 100, visible: false },
-  { field: 'lastExpiry', title: '上次到期', minWidth: 110, visible: false },
-  { field: 'expiryDate', title: '到期日期', minWidth: 140, sortable: true },
-  { field: 'mainCard', title: '主卡', minWidth: 80, visible: false },
-  { field: 'subCard', title: '副卡', minWidth: 80, visible: false },
-  { field: 'registrant', title: '登记人', minWidth: 140, sortable: true },
+  { field: 'boothArea', title: '摊位区域', minWidth: 100, visible: false },
+  { field: 'remark', title: '备注', width: 300, showOverflow: true },
+  { field: 'lastExpiry', title: '上次到期', minWidth: 110, visible: false, formatter: ({ cellValue }) => cellValue ? String(cellValue).replace('T', ' ') : '' },
+  { field: 'expiryDate', title: '到期日期', width: 300, sortable: true, formatter: ({ cellValue }) => cellValue ? String(cellValue).replace('T', ' ') : '' },
+  { field: 'registrant', title: '登记人', width: 130, sortable: true },
+  { field: 'mainCard', title: '主卡ID', minWidth: 80, visible: false },
+  { field: 'subCard', title: '副卡ID', minWidth: 80, visible: false },
+  { field: 'createTime', title: '登记日期', width: 300, sortable: true, formatter: ({ cellValue }) => cellValue ? String(cellValue).replace('T', ' ') : '' },
+  { field: 'updateTime', title: '修改日期', width: 300, sortable: true, formatter: ({ cellValue }) => cellValue ? String(cellValue).replace('T', ' ') : '' },
   { field: 'modifier', title: '修改人', minWidth: 100, visible: false },
-  { field: 'createTime', title: '登记日期', minWidth: 140, sortable: true },
-  { field: 'updateTime', title: '修改日期', minWidth: 140, sortable: true },
-  { field: 'remark', title: '备注', minWidth: 150, showOverflow: true }
+  { field: 'television', title: '电视', minWidth: 80, visible: false },
+  { field: 'canInvoice', title: '能否发票', minWidth: 100, visible: false }
 ]
 
 const onSearch = () => {
@@ -625,16 +654,48 @@ const selectManufacturer = (row) => {
   Object.keys(formData).forEach(k => delete formData[k])
   if (row) {
     Object.assign(formData, { ...row })
+    formatFormDataDates()
+    certificateImage.value = row.certificate || ''
   }
   if (formMode.value !== 'readonly') {
     formMode.value = 'readonly'
   }
 }
 
+const viewCertificate = () => {
+  if (certificateImage.value) {
+    window.open(certificateImage.value.startsWith('http') ? certificateImage.value : '/images/' + certificateImage.value, '_blank')
+  }
+}
+
+const onCertificateUpload = async (e) => {
+  const file = e.target.files[0]
+  if (!file) return
+  const id = currentManufacturer.value?.id
+  if (!id) return
+  try {
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await api(`/manufacturers/${id}/certificate`, { method: 'POST', body: fd })
+    if (res && res.code === 200 && res.data) {
+      certificateImage.value = res.data.filePath
+      if (currentManufacturer.value) {
+        currentManufacturer.value.certificate = res.data.filePath
+      }
+      formData.certificate = res.data.filePath
+    }
+  } catch (err) {
+    console.error('上传营业执照失败:', err)
+    showAlertDialog('上传失败: ' + (err.message || '未知错误'))
+  }
+  e.target.value = ''
+}
+
 const resetForm = () => {
   if (currentManufacturer.value) {
     Object.keys(formData).forEach(k => delete formData[k])
     Object.assign(formData, { ...currentManufacturer.value })
+    formatFormDataDates()
   }
 }
 
@@ -649,6 +710,7 @@ const startEdit = () => {
   formMode.value = 'edit'
   Object.keys(formData).forEach(k => delete formData[k])
   Object.assign(formData, { ...currentManufacturer.value })
+  formatFormDataDates()
 }
 
 const cancelEdit = () => {
@@ -656,6 +718,7 @@ const cancelEdit = () => {
   if (currentManufacturer.value) {
     Object.keys(formData).forEach(k => delete formData[k])
     Object.assign(formData, { ...currentManufacturer.value })
+    formatFormDataDates()
   }
 }
 
@@ -684,6 +747,7 @@ const saveManufacturer = () => {
   formMode.value = 'readonly'
   Object.keys(formData).forEach(k => delete formData[k])
   Object.assign(formData, { ...currentManufacturer.value })
+  formatFormDataDates()
 }
 
 const deleteRow = async (row) => {
@@ -745,21 +809,27 @@ const onImportFileChange = async (e) => {
 
 const DATE_FIELDS = new Set(['createTime', 'updateTime', 'lastExpiry', 'expiryDate'])
 
+const formatFormDataDates = () => {
+  DATE_FIELDS.forEach(key => {
+    if (formData[key]) formData[key] = String(formData[key]).replace('T', ' ')
+  })
+}
+
 const parseDateValue = (val) => {
   if (val == null || val === '') return ''
   const s = String(val).trim()
   if (/^\d{4}[-\/]\d{1,2}[-\/]\d{1,2}/.test(s)) {
     const d = new Date(s)
-    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 19)
-  }
-  if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/.test(s)) {
-    const d = new Date(s)
-    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 19)
-  }
-  const num = Number(s)
-  if (!isNaN(num) && num > 1 && num < 100000) {
-    const d = new Date((num - 25569) * 86400000)
-    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 19)
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 19).replace('T', ' ')
+    }
+    if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/.test(s)) {
+      const d = new Date(s)
+      if (!isNaN(d.getTime())) return d.toISOString().slice(0, 19).replace('T', ' ')
+    }
+    const num = Number(s)
+    if (!isNaN(num) && num > 1 && num < 100000) {
+      const d = new Date((num - 25569) * 86400000)
+      if (!isNaN(d.getTime())) return d.toISOString().slice(0, 19).replace('T', ' ')
   }
   return s
 }
@@ -1022,7 +1092,7 @@ const exportImportFailedRows = () => {
 }
 
 const downloadTemplate = () => {
-  const headers = ['厂商编号', '厂商名称', '摊位号', '电话1', '手机1', '联系人1', '见客手机', '电话2', '手机2', '联系人2', '地址', '电话3', '手机3', 'QQ', '其他备注', '厂商证书', '短信号码', '摊位米数', '摊位类型', '楼层区位', '摊位区位', '上次到期', '到期日期', '主卡', '副卡', '登记人', '修改人', '登记日期', '修改日期', '备注']
+  const headers = ['厂商编号', '厂商名称', '摊位号', '摊位类型', '摊位米数', '手机1', '电话1', '联系人1', '见客手机', 'QQ', '手机2', '电话2', '联系人2', '短信号码', '手机3', '电话3', '联系人3', '厂家证书', '楼层区位', '摊位区域', '备注', '上次到期', '到期日期', '登记人', '主卡ID', '副卡ID', '登记日期', '修改日期', '修改人', '电视', '能否发票']
   const ws = XLSX.utils.aoa_to_sheet([headers])
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, '厂商资料')
