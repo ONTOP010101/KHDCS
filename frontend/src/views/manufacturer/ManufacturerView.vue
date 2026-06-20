@@ -117,6 +117,9 @@
         <button class="manufacturer-btn manufacturer-btn-ghost" @click="importData">
           <Upload :size="14" /> 导入资料
         </button>
+        <button class="manufacturer-btn manufacturer-btn-ghost" @click="showSearchDialog = true">
+          <Search :size="14" /> 综合查询
+        </button>
       </div>
     </div>
 
@@ -133,7 +136,7 @@
           :row-config="{ isHover: true, isCurrent: true, keyField: 'id' }"
           :checkbox-config="{ highlight: true, checkField: 'checkbox' }"
           :cell-config="{ height: 44 }"
-          :sort-config="{ trigger: 'header', remote: false }"
+          :sort-config="{ trigger: 'header', remote: true }"
           :scroll-y="{ enabled: true, gt: 0, oSize: 0, rSize: 60, rHeight: 44 }"
           :virtual-y-config="{ enabled: true, gt: 0 }"
           :optimization="{ animat: false, delayHover: 300, scrollX: { gt: 0, oSize: 0, rSize: 24 }, scrollY: { gt: 0, oSize: 0, rSize: 60, rHeight: 44 } }"
@@ -141,6 +144,7 @@
           :header-cell-style="{ background: '#ffffff', borderColor: '#a0bddb', color: '#1d1d1f', fontWeight: 600, textAlign: 'center' }"
           :cell-style="{ textAlign: 'center' }"
           @cell-click="onCellClick"
+          @sort-change="onSortChange"
         >
           <template #col_manufacturerCode="{ row }">
             <a class="cell-link" href="javascript:void(0)" @click.stop="openSamplePage(row.manufacturerCode)">{{ row.manufacturerCode }}</a>
@@ -415,6 +419,69 @@
   </div>
   </Teleport>
 
+  <Teleport to="body">
+  <div v-if="showSearchDialog" class="adv-search-overlay" @click.self="showSearchDialog = false">
+    <div class="adv-search-panel">
+      <div class="adv-search-body">
+        <div class="adv-field"><label>厂商编号</label><input v-model="searchForm.manufacturerCode" placeholder="请输入" /></div>
+        <div class="adv-field"><label>厂商名称</label><input v-model="searchForm.name" placeholder="请输入" /></div>
+        <div class="adv-field"><label>摊位号</label><input v-model="searchForm.boothNo" placeholder="请输入" /></div>
+        <div class="adv-field"><label>摊位类型</label><input v-model="searchForm.boothType" placeholder="请输入" /></div>
+        <div class="adv-field"><label>联系人</label><input v-model="searchForm.contact1" placeholder="请输入" /></div>
+        <div class="adv-field"><label>电话</label><input v-model="searchForm.phone1" placeholder="请输入" /></div>
+        <div class="adv-field"><label>手机</label><input v-model="searchForm.mobile1" placeholder="请输入" /></div>
+        <div class="adv-field"><label>传真</label><input v-model="searchForm.fax" placeholder="请输入" /></div>
+        <div class="adv-field"><label>邮箱</label><input v-model="searchForm.email" placeholder="请输入" /></div>
+        <div class="adv-field"><label>摊位负责人</label><input v-model="searchForm.boothManager" placeholder="请输入" /></div>
+        <div class="adv-field"><label>主卡ID</label><input v-model="searchForm.mainCard" placeholder="请输入" /></div>
+        <div class="adv-field"><label>副卡ID</label><input v-model="searchForm.subCard" placeholder="请输入" /></div>
+        <div class="adv-field"><label>地址</label><input v-model="searchForm.address" placeholder="请输入" /></div>
+        <div class="adv-field"><label>备注</label><input v-model="searchForm.remark" placeholder="请输入" /></div>
+        <div class="adv-field"><label>摘要</label><input v-model="searchForm.summary" placeholder="请输入" /></div>
+        <div class="adv-field"><label>证书</label><input v-model="searchForm.certificate" placeholder="请输入" /></div>
+        <div class="adv-field"><label>登记人</label><input v-model="searchForm.registrant" placeholder="请输入" /></div>
+        <div class="adv-field"><label>修改人</label><input v-model="searchForm.modifier" placeholder="请输入" /></div>
+        <div class="adv-field">
+          <label>登记日期</label>
+          <div class="range-inputs">
+            <input type="date" v-model="searchForm.createDateStart" />
+            <span>至</span>
+            <input type="date" v-model="searchForm.createDateEnd" />
+          </div>
+        </div>
+        <div class="adv-field">
+          <label>修改日期</label>
+          <div class="range-inputs">
+            <input type="date" v-model="searchForm.updateDateStart" />
+            <span>至</span>
+            <input type="date" v-model="searchForm.updateDateEnd" />
+          </div>
+        </div>
+        <div class="adv-field">
+          <label>到期日期</label>
+          <div class="range-inputs">
+            <input type="date" v-model="searchForm.expiryDateStart" />
+            <span>至</span>
+            <input type="date" v-model="searchForm.expiryDateEnd" />
+          </div>
+        </div>
+        <div class="adv-field adv-field-checks">
+          <label>其他选项</label>
+          <div class="check-group">
+            <label class="chk-item"><input type="checkbox" v-model="searchForm.television" /> 电视</label>
+          </div>
+        </div>
+      </div>
+      <div class="adv-search-footer">
+        <button class="manufacturer-btn manufacturer-btn-ghost" @click="resetSearchForm">清空条件</button>
+        <div style="flex:1"></div>
+        <button class="manufacturer-btn manufacturer-btn-ghost" @click="closeSearchDialog">取消</button>
+        <button class="manufacturer-btn manufacturer-btn-primary" @click="doComprehensiveSearch">确认</button>
+      </div>
+    </div>
+  </div>
+  </Teleport>
+
 </template>
 
 <script setup>
@@ -465,7 +532,8 @@ const allFormFields = [
   { key: 'updateTime', label: '修改日期' },
   { key: 'boothArea', label: '摊位区域' },
   { key: 'television', label: '电视' },
-  { key: 'canInvoice', label: '能否发票' }
+  { key: 'canInvoice', label: '能否发票' },
+  { key: 'address', label: '地址' }
 ]
 
 const fieldVisible = reactive({})
@@ -483,6 +551,7 @@ const HEADER_TO_FIELD = {
   '短信号码': 'smsNumber',
   '手机3': 'mobile3', '电话3': 'phone3', '联系人3': 'contact3',
   '厂家证书': 'certificate',
+  '地址': 'address',
   '楼层区位': 'floorArea', '摊位区域': 'boothArea', '备注': 'remark',
   '上次到期': 'lastExpiry', '到期日期': 'expiryDate', '登记人': 'registrant',
   '主卡ID': 'mainCard', '副卡ID': 'subCard',
@@ -495,7 +564,7 @@ const EDIT_RENDER = { name: 'input' }
 const IMPORT_PREVIEW_ALL_COLUMNS = [
   { type: 'checkbox', width: 44, fixed: 'left' },
   { type: 'seq', title: '序号', width: 60, fixed: 'left' },
-  { field: 'manufacturerCode', title: '厂商编号', width: 110, showOverflow: true, editRender: EDIT_RENDER, sortable: true, slots: { default: 'col_manufacturerCode' } },
+  { field: 'manufacturerCode', title: '厂商编号', width: 110, showOverflow: true, editRender: EDIT_RENDER, sortable: true },
   { field: 'name', title: '厂商名称', width: 140, showOverflow: true, editRender: EDIT_RENDER, sortable: true },
   { field: 'boothNo', title: '摊位号', width: 100, showOverflow: true, editRender: EDIT_RENDER },
   { field: 'boothType', title: '摊位类型', width: 100, showOverflow: true, editRender: EDIT_RENDER },
@@ -512,6 +581,7 @@ const IMPORT_PREVIEW_ALL_COLUMNS = [
   { field: 'mobile3', title: '手机3', width: 120, showOverflow: true, editRender: EDIT_RENDER, visible: false },
   { field: 'phone3', title: '电话3', width: 120, showOverflow: true, editRender: EDIT_RENDER, visible: false },
   { field: 'contact3', title: '联系人3', width: 100, showOverflow: true, editRender: EDIT_RENDER, visible: false },
+  { field: 'address', title: '地址', width: 200, showOverflow: true, editRender: EDIT_RENDER, visible: false },
   { field: 'certificate', title: '厂家证书', width: 100, showOverflow: true, editRender: EDIT_RENDER, visible: false },
   { field: 'floorArea', title: '楼层区位', width: 100, showOverflow: true, editRender: EDIT_RENDER, visible: false },
   { field: 'boothArea', title: '摊位区域', width: 100, showOverflow: true, editRender: EDIT_RENDER, visible: false },
@@ -573,10 +643,13 @@ let lastObservedHeight = 0
 const searchKeyword = ref('')
 const certificateImage = ref('')
 const currentPage = ref(1)
-const pageSize = ref(2000)
-const pageSizeOptions = [500, 1000, 2000, 4000]
+const pageSize = ref(8000)
+const pageSizeOptions = [500, 1000, 2000, 4000, 8000]
 const totalRecords = ref(0)
 const tableLoading = ref(false)
+
+const sortField = ref('')
+const sortOrder = ref('')
 
 const list = ref([])
 
@@ -604,6 +677,7 @@ const allColumns = [
   { field: 'mobile3', title: '手机3', minWidth: 120, showOverflow: true, visible: false },
   { field: 'phone3', title: '电话3', minWidth: 130, showOverflow: true, visible: false },
   { field: 'contact3', title: '联系人3', minWidth: 100, showOverflow: true, visible: false },
+  { field: 'address', title: '地址', width: 300, showOverflow: true, visible: false },
   { field: 'certificate', title: '厂家证书', minWidth: 100, showOverflow: true, visible: false },
   { field: 'floorArea', title: '楼层区位', minWidth: 100, visible: false },
   { field: 'boothArea', title: '摊位区域', minWidth: 100, visible: false },
@@ -621,6 +695,7 @@ const allColumns = [
 ]
 
 const onSearch = () => {
+  activeSearchConditions.value = []
   currentPage.value = 1
   loadManufacturers()
 }
@@ -643,6 +718,13 @@ const goPage = (page) => {
 
 const onCellClick = ({ row }) => {
   selectManufacturer(row)
+}
+
+const onSortChange = ({ field, order }) => {
+  sortField.value = field || ''
+  sortOrder.value = order || ''
+  currentPage.value = 1
+  loadManufacturers()
 }
 
 const openSamplePage = (manufacturerCode) => {
@@ -727,27 +809,47 @@ const editRow = (row) => {
   startEdit()
 }
 
-const saveManufacturer = () => {
+const saveManufacturer = async () => {
   if (!formData.name || !formData.manufacturerCode) {
     showAlertDialog('厂商名称和厂商编号为必填项')
     return
   }
-  if (formMode.value === 'add') {
-    const maxId = list.value.reduce((max, i) => Math.max(max, i.id), 0)
-    const newItem = { ...formData, id: maxId + 1, createTime: new Date().toISOString().slice(0, 10) }
-    list.value.unshift(newItem)
-    currentManufacturer.value = newItem
-  } else if (formMode.value === 'edit') {
-    const idx = list.value.findIndex(i => i.id === currentManufacturer.value.id)
-    if (idx !== -1) {
-      list.value[idx] = { ...formData, id: currentManufacturer.value.id }
-      currentManufacturer.value = list.value[idx]
+  const payload = { ...formData }
+  delete payload.id
+  delete payload.createTime
+  delete payload.updateTime
+  try {
+    if (formMode.value === 'add') {
+      const res = await api('/manufacturers', { method: 'POST', body: JSON.stringify(payload) })
+      if (res && res.code === 200 && res.data) {
+        currentManufacturer.value = res.data
+        showAlertDialog('添加成功', 'success')
+      } else {
+        showAlertDialog(res?.message || '添加失败', 'error')
+        return
+      }
+    } else if (formMode.value === 'edit') {
+      const id = currentManufacturer.value?.id
+      if (!id) { showAlertDialog('未选择厂商', 'error'); return }
+      const res = await api(`/manufacturers/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+      if (res && res.code === 200) {
+        currentManufacturer.value = { ...currentManufacturer.value, ...formData }
+        showAlertDialog('修改成功', 'success')
+      } else {
+        showAlertDialog(res?.message || '修改失败', 'error')
+        return
+      }
     }
+  } catch (e) {
+    console.error(e)
+    showAlertDialog('操作失败: ' + (e.message || '网络错误'), 'error')
+    return
   }
   formMode.value = 'readonly'
   Object.keys(formData).forEach(k => delete formData[k])
   Object.assign(formData, { ...currentManufacturer.value })
   formatFormDataDates()
+  await loadManufacturers()
 }
 
 const deleteRow = async (row) => {
@@ -755,11 +857,11 @@ const deleteRow = async (row) => {
   if (!ok) return
   try {
     await api(`/manufacturers/${row.id}`, { method: 'DELETE' })
-    list.value = list.value.filter(i => i.id !== row.id)
     if (currentManufacturer.value?.id === row.id) {
       currentManufacturer.value = null
       Object.keys(formData).forEach(k => delete formData[k])
     }
+    await loadManufacturers()
   } catch (e) {
     console.error('删除厂商失败:', e)
     showAlertDialog('删除失败: ' + (e.message || '未知错误'))
@@ -774,7 +876,33 @@ const deleteCurrent = () => {
 const loadManufacturers = async () => {
   try {
     tableLoading.value = true
-    const res = await api(`/manufacturers?current=${currentPage.value}&size=${pageSize.value}&keyword=${encodeURIComponent(searchKeyword.value)}`)
+    const baseParams = `current=${currentPage.value}&size=${pageSize.value}`
+    // 有综合查询条件时用 POST /search
+    if (activeSearchConditions.value.length > 0) {
+      console.log('[MFR_LOAD] POST /search conditions:', JSON.stringify(activeSearchConditions.value))
+      const res = await api(`/manufacturers/search?${baseParams}&sortField=${sortField.value || ''}&sortOrder=${sortOrder.value || ''}`, {
+        method: 'POST',
+        body: JSON.stringify(activeSearchConditions.value)
+      })
+      console.log('[MFR_LOAD] POST /search response:', JSON.stringify(res))
+      const data = res.data || res || {}
+      console.log('[MFR_LOAD] data.records length:', data.records?.length, 'data.total:', data.total)
+      list.value = data.records || data.list || data || []
+      totalRecords.value = data.total || list.value.length
+      nextTick(() => {
+        if (list.value.length > 0 && gridRef.value) {
+          gridRef.value.setCurrentRow(list.value[0])
+          selectManufacturer(list.value[0])
+        }
+      })
+      tableLoading.value = false
+      return
+    }
+    // 普通查询
+    const params = [baseParams]
+    if (sortField.value) { params.push(`sortField=${sortField.value}`); params.push(`sortOrder=${sortOrder.value}`) }
+    if (searchKeyword.value) params.push(`keyword=${encodeURIComponent(searchKeyword.value)}`)
+    const res = await api(`/manufacturers?${params.join('&')}`)
     const data = res.data || res || {}
     list.value = data.records || data.list || data || []
     totalRecords.value = data.total || list.value.length
@@ -1092,7 +1220,7 @@ const exportImportFailedRows = () => {
 }
 
 const downloadTemplate = () => {
-  const headers = ['厂商编号', '厂商名称', '摊位号', '摊位类型', '摊位米数', '手机1', '电话1', '联系人1', '见客手机', 'QQ', '手机2', '电话2', '联系人2', '短信号码', '手机3', '电话3', '联系人3', '厂家证书', '楼层区位', '摊位区域', '备注', '上次到期', '到期日期', '登记人', '主卡ID', '副卡ID', '登记日期', '修改日期', '修改人', '电视', '能否发票']
+  const headers = ['厂商编号', '厂商名称', '摊位号', '摊位类型', '摊位米数', '手机1', '电话1', '联系人1', '见客手机', 'QQ', '手机2', '电话2', '联系人2', '短信号码', '手机3', '电话3', '联系人3', '地址', '厂家证书', '楼层区位', '摊位区域', '备注', '上次到期', '到期日期', '登记人', '主卡ID', '副卡ID', '登记日期', '修改日期', '修改人', '电视', '能否发票']
   const ws = XLSX.utils.aoa_to_sheet([headers])
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, '厂商资料')
@@ -1112,6 +1240,88 @@ const formatFileSize = (bytes) => {
 }
 
 const showImportModal = ref(false)
+const showSearchDialog = ref(false)
+
+const SEARCH_FORM_KEY = 'manufacturer_adv_search_form'
+
+const defaultSearchForm = () => ({
+  manufacturerCode: '', boothNo: '', boothType: '', name: '', contact1: '', phone1: '',
+  mobile1: '', fax: '', email: '', boothManager: '', mainCard: '', subCard: '',
+  remark: '', summary: '', address: '', certificate: '', registrant: '', modifier: '',
+  createDateStart: '', createDateEnd: '', updateDateStart: '', updateDateEnd: '',
+  expiryDateStart: '', expiryDateEnd: '', television: false
+})
+
+const searchForm = reactive(defaultSearchForm())
+
+const saveSearchForm = () => {
+  try { localStorage.setItem(SEARCH_FORM_KEY, JSON.stringify({ ...searchForm })) } catch (_) {}
+}
+
+const loadSearchForm = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SEARCH_FORM_KEY))
+    if (saved) {
+      const def = defaultSearchForm()
+      Object.keys(def).forEach(k => { if (saved.hasOwnProperty(k)) searchForm[k] = saved[k] })
+    }
+  } catch (_) {}
+}
+
+const resetSearchForm = () => {
+  const def = defaultSearchForm()
+  Object.keys(def).forEach(k => { searchForm[k] = def[k] })
+  activeSearchConditions.value = []
+  showSearchDialog.value = false
+}
+
+const closeSearchDialog = () => {
+  const def = defaultSearchForm()
+  Object.keys(def).forEach(k => { searchForm[k] = def[k] })
+  activeSearchConditions.value = []
+  showSearchDialog.value = false
+  try { localStorage.removeItem(SEARCH_FORM_KEY) } catch (_) {}
+}
+
+const activeSearchConditions = ref([])
+
+const doComprehensiveSearch = () => {
+  const f = searchForm
+  const conditions = []
+  const push = (field, op, val) => { if (val !== '' && val != null && val !== false) conditions.push({ field, operator: op, value: String(val) }) }
+  const pushLike = (field, val) => push(field, 'like', val)
+
+  pushLike('manufacturerCode', f.manufacturerCode)
+  pushLike('name', f.name)
+  pushLike('boothNo', f.boothNo)
+  pushLike('boothType', f.boothType)
+  pushLike('contact1', f.contact1)
+  pushLike('phone1', f.phone1)
+  pushLike('mobile1', f.mobile1)
+  pushLike('mainCard', f.mainCard)
+  pushLike('subCard', f.subCard)
+  pushLike('address', f.address)
+  pushLike('remark', f.remark)
+  pushLike('certificate', f.certificate)
+  pushLike('registrant', f.registrant)
+  pushLike('modifier', f.modifier)
+  pushLike('television', f.television)
+
+  if (f.createDateStart) push('createTime', 'ge', f.createDateStart)
+  if (f.createDateEnd) push('createTime', 'le', f.createDateEnd)
+  if (f.updateDateStart) push('updateTime', 'ge', f.updateDateStart)
+  if (f.updateDateEnd) push('updateTime', 'le', f.updateDateEnd)
+  if (f.expiryDateStart) push('expiryDate', 'ge', f.expiryDateStart)
+  if (f.expiryDateEnd) push('expiryDate', 'le', f.expiryDateEnd)
+
+  saveSearchForm()
+  activeSearchConditions.value = conditions
+  console.log('[MFR_SEARCH] conditions:', JSON.stringify(conditions))
+  searchKeyword.value = ''
+  currentPage.value = 1
+  showSearchDialog.value = false
+  loadManufacturers()
+}
 const importFile = ref(null)
 const importUploading = ref(false)
 const showBatchResultModal = ref(false)
@@ -1174,6 +1384,7 @@ onMounted(() => {
     })
     resizeObserver.observe(tableWrapRef.value)
   }
+  loadSearchForm()
   loadManufacturers()
 })
 

@@ -3,6 +3,7 @@ package com.app.controller;
 import com.app.common.PageResult;
 import com.app.common.Result;
 import com.app.dto.ImportResult;
+import com.app.dto.SearchCondition;
 import com.app.entity.Manufacturer;
 import com.app.service.ManufacturerService;
 import org.slf4j.Logger;
@@ -29,8 +30,48 @@ public class ManufacturerController {
             @RequestParam(defaultValue = "500") long size,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String sortField,
-            @RequestParam(required = false) String sortOrder) {
-        return Result.success(manufacturerService.list(current, size, keyword, sortField, sortOrder));
+            @RequestParam(required = false) String sortOrder,
+            @RequestParam(required = false) String manufacturerCode,
+            @RequestParam(required = false) String boothNo,
+            @RequestParam(required = false) String boothType,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String contact1,
+            @RequestParam(required = false) String phone1,
+            @RequestParam(required = false) String mobile1,
+            @RequestParam(required = false) String fax,
+            @RequestParam(required = false) String email,
+            @RequestParam(required = false) String boothManager,
+            @RequestParam(required = false) String mainCard,
+            @RequestParam(required = false) String subCard,
+            @RequestParam(required = false) String remark,
+            @RequestParam(required = false) String summary,
+            @RequestParam(required = false) String address,
+            @RequestParam(required = false) String certificate,
+            @RequestParam(required = false) String registrant,
+            @RequestParam(required = false) String modifier,
+            @RequestParam(required = false) String createDateStart,
+            @RequestParam(required = false) String createDateEnd,
+            @RequestParam(required = false) String updateDateStart,
+            @RequestParam(required = false) String updateDateEnd,
+            @RequestParam(required = false) String expiryDateStart,
+            @RequestParam(required = false) String expiryDateEnd,
+            @RequestParam(required = false) String television) {
+        return Result.success(manufacturerService.list(current, size, keyword, sortField, sortOrder,
+                manufacturerCode, boothNo, boothType, name, contact1, phone1, mobile1,
+                fax, email, boothManager, mainCard, subCard, remark, summary, address,
+                certificate, registrant, modifier,
+                createDateStart, createDateEnd, updateDateStart, updateDateEnd,
+                expiryDateStart, expiryDateEnd, television));
+    }
+
+    @PostMapping("/search")
+    public Result<PageResult<Manufacturer>> search(
+            @RequestParam(defaultValue = "1") long current,
+            @RequestParam(defaultValue = "500") long size,
+            @RequestParam(required = false) String sortField,
+            @RequestParam(required = false) String sortOrder,
+            @RequestBody List<SearchCondition> conditions) {
+        return Result.success(manufacturerService.advancedSearch(current, size, conditions, sortField, sortOrder));
     }
 
     @GetMapping("/{id}")

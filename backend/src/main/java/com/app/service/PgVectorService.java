@@ -128,6 +128,7 @@ public class PgVectorService {
             return Collections.emptyList();
         }
         try {
+            pgJdbcTemplate.execute("SET hnsw.ef_search = 200");
             PGvector vec = new PGvector(queryEmbedding);
             return pgJdbcTemplate.query(
                     "SELECT image_id, 1.0 - (embedding <=> ?) AS similarity " +

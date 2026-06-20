@@ -73,10 +73,6 @@ public class SampleController {
                 conditions.add(sc);
             }
         }
-        log.info("[CONTROLLER] conditions received: {}", conditions.size());
-        for (var c : conditions) {
-            log.info("[CONTROLLER]   field={} op={} val={}", c.getField(), c.getOperator(), c.getValue());
-        }
         return Result.success(sampleService.advancedSearch(current, size,
             conditions, sortField, sortOrder));
     }

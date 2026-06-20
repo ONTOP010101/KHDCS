@@ -35,6 +35,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
@@ -96,6 +97,8 @@ public class SampleService {
         FIELD_COL_MAP.put("cartonLength", "carton_length");
         FIELD_COL_MAP.put("cartonWidth", "carton_width");
         FIELD_COL_MAP.put("cartonHeight", "carton_height");
+        FIELD_COL_MAP.put("createTime", "create_time");
+        FIELD_COL_MAP.put("updateTime", "update_time");
     }
 
     static {
@@ -273,8 +276,9 @@ public class SampleService {
         List<Object> params = new ArrayList<>();
 
         if (StringUtils.hasText(keyword)) {
-            sql.append(" AND (sample_code LIKE ? OR sample_name LIKE ? OR manufacturer_code LIKE ?)");
+            sql.append(" AND (sample_code LIKE ? OR sample_name LIKE ? OR manufacturer_code LIKE ? OR factory_code LIKE ?)");
             String kw = "%" + escapeLike(keyword) + "%";
+            params.add(kw);
             params.add(kw);
             params.add(kw);
             params.add(kw);
@@ -323,8 +327,6 @@ public class SampleService {
     }
 
     public PageResult<Sample> advancedSearch(long current, long size, List<SearchCondition> conditions, String sortField, String sortOrder) {
-        log.info("[ADV_SEARCH] current={} size={} conditions={} sortField={} sortOrder={}", current, size, conditions != null ? conditions.size() : 0, sortField, sortOrder);
-        if (conditions != null) for (var c : conditions) log.info("[ADV_SEARCH]   cond: field={} op={} val={}", c.getField(), c.getOperator(), c.getValue());
         // 1. 构建缓存key
         String cacheKey = buildSearchCacheKey(current, size, conditions, sortField, sortOrder);
         CacheEntry<PageResult<Sample>> cached = searchCache.get(cacheKey);
@@ -472,10 +474,11 @@ public class SampleService {
             }
         }
 
-        // WHERE 前缀
-        String whereClause = where.length() > 0 ? " WHERE " + where.toString() : "";
-        log.info("[ADV_SEARCH] whereClause={} params={}", whereClause, params);
-
+        // WHERE 前缀（始终过滤已删除记录）
+        String whereClause = " WHERE deleted = 0";
+        if (where.length() > 0) {
+            whereClause += " AND " + where.toString();
+        }
         // 3. COUNT 查询
         Long total = 0L;
         try {
@@ -782,6 +785,9 @@ public class SampleService {
                 // 根据厂商编码自动回填摊位号等信息
                 fillFromManufacturer(sample, null);
 
+                // 如果外箱长宽高有值但体积/材积为空，自动计算
+                calculateVolumeIfAbsent(sample);
+
                 Long userId = UserContext.getUserId();
                 sample.setCreateBy(userId);
                 sample.setUpdateBy(userId);
@@ -872,6 +878,7 @@ public class SampleService {
                         if (updateMode) {
                             // 根据厂商编码自动回填摊位号等信息
                             fillFromManufacturer(sample, manufacturerCache);
+                            calculateVolumeIfAbsent(sample);
                             truncateFields(sample, i, failedRows);
                             Long userId = UserContext.getUserId();
                             sample.setUpdateBy(userId);
@@ -918,6 +925,7 @@ public class SampleService {
 
                 // 根据厂商编码自动回填摊位号等信息
                 fillFromManufacturer(sample, manufacturerCache);
+                calculateVolumeIfAbsent(sample);
 
                 truncateFields(sample, i, failedRows);
 
@@ -1143,13 +1151,15 @@ public class SampleService {
                 sample.setSampleHeight(dims[2]);
             }
         }
-        // 毛/净重 → 外箱毛重/净重
+        // 毛/净重 → 外箱毛重/净重 + 样品毛重/净重
         String gn = compositeValues.get("_grossNetWeight");
         if (gn != null) {
             BigDecimal[] gnv = splitGrossNet(gn);
             if (gnv != null) {
                 sample.setCartonGrossWeight(gnv[0]);
                 sample.setCartonNetWeight(gnv[1]);
+                sample.setSampleGrossWeight(gnv[0]);
+                sample.setSampleNetWeight(gnv[1]);
             }
         }
     }
@@ -1222,6 +1232,30 @@ public class SampleService {
         }
         if (!StringUtils.hasText(sample.getQq()) && StringUtils.hasText(mfr.getQq())) {
             sample.setQq(mfr.getQq());
+        }
+    }
+
+    /**
+     * 如果外箱长宽高有值但体积/材积为空，自动计算填充
+     */
+    private void calculateVolumeIfAbsent(Sample sample) {
+        BigDecimal length = sample.getCartonLength();
+        BigDecimal width = sample.getCartonWidth();
+        BigDecimal height = sample.getCartonHeight();
+        if (length == null || width == null || height == null) return;
+
+        // 体积 CBM（立方米）：(长cm/100) * (宽cm/100) * (高cm/100) = 长*宽*高 / 1,000,000
+        if (sample.getCartonVolume() == null) {
+            BigDecimal volume = length.multiply(width).multiply(height)
+                    .divide(new BigDecimal("1000000"), 2, RoundingMode.HALF_UP);
+            sample.setCartonVolume(volume);
+        }
+
+        // 材积 CUFT（立方英尺）：长(cm) * 宽(cm) * 高(cm) / 28316.8
+        if (sample.getCartonMaterialVolume() == null) {
+            BigDecimal materialVolume = length.multiply(width).multiply(height)
+                    .divide(new BigDecimal("28316.8"), 2, RoundingMode.HALF_UP);
+            sample.setCartonMaterialVolume(materialVolume);
         }
     }
 

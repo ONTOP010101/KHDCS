@@ -38,31 +38,29 @@
   "build": {
     "appId": "com.ontop.photo-manager",
     "productName": "拍照管理系统",
+    "asar": false,
     "directories": {
-      "output": "release"
+      "output": "dist-installer"
     },
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
       "public/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "../backend/target/photo-management-1.0.0.jar",
+        "to": "backend/app.jar"
+      },
+      {
+        "from": "../backend/jre",
+        "to": "jre"
+      }
+    ],
     "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "public/logo.png"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "拍照管理系统"
+      "target": "portable",
+      "icon": "public/logo.png",
+      "signAndEditExecutable": false
     }
   }
 }

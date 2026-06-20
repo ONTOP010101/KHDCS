@@ -1,4 +1,5 @@
-const API_BASE = ''
+const isElectron = !!(window.electronAPI)
+const API_BASE = isElectron ? 'http://localhost:8080' : ''
 
 function getToken() {
   return sessionStorage.getItem('token') || localStorage.getItem('token')

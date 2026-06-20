@@ -396,7 +396,7 @@ public class ImageService {
             Path fullPath = Paths.get(imagePath, image.getFilePath());
             return Files.readAllBytes(fullPath);
         } catch (IOException e) {
-            throw new BusinessException(500, "\u8bfb\u53d6\u56fe\u7247\u5931\u8d25");
+            throw new BusinessException(404, "图片文件不存在");
         }
     }
 
@@ -411,7 +411,7 @@ public class ImageService {
             InputStream is = Files.newInputStream(fullPath);
             return new InputStreamResource(is);
         } catch (IOException e) {
-            throw new BusinessException(500, "\u8bfb\u53d6\u56fe\u7247\u5931\u8d25");
+            throw new BusinessException(404, "\u56fe\u7247\u6587\u4ef6\u4e0d\u5b58\u5728");
         }
     }
 
@@ -423,7 +423,7 @@ public class ImageService {
             Path fullPath = Paths.get(imagePath, image.getFilePath());
             return Files.readAllBytes(fullPath);
         } catch (IOException e) {
-            throw new BusinessException(500, "\u8bfb\u53d6\u56fe\u7247\u5931\u8d25");
+            throw new BusinessException(404, "\u56fe\u7247\u6587\u4ef6\u4e0d\u5b58\u5728");
         }
     }
 
@@ -436,7 +436,7 @@ public class ImageService {
             InputStream is = Files.newInputStream(fullPath);
             return new InputStreamResource(is);
         } catch (IOException e) {
-            throw new BusinessException(500, "\u8bfb\u53d6\u56fe\u7247\u5931\u8d25");
+            throw new BusinessException(404, "\u56fe\u7247\u6587\u4ef6\u4e0d\u5b58\u5728");
         }
     }
 
@@ -695,7 +695,11 @@ public class ImageService {
         wrapper.eq(Image::getHash, hash)
                 .select(Image::getId, Image::getSampleId, Image::getFilePath,
                         Image::getThumbnailPath, Image::getFileName);
-        Image img = imageMapper.selectOne(wrapper);
+        List<Image> hashMatches = imageMapper.selectList(wrapper);
+        if (hashMatches.size() > 1) {
+            log.warn("findByHash: found {} duplicate hash records for hash={}, using first one", hashMatches.size(), hash.substring(0, 16));
+        }
+        Image img = hashMatches.isEmpty() ? null : hashMatches.get(0);
         if (img == null || img.getSampleId() == null) return null;
         Sample s = sampleMapper.selectById(img.getSampleId());
         if (s == null) return null;
@@ -903,7 +907,7 @@ public class ImageService {
     }
 
     private List<Map<String, Object>> searchByPgVector(float[] queryFeature) {
-        List<Map<String, Object>> candidates = pgVectorService.searchSimilar(queryFeature, 500, 0.3);
+        List<Map<String, Object>> candidates = pgVectorService.searchSimilar(queryFeature, 500, 0.5);
         log.info("PgVector search returned {} candidates", candidates.size());
         if (candidates.isEmpty()) return new ArrayList<>();
 

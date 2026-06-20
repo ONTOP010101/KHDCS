@@ -1,5 +1,5 @@
 <template>
-  <div class="image-search-page">
+  <div class="image-search-page" @paste="onPaste" @dragover.prevent @drop.prevent="onDrop">
     <div class="isp-body">
       <div class="isp-image-strip">
         <div class="isp-strip-inner">
@@ -15,7 +15,7 @@
           </div>
           <div class="isp-upload-btn" @click="$refs.imageSearchInput.click()">
             <Plus :size="20" />
-            <span>上传图片<br/><small>(多图)</small></span>
+            <span>上传图片<br/><small>(拖拽 / Ctrl+V)</small></span>
           </div>
         </div>
         <input ref="imageSearchInput" type="file" accept="image/*" multiple hidden @change="onImageSearchFilesChange" />
@@ -37,35 +37,38 @@
 
       <div v-if="imageSearchError" class="isp-error-banner">{{ imageSearchError }}</div>
 
-      <div class="isp-results-area">
+      <div class="isp-results-area" ref="resultAreaRef" @scroll="onVirtualScroll">
         <div v-if="filteredResults.length > 0">
           <div class="isp-filter-bar">
             <span class="isp-filter-bar-hint">匹配 {{ imageSearchResults.length }} 条，显示 {{ filteredResults.length }} 条（≥{{ Math.round(displayThreshold * 100) }}%）</span>
           </div>
-          <div class="isp-card-grid">
-            <div v-for="(item, idx) in pagedResults" :key="idx"
-                 class="isp-card" @click="viewImageSearchResult(item)">
-              <div class="isp-card-img">
-                <img v-if="item.filePath" :src="'/images/' + item.filePath" loading="lazy" decoding="async" />
-                <div v-else class="isp-card-no-img"><ImageIcon :size="32" /></div>
-                <span class="isp-card-score" :class="{ 'high': item.similarity >= 0.8, 'mid': item.similarity >= 0.6 && item.similarity < 0.8 }">
-                  {{ item.similarity ? Math.round(item.similarity * 100) : Math.round((1 - item.distance / 64) * 100) }}%
-                </span>
-              </div>
-              <div class="isp-card-body">
-                <div class="isp-card-name">{{ item.sampleName || '--' }}</div>
-                <div class="isp-card-code">{{ item.sampleCode || '' }}</div>
-                <div class="isp-card-meta">
-                  <span>{{ item.category || '-' }}</span>
-                  <span v-if="item.price" class="isp-card-price">¥{{ item.price }}</span>
-                </div>
+          <div class="isp-virtual-outer" :style="{ height: totalVirtualHeight + 'px' }">
+            <div class="isp-virtual-inner" :style="{ transform: 'translateY(' + virtualOffsetY + 'px)' }">
+              <div v-for="rowIdx in visibleRowIndices" :key="rowIdx" class="isp-card-row" :style="cardRowStyle">
+                <template v-for="colIdx in colsPerRow" :key="colIdx">
+                  <div v-if="getItem(rowIdx, colIdx)" class="isp-card" @click="viewImageSearchResult(getItem(rowIdx, colIdx))">
+                    <div class="isp-card-img">
+                      <img :src="'/images/' + getItem(rowIdx, colIdx).filePath" loading="lazy" decoding="async" />
+                      <div class="isp-card-overlay" @click.stop="findSimilar(getItem(rowIdx, colIdx))">
+                        <Search :size="14" /> 找相似
+                      </div>
+                      <span class="isp-card-score" :class="{ 'high': getItem(rowIdx, colIdx).similarity >= 0.8, 'mid': getItem(rowIdx, colIdx).similarity >= 0.6 && getItem(rowIdx, colIdx).similarity < 0.8 }">
+                        {{ getItem(rowIdx, colIdx).similarity ? Math.round(getItem(rowIdx, colIdx).similarity * 100) : Math.round((1 - getItem(rowIdx, colIdx).distance / 64) * 100) }}%
+                      </span>
+                    </div>
+                    <div class="isp-card-body">
+                      <div class="isp-card-name">{{ getItem(rowIdx, colIdx).sampleName || '--' }}</div>
+                      <div class="isp-card-code">{{ getItem(rowIdx, colIdx).sampleCode || '' }}</div>
+                      <div class="isp-card-meta">
+                        <span>{{ getItem(rowIdx, colIdx).category || '-' }}</span>
+                        <span v-if="getItem(rowIdx, colIdx).price" class="isp-card-price">¥{{ getItem(rowIdx, colIdx).price }}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="isp-card isp-card-placeholder"></div>
+                </template>
               </div>
             </div>
-          </div>
-          <div class="isp-pagination" v-if="totalPages > 1">
-            <button class="isp-page-btn" :disabled="resultPage <= 1" @click="resultPage--">上一页</button>
-            <span class="isp-page-info">{{ resultPage }} / {{ totalPages }}</span>
-            <button class="isp-page-btn" :disabled="resultPage >= totalPages" @click="resultPage++">下一页</button>
           </div>
         </div>
         <div v-else-if="imageSearchDone && !imageSearching" class="isp-empty">
@@ -118,7 +121,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onBeforeUnmount, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api'
 import { Search, Plus, X, Crop, Image as ImageIcon } from 'lucide-vue-next'
@@ -136,8 +139,6 @@ const imageSearchResults = ref([])
 const imageSearchDone = ref(false)
 const imageSearching = ref(false)
 const showCropModal = ref(false)
-const resultPage = ref(1)
-const resultPageSize = 100
 
 const displayThreshold = computed(() => 0.55)
 
@@ -148,12 +149,85 @@ const filteredResults = computed(() => {
   })
 })
 
-const pagedResults = computed(() => {
-  const start = (resultPage.value - 1) * resultPageSize
-  return filteredResults.value.slice(start, start + resultPageSize)
+// ── 虚拟滚动 ──
+const CARD_MIN_W = 180
+const GAP = 16
+const CARD_BODY_H = 68
+const BUFFER_ROWS = 2
+
+const resultAreaRef = ref(null)
+const containerWidth = ref(800)
+const scrollTop = ref(0)
+const containerHeight = ref(600)
+
+const colsPerRow = computed(() => Math.max(1, Math.floor((containerWidth.value + GAP) / (CARD_MIN_W + GAP))))
+
+const rowHeight = computed(() => {
+  // aspect-ratio:1 → card img height = card width
+  const cardW = Math.floor((containerWidth.value - GAP * (colsPerRow.value - 1)) / colsPerRow.value)
+  return cardW + CARD_BODY_H + GAP
 })
 
-const totalPages = computed(() => Math.ceil(filteredResults.value.length / resultPageSize) || 1)
+const totalRows = computed(() => Math.ceil(filteredResults.value.length / colsPerRow.value))
+
+const totalVirtualHeight = computed(() => totalRows.value * rowHeight.value)
+
+const startRow = computed(() => Math.max(0, Math.floor(scrollTop.value / rowHeight.value) - BUFFER_ROWS))
+
+const visibleRowCount = computed(() => Math.ceil(containerHeight.value / rowHeight.value) + BUFFER_ROWS * 2)
+
+const endRow = computed(() => Math.min(totalRows.value, startRow.value + visibleRowCount.value))
+
+const visibleRowIndices = computed(() => {
+  const indices = []
+  for (let i = startRow.value; i < endRow.value; i++) indices.push(i)
+  return indices
+})
+
+const virtualOffsetY = computed(() => startRow.value * rowHeight.value)
+
+const cardRowStyle = computed(() => ({
+  display: 'grid',
+  gridTemplateColumns: `repeat(${colsPerRow.value}, 1fr)`,
+  gap: GAP + 'px',
+  marginBottom: GAP + 'px'
+}))
+
+function getItem(rowIdx, colIdx) {
+  const idx = rowIdx * colsPerRow.value + (colIdx - 1)
+  return filteredResults.value[idx] || null
+}
+
+function onVirtualScroll() {
+  if (resultAreaRef.value) {
+    scrollTop.value = resultAreaRef.value.scrollTop
+  }
+}
+
+let resizeObserver = null
+
+onMounted(() => {
+  if (resultAreaRef.value) {
+    containerHeight.value = resultAreaRef.value.clientHeight
+    resizeObserver = new ResizeObserver(() => {
+      if (resultAreaRef.value) {
+        containerWidth.value = resultAreaRef.value.clientWidth
+        containerHeight.value = resultAreaRef.value.clientHeight
+      }
+    })
+    resizeObserver.observe(resultAreaRef.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (resizeObserver) resizeObserver.disconnect()
+  imageSearchImages.value.forEach(img => {
+    if (img.url && img.url.startsWith('blob:')) {
+      URL.revokeObjectURL(img.url)
+    }
+  })
+  imageSearchImages.value = []
+})
 
 const cropEditorRef = ref(null)
 const cropImgRef = ref(null)
@@ -193,8 +267,7 @@ const autoBackfillDhash = async () => {
 
 const imageSearchError = ref('')
 
-const onImageSearchFilesChange = (e) => {
-  const files = e.target.files
+const addSearchImages = (files) => {
   if (!files || files.length === 0) return
   let skipped = 0
   for (let i = 0; i < files.length; i++) {
@@ -204,7 +277,7 @@ const onImageSearchFilesChange = (e) => {
       continue
     }
     const url = URL.createObjectURL(file)
-    imageSearchImages.value.push({ file, url, name: file.name })
+    imageSearchImages.value.push({ file, url, name: file.name || 'pasted-image.png' })
   }
   if (skipped > 0) {
     imageSearchError.value = skipped + ' 个非图片文件已跳过'
@@ -217,7 +290,33 @@ const onImageSearchFilesChange = (e) => {
   imageSearchResults.value = []
   imageSearchDone.value = false
   resetCropState()
+}
+
+const onImageSearchFilesChange = (e) => {
+  addSearchImages(e.target.files)
   e.target.value = ''
+}
+
+const onPaste = (e) => {
+  const items = e.clipboardData?.items
+  if (!items) return
+  const imageFiles = []
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.startsWith('image/')) {
+      const file = items[i].getAsFile()
+      if (file) imageFiles.push(file)
+    }
+  }
+  if (imageFiles.length > 0) {
+    e.preventDefault()
+    addSearchImages(imageFiles)
+  }
+}
+
+const onDrop = (e) => {
+  const files = e.dataTransfer?.files
+  if (!files || files.length === 0) return
+  addSearchImages(Array.from(files))
 }
 
 const selectSearchImage = (idx, skipAutoSearch) => {
@@ -375,7 +474,6 @@ const doImageSearch = async () => {
   imageSearchDone.value = false
   imageSearchResults.value = []
   imageSearchError.value = ''
-  resultPage.value = 1
   const searchFile = await getCroppedFile()
   if (!searchFile) {
     imageSearching.value = false
@@ -413,20 +511,34 @@ const doImageSearch = async () => {
   }
 }
 
+const findSimilar = async (item) => {
+  if (!item.filePath) return
+  imageSearching.value = true
+  try {
+    const response = await fetch('/images/' + item.filePath)
+    if (!response.ok) throw new Error('Failed to fetch image')
+    const blob = await response.blob()
+    const fileName = item.filePath.split('/').pop() || 'similar.jpg'
+    const file = new File([blob], fileName, { type: blob.type || 'image/jpeg', lastModified: Date.now() })
+    const url = URL.createObjectURL(file)
+    imageSearchImages.value = [{ file, url, name: fileName }]
+    imageSearchSelectedIdx.value = 0
+    imageSearchResults.value = []
+    imageSearchDone.value = false
+    resetCropState()
+    doImageSearch()
+  } catch (e) {
+    imageSearching.value = false
+    imageSearchError.value = '获取图片失败'
+    console.error('Find similar failed:', e)
+  }
+}
+
 const viewImageSearchResult = (item) => {
   if (item.sampleId) {
     router.push({ name: 'Sample', query: { sampleId: item.sampleId, sampleCode: item.sampleCode || '' } })
   }
 }
-
-onBeforeUnmount(() => {
-  imageSearchImages.value.forEach(img => {
-    if (img.url && img.url.startsWith('blob:')) {
-      URL.revokeObjectURL(img.url)
-    }
-  })
-  imageSearchImages.value = []
-})
 </script>
 
 <style scoped>
@@ -440,8 +552,11 @@ onBeforeUnmount(() => {
 
 .isp-body {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .isp-image-strip {
@@ -641,8 +756,23 @@ onBeforeUnmount(() => {
 .isp-results-area {
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
+}
+
+.isp-virtual-outer {
+  position: relative;
+  width: 100%;
+}
+
+.isp-virtual-inner {
+  will-change: transform;
+}
+
+.isp-card-placeholder {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .isp-filter-bar {
@@ -654,12 +784,6 @@ onBeforeUnmount(() => {
 .isp-filter-bar-hint {
   font-size: 12px;
   color: rgba(29,29,31,0.45);
-}
-
-.isp-card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 16px;
 }
 
 .isp-card {
@@ -698,6 +822,27 @@ onBeforeUnmount(() => {
   object-fit: contain;
   display: block;
   background: #f7f8fa;
+}
+
+.isp-card-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.2s;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.isp-card:hover .isp-card-overlay {
+  opacity: 1;
 }
 
 .isp-card-no-img {
@@ -755,38 +900,6 @@ onBeforeUnmount(() => {
   font-size: 15px;
   font-weight: 800;
   color: #e03e2d;
-}
-
-.isp-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px solid #f0f0f2;
-}
-
-.isp-page-btn {
-  height: 30px;
-  padding: 0 14px;
-  border-radius: 8px;
-  border: 1px solid #ddd;
-  background: #fff;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.15s;
-  color: #333;
-}
-
-.isp-page-btn:hover:not(:disabled) { background: #f5f5f7; border-color: #ccc; }
-.isp-page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-
-.isp-page-info {
-  font-size: 13px;
-  color: #666;
-  min-width: 60px;
-  text-align: center;
 }
 
 .isp-empty {

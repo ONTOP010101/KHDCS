@@ -54,6 +54,21 @@ BOOT-INF/
 # Electron dist
 electron/dist/
 electron/jre/
+frontend/dist-installer/
+frontend/release/
+
+# JRE
+backend/jre/
+
+# Models
+backend/models/
+
+# Pgvector
+pgvector/
+
+# Meta-inf
+META-INF/
+backend/META-INF/
 
 # Temp files
 *.fixed

@@ -20,11 +20,11 @@ app:
 
 search:
   image:
-    engine: legacy
+    engine: deep
     siamese-model-path:
 
 pgvector:
-  enabled: false
+  enabled: true
   datasource:
     url: jdbc:postgresql://localhost:5432/photo_management
     username: postgres

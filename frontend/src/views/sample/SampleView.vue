@@ -91,7 +91,7 @@
             </div>
           </template>
           <template v-else>
-            <span class="sample-image-strip-empty">暂无图片</span>
+            <span class="sample-image-strip-empty" style="cursor:pointer" @click="viewOriginal">暂无图片</span>
           </template>
           <label v-if="formMode === 'edit' || formMode === 'add'" class="sample-image-upload-btn">
             <Upload :size="14" /> 上传
@@ -197,6 +197,7 @@
         <button class="sample-btn sample-btn-ghost" @click="router.push({ name: 'ImageSearch' })">
           <ImageIcon :size="14" /> 图像搜索
         </button>
+        <div class="toolbar-sep"></div>
       </div>
     </div>
 
@@ -220,7 +221,7 @@
           :optimization="{ animat: false, delayHover: 300, scrollX: { gt: 0, oSize: 0, rSize: 0 }, scrollY: { gt: 0, oSize: 0, rSize: 60, rHeight: 44 } }"
           :border="true"
           :header-cell-style="{ background: '#ffffff', borderColor: '#a0bddb', color: '#1d1d1f', fontWeight: 600, textAlign: 'center' }"
-          :cell-style="{ textAlign: 'center' }"
+          :cell-style="cellAreaStyle"
           @checkbox-change="onCheckboxChange"
           @checkbox-all="onCheckboxAll"
           @cell-click="onCellClick"
@@ -237,7 +238,7 @@
                 @mouseenter="onThumbMouseEnter($event, row)"
                 @mouseleave="onThumbMouseLeave"
               />
-              <span v-else style="color:rgba(29,29,31,0.25);font-size:11px">无图</span>
+              <span v-else style="color:rgba(29,29,31,0.25);font-size:11px;cursor:pointer" @click.stop="openPhotoModalFor(row)">无图</span>
             </div>
           </template>
           <template #action_default="{ row }">
@@ -297,6 +298,9 @@
                 </div>
               </div>
             </div>
+          </div>
+          <div v-if="thumbSortClone.show" class="ip-sort-clone" :style="{ left: thumbSortClone.x + 'px', top: thumbSortClone.y + 'px', width: thumbSortClone.width + 'px', height: thumbSortClone.height + 'px' }">
+            <img :src="thumbSortClone.src" />
           </div>
         </div>
       </div>
@@ -796,7 +800,11 @@
 
     <Teleport to="body">
     <div v-if="showImagePreview" class="image-preview-overlay" @click.self="showImagePreview = false">
-      <div class="image-preview-dialog">
+      <div class="image-preview-dialog" :class="{ 'ip-dragover': ipDragOver }" @dragenter.prevent="ipDragOver = true" @dragover.prevent="handlePreviewDragOver" @dragleave="handlePreviewDragLeave" @drop="handlePreviewDrop">
+        <div v-if="ipDragOver" class="ip-drag-hint">
+          <div class="ip-drag-hint-icon"><ImagePlus :size="48" /></div>
+          <div class="ip-drag-hint-text">释放鼠标以上传图片</div>
+        </div>
         <div class="ip-header">
           <div class="ip-header-left">
             <ImageIcon :size="18" />
@@ -828,8 +836,9 @@
           <div v-if="imagePreviewList.length > 1" class="ip-thumbs">
             <div
               v-for="(img, idx) in imagePreviewList" :key="img.hash || idx"
-              class="ip-thumb" :class="{ active: idx === imagePreviewIndex, 'ip-thumb-popout': posPickerIdx === idx }"
-              @click="imagePreviewIndex = idx"
+              class="ip-thumb" :class="{ active: idx === imagePreviewIndex, 'ip-thumb-popout': posPickerIdx === idx, 'ip-thumb-drag': thumbDragIdx === idx, 'ip-thumb-dragover': thumbDragOverIdx === idx }"
+              @mousedown.prevent="onThumbSortDown($event, idx)"
+              @click="thumbDragDone ? (thumbDragDone = false) : (imagePreviewIndex = idx)"
             >
               <div class="ip-pos-badge" @click.stop="togglePosPicker(idx)" :title="'当前位置: ' + posLabel(idx) + ', 点击更改'">
                 {{ posLabel(idx) }}
@@ -884,14 +893,122 @@
             </div>
           </div>
         </div>
-        <div class="spm-body-right" v-html="photoModalDetailHtml"></div>
+        <div class="spm-body-right" v-if="photoModalSample">
+          <template v-if="!editing">
+            <div class="spm-field-row"><div class="spm-field spm-field-full"><span class="spm-field-label">样品名称</span><span class="spm-field-value" :title="photoModalSample.sampleName || '-'">{{ photoModalSample.sampleName || '-' }}</span></div></div>
+            <div class="spm-field-row">
+              <div class="spm-field"><span class="spm-field-label">公司编号</span><span class="spm-field-value" :title="photoModalSample.sampleCode || '-'">{{ photoModalSample.sampleCode || '-' }}</span></div>
+              <div class="spm-field"><span class="spm-field-label">出厂货号</span><span class="spm-field-value" :title="photoModalSample.factoryCode || '-'">{{ photoModalSample.factoryCode || '-' }}</span></div>
+            </div>
+            <div class="spm-field-row" :class="{ 'spm-hidden': hideFactoryPrice }">
+              <div class="spm-field" v-if="!hideTaxPrice || !hideFactoryPrice"><span class="spm-field-label">出厂价</span><span class="spm-field-value spm-price" :title="photoModalSample.factoryPrice || '-'">{{ photoModalSample.factoryPrice || '-' }}</span></div>
+              <div class="spm-field" v-if="!hideTaxPrice"><span class="spm-field-label">报出价</span><span class="spm-field-value spm-price" :title="photoModalSample.taxPrice || '-'">{{ photoModalSample.taxPrice || '-' }}</span></div>
+            </div>
+            <div class="spm-field-row">
+              <div class="spm-field"><span class="spm-field-label">包装方式</span><span class="spm-field-value" :title="photoModalSample.packagingCn || '-'">{{ photoModalSample.packagingCn || '-' }}</span></div>
+              <div class="spm-field"><span class="spm-field-label">内盒/装箱量</span><span class="spm-field-value" :title="(photoModalSample.innerBoxCount||'-') + ' / ' + (photoModalSample.cartonCapacity||'-')">{{ (photoModalSample.innerBoxCount||'-') + ' / ' + (photoModalSample.cartonCapacity||'-') }}</span></div>
+            </div>
+            <div class="spm-field-row">
+              <div class="spm-field"><span class="spm-field-label">外箱规格</span><span class="spm-field-value" :title="fmt3(photoModalSample.cartonLength,photoModalSample.cartonWidth,photoModalSample.cartonHeight)+' CM'">{{ fmt3(photoModalSample.cartonLength,photoModalSample.cartonWidth,photoModalSample.cartonHeight) }} CM</span></div>
+              <div class="spm-field"><span class="spm-field-label">外箱毛/净重</span><span class="spm-field-value" :title="(photoModalSample.cartonGrossWeight||'-')+' / '+(photoModalSample.cartonNetWeight||'-')+' KG'">{{ (photoModalSample.cartonGrossWeight||'-') + ' / ' + (photoModalSample.cartonNetWeight||'-') + ' KG' }}</span></div>
+            </div>
+            <div class="spm-field-row">
+              <div class="spm-field"><span class="spm-field-label">包装规格</span><span class="spm-field-value" :title="fmt3(photoModalSample.packageLength,photoModalSample.packageWidth,photoModalSample.packageHeight)+' CM'">{{ fmt3(photoModalSample.packageLength,photoModalSample.packageWidth,photoModalSample.packageHeight) }} CM</span></div>
+              <div class="spm-field"><span class="spm-field-label">英文包装</span><span class="spm-field-value" :title="photoModalSample.packagingEn || '-'">{{ photoModalSample.packagingEn || '-' }}</span></div>
+            </div>
+            <div class="spm-field-row">
+              <div class="spm-field"><span class="spm-field-label">产品规格</span><span class="spm-field-value" :title="fmt3(photoModalSample.sampleLength,photoModalSample.sampleWidth,photoModalSample.sampleHeight)+' CM'">{{ fmt3(photoModalSample.sampleLength,photoModalSample.sampleWidth,photoModalSample.sampleHeight) }} CM</span></div>
+              <div class="spm-field"><span class="spm-field-label">产品毛/净重</span><span class="spm-field-value" :title="(photoModalSample.sampleGrossWeight||'-')+' / '+(photoModalSample.sampleNetWeight||'-')+' KG'">{{ (photoModalSample.sampleGrossWeight||'-') + ' / ' + (photoModalSample.sampleNetWeight||'-') + ' KG' }}</span></div>
+            </div>
+            <div class="spm-field-row">
+              <div class="spm-field"><span class="spm-field-label">体积/材积</span><span class="spm-field-value" :title="(photoModalSample.cartonVolume||'-')+' / '+(photoModalSample.cartonMaterialVolume||'-')">{{ (photoModalSample.cartonVolume||'-') + ' / ' + (photoModalSample.cartonMaterialVolume||'-') }}</span></div>
+              <div class="spm-field"><span class="spm-field-label">电池信息</span><span class="spm-field-value" :title="photoModalSample.batteryInfo || '-'">{{ photoModalSample.batteryInfo || '-' }}</span></div>
+            </div>
+            <div class="spm-field-row"><div class="spm-field spm-field-full"><span class="spm-field-label">摊位号</span><span class="spm-field-value" :title="photoModalSample.boothNo || '-'">{{ photoModalSample.boothNo || '-' }}</span></div></div>
+            <div class="spm-field-row"><div class="spm-field spm-field-full"><span class="spm-field-label">产品认证</span><span class="spm-field-value" :title="photoModalSample.certification || '-'">{{ photoModalSample.certification || '-' }}</span></div></div>
+            <div class="spm-field-row"><div class="spm-field spm-field-full"><span class="spm-field-label">中文备注</span><span class="spm-field-value" :title="photoModalSample.remark || '-'">{{ photoModalSample.remark || '-' }}</span></div></div>
+            <template v-if="!hideSupplierInfo">
+              <div class="spm-section-title">厂商信息</div>
+              <div class="spm-field-row">
+                <div class="spm-field"><span class="spm-field-label">厂商编号</span><span class="spm-field-value" :title="photoModalSample.manufacturerCode || '-'">{{ photoModalSample.manufacturerCode || '-' }}</span></div>
+                <div class="spm-field"><span class="spm-field-label">厂商名称</span><span class="spm-field-value" :title="photoModalSample.supplier || '-'">{{ photoModalSample.supplier || '-' }}</span></div>
+              </div>
+              <div class="spm-field-row">
+                <div class="spm-field"><span class="spm-field-label">联系人</span><span class="spm-field-value" :title="photoModalSample.contactPerson || '-'">{{ photoModalSample.contactPerson || '-' }}</span></div>
+                <div class="spm-field"><span class="spm-field-label">电话</span><span class="spm-field-value" :title="photoModalSample.contactPhone || '-'">{{ photoModalSample.contactPhone || '-' }}</span></div>
+              </div>
+              <div class="spm-field-row">
+                <div class="spm-field"><span class="spm-field-label">手机</span><span class="spm-field-value" :title="photoModalSample.mobile || '-'">{{ photoModalSample.mobile || '-' }}</span></div>
+                <div class="spm-field"><span class="spm-field-label">QQ</span><span class="spm-field-value" :title="photoModalSample.qq || '-'">{{ photoModalSample.qq || '-' }}</span></div>
+              </div>
+            </template>
+          </template>
+
+          <template v-else>
+            <div class="spm-field-row"><div class="spm-field spm-field-full"><span class="spm-field-label">样品名称</span><input class="spm-input" v-model="editData.sampleName" /></div></div>
+            <div class="spm-field-row">
+              <div class="spm-field"><span class="spm-field-label">公司编号</span><span class="spm-input-ro">{{ photoModalSample.sampleCode || '-' }}</span></div>
+              <div class="spm-field"><span class="spm-field-label">出厂货号</span><input class="spm-input" v-model="editData.factoryCode" /></div>
+            </div>
+            <div class="spm-field-row">
+              <div class="spm-field"><span class="spm-field-label">出厂价</span><input class="spm-input" v-model="editData.factoryPrice" /></div>
+              <div class="spm-field"><span class="spm-field-label">报出价</span><input class="spm-input" v-model="editData.taxPrice" /></div>
+            </div>
+            <div class="spm-field-row">
+              <div class="spm-field"><span class="spm-field-label">包装方式</span><input class="spm-input" v-model="editData.packagingCn" /></div>
+              <div class="spm-field"><span class="spm-field-label">内盒</span><input class="spm-input spm-input-sm" v-model="editData.innerBoxCount" /><span class="spm-field-label">/ 装入</span><input class="spm-input spm-input-sm" v-model="editData.cartonCapacity" /></div>
+            </div>
+            <div class="spm-field-row">
+              <div class="spm-field"><span class="spm-field-label">外箱规格</span><span class="spm-field-dim"><input class="spm-input spm-input-sm" v-model="editData.cartonLength" /> x <input class="spm-input spm-input-sm" v-model="editData.cartonWidth" /> x <input class="spm-input spm-input-sm" v-model="editData.cartonHeight" /> CM</span></div>
+              <div class="spm-field"><span class="spm-field-label">毛/净</span><input class="spm-input spm-input-sm" v-model="editData.cartonGrossWeight" /><span class="spm-field-label">/</span><input class="spm-input spm-input-sm" v-model="editData.cartonNetWeight" /> KG</div>
+            </div>
+            <div class="spm-field-row">
+              <div class="spm-field"><span class="spm-field-label">包装规格</span><span class="spm-field-dim"><input class="spm-input spm-input-sm" v-model="editData.packageLength" /> x <input class="spm-input spm-input-sm" v-model="editData.packageWidth" /> x <input class="spm-input spm-input-sm" v-model="editData.packageHeight" /> CM</span></div>
+              <div class="spm-field"><span class="spm-field-label">英文包装</span><input class="spm-input" v-model="editData.packagingEn" /></div>
+            </div>
+            <div class="spm-field-row">
+              <div class="spm-field"><span class="spm-field-label">产品规格</span><span class="spm-field-dim"><input class="spm-input spm-input-sm" v-model="editData.sampleLength" /> x <input class="spm-input spm-input-sm" v-model="editData.sampleWidth" /> x <input class="spm-input spm-input-sm" v-model="editData.sampleHeight" /> CM</span></div>
+              <div class="spm-field"><span class="spm-field-label">毛/净</span><input class="spm-input spm-input-sm" v-model="editData.sampleGrossWeight" /><span class="spm-field-label">/</span><input class="spm-input spm-input-sm" v-model="editData.sampleNetWeight" /> KG</div>
+            </div>
+            <div class="spm-field-row">
+              <div class="spm-field"><span class="spm-field-label">体积</span><input class="spm-input spm-input-sm" v-model="editData.cartonVolume" /><span class="spm-field-label">/ 材积</span><input class="spm-input spm-input-sm" v-model="editData.cartonMaterialVolume" /></div>
+              <div class="spm-field"><span class="spm-field-label">电池信息</span><input class="spm-input" v-model="editData.batteryInfo" /></div>
+            </div>
+            <div class="spm-field-row"><div class="spm-field spm-field-full"><span class="spm-field-label">摊位号</span><span class="spm-input-ro">{{ photoModalSample.boothNo || '-' }}</span></div></div>
+            <div class="spm-field-row"><div class="spm-field spm-field-full"><span class="spm-field-label">产品认证</span><input class="spm-input" v-model="editData.certification" /></div></div>
+            <div class="spm-field-row"><div class="spm-field spm-field-full"><span class="spm-field-label">中文备注</span><input class="spm-input" v-model="editData.remark" /></div></div>
+            <template v-if="!hideSupplierInfo">
+              <div class="spm-section-title">厂商信息</div>
+              <div class="spm-field-row">
+                <div class="spm-field"><span class="spm-field-label">厂商编号</span><span class="spm-input-ro">{{ photoModalSample.manufacturerCode || '-' }}</span></div>
+                <div class="spm-field"><span class="spm-field-label">厂商名称</span><span class="spm-input-ro">{{ photoModalSample.supplier || '-' }}</span></div>
+              </div>
+              <div class="spm-field-row">
+                <div class="spm-field"><span class="spm-field-label">联系人</span><input class="spm-input" v-model="editData.contactPerson" /></div>
+                <div class="spm-field"><span class="spm-field-label">电话</span><input class="spm-input" v-model="editData.contactPhone" /></div>
+              </div>
+              <div class="spm-field-row">
+                <div class="spm-field"><span class="spm-field-label">手机</span><input class="spm-input" v-model="editData.mobile" /></div>
+                <div class="spm-field"><span class="spm-field-label">QQ</span><input class="spm-input" v-model="editData.qq" /></div>
+              </div>
+            </template>
+          </template>
+        </div>
       </div>
       <div class="spm-footer">
-        <div class="spm-toggle-group">
-          <label class="spm-toggle"><input type="checkbox" v-model="hideFactoryPrice" @change="rebuildDetailHtml" /> 隐藏出厂价</label>
-          <label class="spm-toggle"><input type="checkbox" v-model="hideSupplierInfo" @change="rebuildDetailHtml" /> 隐藏厂商信息</label>
+        <div class="spm-toggle-group" v-if="!editing">
+          <label class="spm-toggle"><input type="checkbox" v-model="hideFactoryPrice" /> 隐藏出厂价</label>
+          <label class="spm-toggle"><input type="checkbox" v-model="hideTaxPrice" /> 隐藏报出价</label>
+          <label class="spm-toggle"><input type="checkbox" v-model="hideSupplierInfo" /> 隐藏厂商信息</label>
         </div>
-        <button class="spm-btn-close" @click="showPhotoModal = false">关闭</button>
+        <div class="spm-toggle-group" style="gap:8px">
+          <button v-if="!editing" class="spm-btn-edit" @click="startModalEdit">编辑</button>
+          <template v-else>
+            <button class="spm-btn-save" @click="saveModalEdit">保存</button>
+            <button class="spm-btn-close" @click="cancelModalEdit">取消</button>
+          </template>
+          <button v-if="!editing" class="spm-btn-close" @click="showPhotoModal = false">关闭</button>
+        </div>
       </div>
     </div>
     </Teleport>
@@ -972,7 +1089,7 @@
             </button>
           </div>
 
-          <div class="import-preview-table-wrap">
+          <div ref="importPreviewWrapRef" class="import-preview-table-wrap">
             <vxe-grid
               ref="importPreviewGridRef"
               :columns="IMPORT_PREVIEW_ALL_COLUMNS"
@@ -989,7 +1106,7 @@
               :optimization="{ animat: false, delayHover: 250, scrollX: { gt: 0, oSize: 100, rSize: 100 }, scrollY: { gt: 0, oSize: 0, rSize: 60, rHeight: 44 } }"
               :border="true"
               :header-cell-style="{ background: '#ffffff', borderColor: '#a0bddb', color: '#1d1d1f', fontWeight: 600, textAlign: 'center' }"
-              :cell-style="{ textAlign: 'center' }"
+              :cell-style="importArea.cellAreaStyle"
               :row-class-name="importRowClassName"
               @edit-closed="onImportCellEdit"
               @checkbox-change="onImportPreviewCheckChange"
@@ -1319,6 +1436,23 @@
           </div>
           <div class="adv-field"><label>厂商认证</label><input v-model="advForm.batteryInfo" placeholder="" /></div>
           <div class="adv-field"><label>关键词</label><input v-model="advForm.keyword" placeholder="" /></div>
+          <!-- Row 11 -->
+          <div class="adv-field adv-field-range">
+            <label>登记日期</label>
+            <div class="range-inputs">
+              <input type="date" v-model="advForm.createTimeMin" />
+              <span>-</span>
+              <input type="date" v-model="advForm.createTimeMax" />
+            </div>
+          </div>
+          <div class="adv-field adv-field-range">
+            <label>修改日期</label>
+            <div class="range-inputs">
+              <input type="date" v-model="advForm.updateTimeMin" />
+              <span>-</span>
+              <input type="date" v-model="advForm.updateTimeMax" />
+            </div>
+          </div>
         </div>
         <div class="adv-search-footer">
           <button class="sample-btn sample-btn-ghost" @click="clearAdvForm">清空条件</button>
@@ -1963,6 +2097,7 @@
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, onActivated, nextTick, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api'
+import { useAreaSelection } from '@/composables/useAreaSelection'
 import '@/styles/sample.css'
 import '@/styles/sample-form.css'
 import ExcelParserWorker from '@/workers/excelParser.worker.js?worker'
@@ -2245,6 +2380,30 @@ const totalPages = computed(() => Math.max(1, Math.ceil(totalRecords.value / pag
 const currentSortField = ref('createTime')
 const currentSortOrder = ref('desc')
 const selectedIds = ref([])
+const lastCheckboxIndex = ref(-1)
+// 列区域选取
+const areaDragging = ref(false)
+const areaDragField = ref('')       // 真实字段名（用于 cell-style 匹配）
+const areaDragColId = ref('')       // DOM colid（用于 querySelector）
+const areaDragStartRowId = ref(null)
+const areaDragEndRowId = ref(null)
+const areaDragMoved = ref(false)
+const areaDragStartY = ref(0)
+const areaSelectedColumn = ref('')   // 已确认的选区列 — 真实字段名
+const areaSelectedColId = ref('')    // 已确认的选区列 — DOM colid
+const areaSelectedStartRowId = ref(null)  // 已确认的选区起行
+const areaSelectedEndRowId = ref(null)    // 已确认的选区止行
+const areaRenderTick = ref(0)
+const extDragging = ref(false)    // 是否正在拖拽把手延伸选区
+let areaHandleEl = null           // 选区右下角把手元素
+const areaSelectedCount = computed(() => {
+  if (!areaSelectedColumn.value) return 0
+  const data = tableData.value
+  const sIdx = data.findIndex(r => String(r.id) === String(areaSelectedStartRowId.value))
+  const eIdx = data.findIndex(r => String(r.id) === String(areaSelectedEndRowId.value))
+  if (sIdx === -1 || eIdx === -1) return 0
+  return Math.abs(eIdx - sIdx) + 1
+})
 const searchKeyword = ref('')
 const locateKeyword = ref('')
 const manufacturerCode = ref('')
@@ -2269,9 +2428,12 @@ const photoModalSample = ref(null)
 const photoModalImages = ref([])
 const photoModalIndex = ref(0)
 const hideFactoryPrice = ref(false)
+const hideTaxPrice = ref(false)
 const hideSupplierInfo = ref(false)
+const editing = ref(false)
+const editData = reactive({})
 const photoModalPos = reactive({ x: 0, y: 0 })
-const photoModalW = ref(860)
+const photoModalW = ref(1000)
 
 const showImagePreview = ref(false)
 const imagePreviewList = ref([])
@@ -2285,6 +2447,11 @@ const posPickerIdx = ref(null)
 const ipUploading = ref(false)
 const ipUploadDone = ref(0)
 const ipUploadTotal = ref(0)
+const ipDragOver = ref(false)
+const thumbDragIdx = ref(-1)
+const thumbDragOverIdx = ref(-1)
+const thumbDragDone = ref(false)
+const thumbSortClone = ref({ show: false, x: 0, y: 0, width: 0, height: 0, src: '' })
 const isAllImageSelected = computed(() => {
   return imagePreviewList.value.length > 0 && imagePreviewSelected.value.size === imagePreviewList.value.length
 })
@@ -2295,13 +2462,12 @@ const currentPreviewSrc = computed(() => {
   if (img.hash) return '/images/view/hash/' + img.hash
   return '/thumbnails/' + img.thumbnailPath
 })
-const photoModalH = ref(540)
+const photoModalH = ref(680)
 const photoModalInit = () => {
-  photoModalW.value = Math.min(860, window.innerWidth - 40)
-  photoModalH.value = Math.min(540, window.innerHeight - 40)
+  photoModalW.value = Math.min(1000, window.innerWidth - 40)
+  photoModalH.value = Math.min(680, window.innerHeight - 40)
   photoModalPos.x = Math.round((window.innerWidth - photoModalW.value) / 2)
   photoModalPos.y = Math.round((window.innerHeight - photoModalH.value) / 2)
-  rebuildDetailHtml()
 }
 const photoModalStyle = computed(() => ({
   display: showPhotoModal.value ? 'flex' : 'none',
@@ -2312,34 +2478,6 @@ const photoModalStyle = computed(() => ({
   left: photoModalPos.x + 'px',
   position: 'fixed'
 }))
-const photoModalDetailHtml = ref('')
-const rebuildDetailHtml = () => {
-  const d = photoModalSample.value
-  if (!d) { photoModalDetailHtml.value = ''; return }
-  const v = (k) => { const x = d[k]; return (x != null && x !== '') ? String(x) : ''; }
-  const f = (label, val, cls) => `<div class="spm-field"><span class="spm-field-label">${label}</span><span class="spm-field-value${cls ? ' ' + cls : ''}" title="${val || '-'}">${val || '-'}</span></div>`
-  const ff = (label, val, cls) => `<div class="spm-field spm-field-full"><span class="spm-field-label">${label}</span><span class="spm-field-value${cls ? ' ' + cls : ''}" title="${val || '-'}">${val || '-'}</span></div>`
-  const row = (...args) => `<div class="spm-field-row">${args.join('')}</div>`
-  const rowS = (section, ...args) => {
-    const hidden = (section === 'factory-price' && hideFactoryPrice.value) || (section === 'supplier-info' && hideSupplierInfo.value)
-    return `<div class="spm-field-row${hidden ? ' spm-hidden' : ''}" data-spm-section="${section}">${args.join('')}</div>`
-  }
-  photoModalDetailHtml.value =
-    row(ff('样品名称', v('sampleName'))) +
-    row(f('公司编号', v('sampleCode')), f('出厂货号', v('factoryCode'))) +
-    rowS('factory-price', f('出厂价', v('factoryPrice'), 'spm-price'), f('报出价', v('taxPrice'), 'spm-price')) +
-    row(f('包装规格', v('packagingCn')), f('内盒/装箱量', (v('innerBoxCount') || '-') + ' / ' + (v('cartonCapacity') || '-'))) +
-    row(f('外箱规格', (v('cartonLength')||'-') + '×' + (v('cartonWidth')||'-') + '×' + (v('cartonHeight')||'-') + ' CM'), f('外箱毛/净重', (v('cartonGrossWeight')||'-') + ' / ' + (v('cartonNetWeight')||'-') + ' KG')) +
-    row(f('产品规格', (v('sampleLength')||'-') + '×' + (v('sampleWidth')||'-') + '×' + (v('sampleHeight')||'-') + ' CM'), f('产品毛/净重', (v('sampleGrossWeight')||'-') + ' / ' + (v('sampleNetWeight')||'-') + ' KG')) +
-    row(f('体积/材积', (v('cartonVolume')||'-') + ' / ' + (v('cartonMaterialVolume')||'-')), f('包装', v('packagingEn') || v('packagingCn') || '-')) +
-    row(f('摊位号', v('boothNo')), f('电池信息', v('batteryInfo'))) +
-    row(ff('产品认证', v('certification'))) +
-    row(ff('中文备注', v('remark'))) +
-    '<div class="spm-section-title">厂商信息</div>' +
-    rowS('supplier-info', f('厂商编号', v('manufacturerCode')), f('厂商名称', v('supplier'))) +
-    rowS('supplier-info', f('联系人', v('contactPerson')), f('电话', v('contactPhone'))) +
-    rowS('supplier-info', f('手机', v('mobile')), f('QQ', v('qq')))
-}
 let dragStart = null
 const startDragModal = (e) => {
   dragStart = { x: e.clientX - photoModalPos.x, y: e.clientY - photoModalPos.y }
@@ -2369,8 +2507,18 @@ const importPreviewHeaders = ref([])
 const importSelectedRows = ref([])
 const importSelectedRowIndexes = ref(new Set())  // 跨页跟踪勾选
 const importPreviewGridRef = ref(null)
+const importPreviewWrapRef = ref(null)   // 导入预览表格外层容器
 const importPreviewPage = ref(1)
 const importPreviewPageSize = ref(3000)
+// ===== 导入预览区域选取 =====
+const importArea = useAreaSelection({
+  wrapperRef: importPreviewWrapRef,
+  gridRef: importPreviewGridRef,
+  tableData: importPreviewAllRows,
+  keyField: '_rowIndex',
+  handleClass: 'import-area-handle',
+  selectingClass: 'import-area-selecting'
+})
 const batchEditField = ref('packagingCn')   // 批量修改-选择的字段
 const batchEditValue = ref('')             // 批量修改-输入的值
 const batchEditDropdownOpen = ref(false)   // 下拉面板开关
@@ -2829,6 +2977,7 @@ const loadTableData = async () => {
     console.error(e)
   } finally {
     tableLoading.value = false
+    clearAreaSelection()
   }
 }
 
@@ -2881,6 +3030,105 @@ const posLabel = (idx) => {
 
 const togglePosPicker = (idx) => {
   posPickerIdx.value = posPickerIdx.value === idx ? null : idx
+}
+
+let thumbSortOrigin = null // { idx, startX, startY }
+let thumbSortMoveHandler = null
+let thumbSortUpHandler = null
+
+const onThumbSortDown = (e, idx) => {
+  if (e.button !== 0) return
+  thumbDragDone.value = false
+  const el = e.currentTarget
+  const rect = el.getBoundingClientRect()
+  const img = imagePreviewList.value[idx]
+  const src = img.thumbnailPath ? '/thumbnails/' + img.thumbnailPath : '/images/' + img.filePath
+  thumbSortOrigin = { idx, startX: e.clientX, startY: e.clientY, el, rect }
+  // track mousemove/mouseup on document
+  document.addEventListener('mousemove', thumbSortMoveHandler = (ev) => {
+    const dx = ev.clientX - thumbSortOrigin.startX
+    const dy = ev.clientY - thumbSortOrigin.startY
+    const dist = Math.sqrt(dx * dx + dy * dy)
+    if (!thumbSortClone.value.show && dist < 6) return // threshold to start drag
+    if (!thumbSortClone.value.show) {
+      // enter drag mode
+      thumbDragIdx.value = idx
+      thumbSortClone.value = {
+        show: true,
+        x: ev.clientX - rect.width / 2,
+        y: ev.clientY - rect.height / 2,
+        width: rect.width,
+        height: rect.height,
+        src
+      }
+      el.style.opacity = '0.3'
+    }
+    // update clone position
+    thumbSortClone.value.x = ev.clientX - rect.width / 2
+    thumbSortClone.value.y = ev.clientY - rect.height / 2
+    // find which thumb we're over
+    const target = document.elementFromPoint(ev.clientX, ev.clientY)
+    const targetThumb = target?.closest('.ip-thumb')
+    if (targetThumb) {
+      const thumbs = Array.from(targetThumb.parentElement.children)
+      const overIdx = thumbs.indexOf(targetThumb)
+      if (overIdx >= 0 && overIdx !== idx) {
+        thumbDragOverIdx.value = overIdx
+      } else {
+        thumbDragOverIdx.value = -1
+      }
+    } else {
+      thumbDragOverIdx.value = -1
+    }
+  })
+  document.addEventListener('mouseup', thumbSortUpHandler = async (ev) => {
+    const targetIdx = thumbDragOverIdx.value
+    const fromIdx = idx
+    cleanupThumbSort()
+    if (targetIdx < 0 || targetIdx === fromIdx) return
+    thumbDragDone.value = true
+    const list = [...imagePreviewList.value]
+    const [moved] = list.splice(fromIdx, 1)
+    list.splice(targetIdx, 0, moved)
+    const items = list.map(i => ({ id: i.id, hash: i.hash })).filter(it => it.id)
+    const result = await api('/images/reorder', { method: 'POST', body: JSON.stringify(items) })
+    if (result && result.code === 200) {
+      if (currentSample.value?.id) {
+        await fetchImagesForSample(currentSample.value.id)
+      }
+      imagePreviewList.value = [...currentSampleImages.value]
+      imagePreviewIndex.value = 0
+      imagePreviewSelected.value = new Set()
+      const sampleId = currentSample.value?.id
+      if (sampleId && currentSampleImages.value.length > 0) {
+        const firstImg = currentSampleImages.value[0]
+        const row = tableData.value.find(r => r.id === sampleId)
+        if (row) {
+          row.thumbnail = firstImg.thumbnailPath
+          row.firstImageId = firstImg.id
+        }
+      }
+    } else {
+      imagePreviewList.value = [...currentSampleImages.value]
+    }
+  }, { once: true })
+}
+const cleanupThumbSort = () => {
+  if (thumbSortMoveHandler) {
+    document.removeEventListener('mousemove', thumbSortMoveHandler)
+    thumbSortMoveHandler = null
+  }
+  if (thumbSortUpHandler) {
+    document.removeEventListener('mouseup', thumbSortUpHandler)
+    thumbSortUpHandler = null
+  }
+  if (thumbSortOrigin && thumbSortOrigin.el) {
+    thumbSortOrigin.el.style.opacity = ''
+  }
+  thumbSortOrigin = null
+  thumbSortClone.value.show = false
+  thumbDragIdx.value = -1
+  thumbDragOverIdx.value = -1
 }
 
 const setImagePosition = async (idx, newPos) => {
@@ -3008,8 +3256,56 @@ const onPreviewUpload = async (e) => {
   }
 }
 
+const handlePreviewDragOver = (e) => {
+  e.preventDefault()
+  e.dataTransfer.dropEffect = 'copy'
+  ipDragOver.value = true
+}
+const handlePreviewDragLeave = (e) => {
+  if (e.currentTarget === e.target) {
+    ipDragOver.value = false
+  }
+}
+const handlePreviewDrop = async (e) => {
+  e.preventDefault()
+  ipDragOver.value = false
+  const files = e.dataTransfer?.files
+  if (!files || files.length === 0) return
+  const sampleId = currentSample.value?.id
+  if (!sampleId) return
+  const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'))
+  if (imageFiles.length === 0) {
+    showAlertDialog('请拖入图片文件', 'warning')
+    return
+  }
+  ipUploading.value = true
+  ipUploadTotal.value = imageFiles.length
+  ipUploadDone.value = 0
+  let successCount = 0
+  for (const file of imageFiles) {
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('sampleId', sampleId)
+      const res = await api('/images/upload', { method: 'POST', body: fd })
+      if (res && res.code === 200) successCount++
+    } catch (_) {}
+    ipUploadDone.value++
+  }
+  ipUploading.value = false
+  await fetchImagesForSample(sampleId)
+  imagePreviewList.value = currentSampleImages.value
+  imagePreviewIndex.value = 0
+  imagePreviewSelected.value = new Set()
+  if (successCount > 0 && successCount === imageFiles.length) {
+    showAlertDialog(`成功上传 ${successCount} 张图片`, 'success')
+  } else if (successCount > 0) {
+    showAlertDialog(`上传完成: 成功 ${successCount} 张, 失败 ${imageFiles.length - successCount} 张`, 'info')
+  }
+}
+
 const viewOriginal = () => {
-  if (!currentSample.value || currentSampleImages.value.length === 0) return
+  if (!currentSample.value) return
   imagePreviewList.value = currentSampleImages.value
   imagePreviewIndex.value = stripIndex.value
   imagePreviewSelected.value = new Set()
@@ -3061,11 +3357,16 @@ const deletePreviewImage = async () => {
   }
 }
 
-const onSearch = () => {
+const onSearch = async () => {
   mainBatchQueryActive.value = false
   activeSearchConditions.value = null  // 清除综合查询条件
   currentPage.value = 1
-  loadTableData()
+  await loadTableData()
+  // 搜索后自动选中第一条
+  if (tableData.value.length > 0 && gridRef.value) {
+    gridRef.value.setCurrentRow(tableData.value[0])
+    selectSample(tableData.value[0])
+  }
 }
 
 const onLocate = () => {
@@ -3105,7 +3406,16 @@ const onSortChange = ({ property, order }) => {
   loadTableData()
 }
 
-const onCheckboxChange = () => {
+const onCheckboxChange = ({ checked, row, rowIndex, $event }) => {
+  if ($event && $event.shiftKey && lastCheckboxIndex.value >= 0 && rowIndex != null) {
+    const startIdx = Math.min(lastCheckboxIndex.value, rowIndex)
+    const endIdx = Math.max(lastCheckboxIndex.value, rowIndex)
+    const data = gridRef.value.getTableData().fullData
+    for (let i = startIdx; i <= endIdx; i++) {
+      gridRef.value.setCheckboxRow(data[i], !!checked)
+    }
+  }
+  lastCheckboxIndex.value = rowIndex != null ? rowIndex : -1
   updateSelectedIds()
 }
 
@@ -3118,6 +3428,276 @@ const updateSelectedIds = () => {
   const records = gridRef.value.getCheckboxRecords()
   selectedIds.value = records.map(r => r.id)
 }
+
+// ── 列区域选取 ──────────────────────────────────
+const DATA_COL_FIELDS = new Set(
+  allColumns
+    .filter(c => c.field && c.type !== 'checkbox' && c.type !== 'seq')
+    .map(c => c.field)
+)
+
+const getRowIdAndField = (el) => {
+  const td = el.closest('td.vxe-body--column')
+  if (!td) {
+    const wrapper = el.closest('.vxe-body-cell--wrapper')
+    if (!wrapper) return null
+    const cid = wrapper.getAttribute('colid')
+    const rid = wrapper.getAttribute('rowid')
+    if (!cid || !rid) return null
+    return { rowId: rid, field: cid }
+  }
+  const colid = td.getAttribute('colid')
+  if (!colid) return null
+  const tr = td.closest('tr')
+  if (!tr) return null
+  const rowid = tr.getAttribute('rowid')
+  if (!rowid) return null
+  return { rowId: rowid, field: colid }
+}
+
+const onTableWrapMouseDown = (e) => {
+  if (e.button !== 0) return
+  if (e.target.closest('.sample-area-handle')) return  // 跳过把手拖拽
+  if (!tableWrapRef.value?.contains(e.target)) return
+  const info = getRowIdAndField(e.target)
+  if (!info) return
+  areaDragStartRowId.value = info.rowId
+  areaDragEndRowId.value = info.rowId
+  areaDragColId.value = info.field                    // DOM colid
+  areaDragField.value = getFieldByColId(info.field)   // 真实字段名
+  areaDragging.value = false // 还没开始拖，只是按下
+  areaDragMoved.value = false
+  areaDragStartY.value = e.clientY
+  // 清除之前选区
+  areaSelectedColumn.value = ''
+  areaSelectedColId.value = ''
+  areaSelectedStartRowId.value = null
+  areaSelectedEndRowId.value = null
+  areaRenderTick.value++   // 触发 cellAreaStyle 重新求值
+  document.addEventListener('mousemove', onDocMouseMove)
+  document.addEventListener('mouseup', onDocMouseUp)
+  e.preventDefault()
+}
+
+const cellAreaStyle = ({ row, column }) => {
+  void areaRenderTick.value // 强制重新求值
+  const field = (column && (column.field || column.type)) || ''
+  // 拖拽中的高亮
+  if (areaDragging.value && field === areaDragField.value) {
+    const data = tableData.value
+    const sIdx = data.findIndex(r => String(r.id) === String(areaDragStartRowId.value))
+    const eIdx = data.findIndex(r => String(r.id) === String(areaDragEndRowId.value))
+    if (sIdx !== -1 && eIdx !== -1) {
+      const min = Math.min(sIdx, eIdx)
+      const max = Math.max(sIdx, eIdx)
+      const rIdx = data.findIndex(r => r.id === row.id)
+      if (rIdx >= min && rIdx <= max) {
+        return { textAlign: 'center', background: '#e3f2fd', outline: '2px solid #4285f4', outlineOffset: '-2px' }
+      }
+    }
+  }
+  // 已确认选区高亮
+  if (areaSelectedColumn.value && field === areaSelectedColumn.value) {
+    const data = tableData.value
+    const sIdx = data.findIndex(r => String(r.id) === String(areaSelectedStartRowId.value))
+    const eIdx = data.findIndex(r => String(r.id) === String(areaSelectedEndRowId.value))
+    if (sIdx !== -1 && eIdx !== -1) {
+      const min = Math.min(sIdx, eIdx)
+      const max = Math.max(sIdx, eIdx)
+      const rIdx = data.findIndex(r => r.id === row.id)
+      if (rIdx >= min && rIdx <= max) {
+        return { textAlign: 'center', background: '#dceefb', outline: '2px solid #4285f4', outlineOffset: '-2px' }
+      }
+    }
+  }
+  return { textAlign: 'center' }
+}
+
+const onDocMouseMove = (e) => {
+  if (!areaDragging.value && !areaDragMoved.value) {
+    if (Math.abs(e.clientY - areaDragStartY.value) < 6) return
+    areaDragging.value = true
+    areaDragMoved.value = true
+    document.body.classList.add('sample-area-selecting')
+  }
+  if (!areaDragging.value) return
+  const target = document.elementFromPoint(e.clientX, e.clientY)
+  if (!target) return
+  const info = getRowIdAndField(target)
+  if (!info || info.field !== areaDragColId.value) return
+  areaDragEndRowId.value = info.rowId
+  areaRenderTick.value++
+}
+
+const onDocMouseUp = () => {
+  document.removeEventListener('mousemove', onDocMouseMove)
+  document.removeEventListener('mouseup', onDocMouseUp)
+  document.body.classList.remove('sample-area-selecting')
+  if (!areaDragging.value) {
+    // 单击单个单元格 → 选中该单元格
+    if (areaDragField.value) {
+      areaSelectedColumn.value = areaDragField.value
+      areaSelectedColId.value = areaDragColId.value
+      areaSelectedStartRowId.value = areaDragStartRowId.value
+      areaSelectedEndRowId.value = areaDragEndRowId.value
+      areaRenderTick.value++
+      attachAreaHandle()
+    }
+    return
+  }
+  areaDragging.value = false
+  // 确认选区
+  areaSelectedColumn.value = areaDragField.value
+  areaSelectedColId.value = areaDragColId.value
+  areaSelectedStartRowId.value = areaDragStartRowId.value
+  areaSelectedEndRowId.value = areaDragEndRowId.value
+  areaRenderTick.value++   // 触发 cellAreaStyle 重新求值
+  attachAreaHandle()
+}
+
+const clearAreaSelection = () => {
+  removeAreaHandle()
+  areaSelectedColumn.value = ''
+  areaSelectedColId.value = ''
+  areaSelectedStartRowId.value = null
+  areaSelectedEndRowId.value = null
+  areaDragging.value = false
+  areaRenderTick.value++
+}
+
+// ===== 选区右下角把手（延伸选区） =====
+const attachAreaHandle = () => {
+  removeAreaHandle()
+  if (!areaSelectedColId.value) return
+  const wrapper = tableWrapRef.value
+  if (!wrapper) return
+  const data = tableData.value
+  const sIdx = data.findIndex(r => String(r.id) === String(areaSelectedStartRowId.value))
+  const eIdx = data.findIndex(r => String(r.id) === String(areaSelectedEndRowId.value))
+  if (sIdx === -1 || eIdx === -1) return
+  // 选区最后一行（数据中靠后的）
+  const lastIdx = Math.max(sIdx, eIdx)
+  const lastId = String(data[lastIdx].id)
+  // 等 vxe-grid 渲染完
+  requestAnimationFrame(() => {
+    const cellEl = wrapper.querySelector(`[rowid="${lastId}"] [colid="${areaSelectedColId.value}"]`)
+    if (!cellEl) return
+    const td = cellEl.tagName === 'TD' ? cellEl : cellEl.closest('td')
+    if (!td) return
+    const h = document.createElement('div')
+    h.className = 'sample-area-handle'
+    Object.assign(h.style, {
+      position: 'absolute', right: '-6px', bottom: '-6px',
+      width: '14px', height: '14px',
+      background: '#4285f4', border: '2px solid #fff',
+      borderRadius: '2px', boxShadow: '0 0 0 2px #4285f4',
+      cursor: 'crosshair', zIndex: '10',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      color: '#fff', fontSize: '12px', fontWeight: 'bold', lineHeight: '1',
+      userSelect: 'none'
+    })
+    h.textContent = '+'
+    h.addEventListener('mousedown', onHandleMouseDown)
+    td.style.position = 'relative'
+    td.appendChild(h)
+    areaHandleEl = h
+  })
+}
+
+const removeAreaHandle = () => {
+  if (areaHandleEl) {
+    areaHandleEl.removeEventListener('mousedown', onHandleMouseDown)
+    if (areaHandleEl.parentNode) areaHandleEl.parentNode.removeChild(areaHandleEl)
+    areaHandleEl = null
+  }
+}
+
+const onHandleMouseDown = (e) => {
+  e.stopPropagation()
+  e.preventDefault()
+  extDragging.value = true
+  document.body.classList.add('sample-area-selecting')
+  document.addEventListener('mousemove', onExtMouseMove)
+  document.addEventListener('mouseup', onExtMouseUp)
+}
+
+const onExtMouseMove = (e) => {
+  if (!extDragging.value) return
+  const target = document.elementFromPoint(e.clientX, e.clientY)
+  if (!target) return
+  const info = getRowIdAndField(target)
+  if (!info) return
+  areaSelectedEndRowId.value = info.rowId
+  areaRenderTick.value++
+}
+
+const onExtMouseUp = () => {
+  extDragging.value = false
+  document.body.classList.remove('sample-area-selecting')
+  document.removeEventListener('mousemove', onExtMouseMove)
+  document.removeEventListener('mouseup', onExtMouseUp)
+  // 重新挂把手到新的最后一行
+  attachAreaHandle()
+}
+
+const getFieldByColId = (colId) => {
+  const grid = gridRef.value
+  if (!grid) return colId // fallback
+  const cols = grid.getColumns() || []
+  const col = cols.find(c => c.id === colId)
+  return col ? col.field : colId
+}
+
+const getAreaSelectedValues = () => {
+  if (!areaSelectedColumn.value) return []
+  const data = tableData.value
+  const sIdx = data.findIndex(r => String(r.id) === String(areaSelectedStartRowId.value))
+  const eIdx = data.findIndex(r => String(r.id) === String(areaSelectedEndRowId.value))
+  if (sIdx === -1 || eIdx === -1) return []
+  const min = Math.min(sIdx, eIdx)
+  const max = Math.max(sIdx, eIdx)
+  const field = areaSelectedColumn.value  // 已经是真实字段名
+  return data.slice(min, max + 1).map(r => ({
+    id: r.id,
+    sampleCode: r.sampleCode,
+    value: r[field]
+  }))
+}
+
+const writeClipboard = (text) => {
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'absolute'
+  textarea.style.left = '-9999px'
+  textarea.style.top = '0'
+  document.body.appendChild(textarea)
+  textarea.focus()
+  textarea.select()
+  textarea.setSelectionRange(0, textarea.value.length)
+  try {
+    document.execCommand('copy')
+    return true
+  } catch {
+    return false
+  } finally {
+    document.body.removeChild(textarea)
+  }
+}
+
+const copyAreaSelected = async () => {
+  const vals = getAreaSelectedValues()
+  if (vals.length === 0) {
+    showAlertDialog('请先在某一列拖动鼠标选取区域')
+    return
+  }
+  const text = vals.map(v => v.value != null ? String(v.value) : '').join('\n')
+  if (writeClipboard(text)) {
+    showAlertDialog(`已复制 ${vals.length} 个值`, 'success')
+  } else {
+    showAlertDialog('复制失败，请手动复制')
+  }
+}
+// ─────────────────────────────────────────────
 
 const onCellClick = ({ row }) => {
   selectSample(row)
@@ -3159,18 +3739,7 @@ const formatCardDate = (val) => {
 }
 
 const copyCardCode = (code) => {
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(code).catch(() => {})
-  } else {
-    const ta = document.createElement('textarea')
-    ta.value = code
-    ta.style.position = 'fixed'
-    ta.style.left = '-9999px'
-    document.body.appendChild(ta)
-    ta.select()
-    document.execCommand('copy')
-    document.body.removeChild(ta)
-  }
+  writeClipboard(code)
 }
 
 const selectSample = (row) => {
@@ -3371,6 +3940,7 @@ const openPhotoModal = () => {
 }
 
 const onThumbMouseEnter = (e, row) => {
+  if (showImagePreview.value || showPhotoModal.value) return
   if (!row.thumbnail) return
   // 优先用原图，缩略图兜底
   const thumbSrc = '/thumbnails/' + row.thumbnail
@@ -3405,6 +3975,7 @@ const onThumbMouseLeave = () => {
 }
 
 const openPhotoModalFor = (row) => {
+  selectSample(row)
   photoModalSample.value = row
   photoModalIndex.value = 0
   const temp = {}
@@ -3429,6 +4000,69 @@ const fetchPhotoModalImages = async (sampleId) => {
       photoModalImages.value = []
     }
   }
+}
+
+const fmt3 = (a, b, c) => {
+  return [(a != null && a !== '' ? a : '0'), (b != null && b !== '' ? b : '0'), (c != null && c !== '' ? c : '0')].join('x')
+}
+
+const startModalEdit = () => {
+  const s = photoModalSample.value
+  if (!s) return
+  Object.keys(editData).forEach(k => delete editData[k])
+  Object.assign(editData, {
+    sampleName: s.sampleName || '',
+    factoryCode: s.factoryCode || '',
+    factoryPrice: s.factoryPrice || '',
+    taxPrice: s.taxPrice || '',
+    packagingCn: s.packagingCn || '',
+    innerBoxCount: s.innerBoxCount || '',
+    cartonCapacity: s.cartonCapacity || '',
+    cartonLength: s.cartonLength || '',
+    cartonWidth: s.cartonWidth || '',
+    cartonHeight: s.cartonHeight || '',
+    cartonGrossWeight: s.cartonGrossWeight || '',
+    cartonNetWeight: s.cartonNetWeight || '',
+    packageLength: s.packageLength || '',
+    packageWidth: s.packageWidth || '',
+    packageHeight: s.packageHeight || '',
+    packagingEn: s.packagingEn || '',
+    sampleLength: s.sampleLength || '',
+    sampleWidth: s.sampleWidth || '',
+    sampleHeight: s.sampleHeight || '',
+    sampleGrossWeight: s.sampleGrossWeight || '',
+    sampleNetWeight: s.sampleNetWeight || '',
+    cartonVolume: s.cartonVolume || '',
+    cartonMaterialVolume: s.cartonMaterialVolume || '',
+    batteryInfo: s.batteryInfo || '',
+    certification: s.certification || '',
+    remark: s.remark || '',
+    contactPerson: s.contactPerson || '',
+    contactPhone: s.contactPhone || '',
+    mobile: s.mobile || '',
+    qq: s.qq || ''
+  })
+  editing.value = true
+}
+
+const saveModalEdit = async () => {
+  const s = photoModalSample.value
+  if (!s) return
+  try {
+    const payload = { ...editData, id: s.id }
+    const res = await api(`/samples/${s.id}`, { method: 'PUT', body: JSON.stringify(payload) })
+    if (res.code === 200 || res.id) {
+      Object.assign(s, editData)
+      editing.value = false
+      await loadTableData()
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+const cancelModalEdit = () => {
+  editing.value = false
 }
 
 const photoModalPrev = () => {
@@ -3468,6 +4102,15 @@ const closeDropdowns = (e) => {
       showPrintDropdown.value = false
     }
   }
+  // 点击表格外部清除选区
+  if (areaSelectedColumn.value && tableWrapRef.value && !tableWrapRef.value.contains(e.target)) {
+    // 如果点击在导入预览内，不清主表选区
+    if (!importPreviewWrapRef.value || !importPreviewWrapRef.value.contains(e.target)) {
+      clearAreaSelection()
+    }
+  }
+  // 导入预览选区清除
+  importArea.onDocClick(e)
 }
 
 const downloadTemplate = () => {
@@ -4238,6 +4881,40 @@ const onReportEscKey = (e) => {
   }
 }
 
+let areaCopyTextarea = null
+
+const onAreaCopyKey = (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.key !== 'c') return
+  if (!areaSelectedColumn.value) return
+  const vals = getAreaSelectedValues()
+  if (vals.length === 0) return
+  const text = vals.map(v => v.value != null ? String(v.value) : '').join('\n')
+  // 创建临时 textarea 并选中，让浏览器触发 copy 事件
+  areaCopyTextarea = document.createElement('textarea')
+  areaCopyTextarea.value = text
+  areaCopyTextarea.style.position = 'absolute'
+  areaCopyTextarea.style.left = '-9999px'
+  areaCopyTextarea.style.top = '0'
+  document.body.appendChild(areaCopyTextarea)
+  areaCopyTextarea.focus()
+  areaCopyTextarea.select()
+  areaCopyTextarea.setSelectionRange(0, areaCopyTextarea.value.length)
+}
+
+const onAreaCopyEvent = (e) => {
+  if (!areaSelectedColumn.value) return
+  const vals = getAreaSelectedValues()
+  if (vals.length === 0) return
+  const text = vals.map(v => v.value != null ? String(v.value) : '').join('\n')
+  e.clipboardData.setData('text/plain', text)
+  e.preventDefault()
+  // 清理临时 textarea
+  if (areaCopyTextarea && document.body.contains(areaCopyTextarea)) {
+    document.body.removeChild(areaCopyTextarea)
+    areaCopyTextarea = null
+  }
+}
+
 // 打开模态框（保留旧入口，如需使用原弹窗可改名调用）
 const openVendorConfirmModal = () => {
   initVcFields()
@@ -4952,7 +5629,8 @@ const defaultAdvForm = () => ({
   packageWidthMin: null, packageWidthMax: null, packageHeightMin: null, packageHeightMax: null,
   cartonLengthMin: null, cartonLengthMax: null,
   cartonWidthMin: null, cartonWidthMax: null, cartonHeightMin: null, cartonHeightMax: null,
-  innerBoxCountMin: null, innerBoxCountMax: null, batteryInfo: '', keyword: ''
+  innerBoxCountMin: null, innerBoxCountMax: null, batteryInfo: '', keyword: '',
+  createTimeMin: '', createTimeMax: '', updateTimeMin: '', updateTimeMax: ''
 })
 
 const advForm = reactive(defaultAdvForm())
@@ -6305,6 +6983,12 @@ const doAdvancedSearch = async () => {
   if (f.innerBoxCountMin != null) push('innerBoxCount', 'ge', f.innerBoxCountMin)
   if (f.innerBoxCountMax != null) push('innerBoxCount', 'le', f.innerBoxCountMax)
 
+  // 日期范围
+  if (f.createTimeMin) push('createTime', 'ge', f.createTimeMin + ' 00:00:00')
+  if (f.createTimeMax) push('createTime', 'le', f.createTimeMax + ' 23:59:59')
+  if (f.updateTimeMin) push('updateTime', 'ge', f.updateTimeMin + ' 00:00:00')
+  if (f.updateTimeMax) push('updateTime', 'le', f.updateTimeMax + ' 23:59:59')
+
   // 尺寸范围
   if (f.sampleLengthMin != null) push('sampleLength', 'ge', f.sampleLengthMin)
   if (f.sampleLengthMax != null) push('sampleLength', 'le', f.sampleLengthMax)
@@ -6336,7 +7020,6 @@ const doAdvancedSearch = async () => {
   activeSearchConditions.value = conditions
 
   try {
-    console.log('[ADV_SEARCH] conditions:', JSON.stringify(conditions))
     const res = await api(`/samples/search?current=${currentPage.value}&size=${pageSize.value}&sortField=${currentSortField.value}&sortOrder=${currentSortOrder.value}`, {
       method: 'POST',
       body: JSON.stringify({ conditions })
@@ -6392,6 +7075,19 @@ watch([customCodesText, customManufacturerCode], () => {
   }, 600)
 })
 
+// 导入预览打开/关闭时注册/销毁区域选取
+let importAreaSetupDone = false
+watch(showImportPreview, (v) => {
+  if (v && !importAreaSetupDone) {
+    importArea.setup()
+    importAreaSetupDone = true
+  }
+  if (!v && importAreaSetupDone) {
+    importArea.cleanup()
+    importAreaSetupDone = false
+  }
+})
+
 onMounted(() => {
   const route = useRoute()
   if (route.params.manufacturerCode) {
@@ -6401,7 +7097,18 @@ onMounted(() => {
   }
   document.addEventListener('click', closeDropdowns)
   window.addEventListener('keydown', onReportEscKey)
+  window.addEventListener('keydown', onAreaCopyKey, true)
+  document.addEventListener('copy', onAreaCopyEvent, true)
+  document.addEventListener('mousedown', onTableWrapMouseDown, true)
   if (tableWrapRef.value) {
+    // 虚拟滚动后重新挂选区把手
+    let handleScrollTimer = null
+    tableWrapRef.value.addEventListener('scroll', () => {
+      if (!areaHandleEl || !document.contains(areaHandleEl)) {
+        if (handleScrollTimer) clearTimeout(handleScrollTimer)
+        handleScrollTimer = setTimeout(attachAreaHandle, 150)
+      }
+    }, { passive: true })
     resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0]
       if (entry) {
@@ -6447,6 +7154,13 @@ watch(() => route.query.sampleCode, (sampleCode) => {
 onBeforeUnmount(() => {
   document.removeEventListener('click', closeDropdowns)
   window.removeEventListener('keydown', onReportEscKey)
+  window.removeEventListener('keydown', onAreaCopyKey, true)
+  document.removeEventListener('copy', onAreaCopyEvent, true)
+  document.removeEventListener('mousedown', onTableWrapMouseDown, true)
+  document.removeEventListener('mousemove', onDocMouseMove)
+  document.removeEventListener('mouseup', onDocMouseUp)
+  if (tableWrapRef.value) {
+  }
   if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null
@@ -7175,4 +7889,10 @@ async function refDeleteSelectedPkgs() {
 
 .spin { animation: importSpin 0.8s linear infinite; }
 @keyframes importSpin { 100% { transform: rotate(360deg); } }
+
+/* 列区域选取时禁用文本选中 */
+.sample-area-selecting *, .import-area-selecting * { user-select: none !important; -webkit-user-select: none !important; }
+
+/* 列区域选中单元格高亮 */
+.area-selected-cell { background: #dceefb !important; outline: 1px solid #007aff; outline-offset: -1px; }
 </style>

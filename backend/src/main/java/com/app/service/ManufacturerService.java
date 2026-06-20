@@ -3,6 +3,7 @@ package com.app.service;
 import com.app.common.PageResult;
 import com.app.common.Result;
 import com.app.dto.ImportResult;
+import com.app.dto.SearchCondition;
 import com.app.entity.Manufacturer;
 import com.app.mapper.ManufacturerMapper;
 import com.app.util.UserContext;
@@ -13,6 +14,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.BeanPropertyRowMapper;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -21,6 +24,10 @@ import org.springframework.web.multipart.MultipartFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -35,6 +42,9 @@ public class ManufacturerService {
     @Autowired
     private ManufacturerMapper manufacturerMapper;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     @Value("${app.upload.image-path}")
     private String imagePath;
 
@@ -46,10 +56,39 @@ public class ManufacturerService {
         SORT_FIELD_MAP.put("createTime", Manufacturer::getCreateTime);
     }
 
-    public PageResult<Manufacturer> list(long current, long size, String keyword, String sortField, String sortOrder) {
+    private static final Map<String, String> FIELD_COL_MAP = new LinkedHashMap<>();
+    static {
+        FIELD_COL_MAP.put("manufacturerCode", "manufacturer_code");
+        FIELD_COL_MAP.put("name", "name");
+        FIELD_COL_MAP.put("boothNo", "booth_no");
+        FIELD_COL_MAP.put("boothType", "booth_type");
+        FIELD_COL_MAP.put("contact1", "contact1");
+        FIELD_COL_MAP.put("phone1", "phone1");
+        FIELD_COL_MAP.put("mobile1", "mobile1");
+        FIELD_COL_MAP.put("mainCard", "main_card");
+        FIELD_COL_MAP.put("subCard", "sub_card");
+        FIELD_COL_MAP.put("remark", "remark");
+        FIELD_COL_MAP.put("address", "address");
+        FIELD_COL_MAP.put("certificate", "certificate");
+        FIELD_COL_MAP.put("registrant", "registrant");
+        FIELD_COL_MAP.put("modifier", "modifier");
+        FIELD_COL_MAP.put("television", "television");
+        FIELD_COL_MAP.put("createTime", "create_time");
+        FIELD_COL_MAP.put("updateTime", "update_time");
+        FIELD_COL_MAP.put("expiryDate", "expiry_date");
+    }
+
+    public PageResult<Manufacturer> list(long current, long size, String keyword, String sortField, String sortOrder,
+            String manufacturerCode, String boothNo, String boothType, String name, String contact1,
+            String phone1, String mobile1, String fax, String email, String boothManager,
+            String mainCard, String subCard, String remark, String summary, String address,
+            String certificate, String registrant, String modifier,
+            String createDateStart, String createDateEnd, String updateDateStart, String updateDateEnd,
+            String expiryDateStart, String expiryDateEnd, String television) {
         Page<Manufacturer> page = new Page<>(current, size);
         LambdaQueryWrapper<Manufacturer> qw = new LambdaQueryWrapper<>();
 
+        // 关键字搜索
         if (StringUtils.hasText(keyword)) {
             qw.and(w -> w
                 .like(Manufacturer::getName, keyword)
@@ -65,9 +104,105 @@ public class ManufacturerService {
                 .like(Manufacturer::getContact1, keyword));
         }
 
+        // 综合查询 - 精确字段模糊匹配（至少2个字符才生效）
+        if (StringUtils.hasText(manufacturerCode) && manufacturerCode.trim().length() >= 2) qw.like(Manufacturer::getManufacturerCode, manufacturerCode.trim());
+        if (StringUtils.hasText(boothNo) && boothNo.trim().length() >= 2) qw.like(Manufacturer::getBoothNo, boothNo.trim());
+        if (StringUtils.hasText(boothType) && boothType.trim().length() >= 2) qw.like(Manufacturer::getBoothType, boothType.trim());
+        if (StringUtils.hasText(name) && name.trim().length() >= 2) qw.like(Manufacturer::getName, name.trim());
+        if (StringUtils.hasText(contact1) && contact1.trim().length() >= 2) qw.like(Manufacturer::getContact1, contact1.trim());
+        if (StringUtils.hasText(phone1) && phone1.trim().length() >= 2) qw.like(Manufacturer::getPhone1, phone1.trim());
+        if (StringUtils.hasText(mobile1) && mobile1.trim().length() >= 2) qw.like(Manufacturer::getMobile1, mobile1.trim());
+        if (StringUtils.hasText(mainCard) && mainCard.trim().length() >= 2) qw.like(Manufacturer::getMainCard, mainCard.trim());
+        if (StringUtils.hasText(subCard) && subCard.trim().length() >= 2) qw.like(Manufacturer::getSubCard, subCard.trim());
+        if (StringUtils.hasText(remark) && remark.trim().length() >= 2) qw.like(Manufacturer::getRemark, remark.trim());
+        if (StringUtils.hasText(address) && address.trim().length() >= 2) qw.like(Manufacturer::getAddress, address.trim());
+        if (StringUtils.hasText(certificate) && certificate.trim().length() >= 2) qw.like(Manufacturer::getCertificate, certificate.trim());
+        if (StringUtils.hasText(registrant) && registrant.trim().length() >= 2) qw.like(Manufacturer::getRegistrant, registrant.trim());
+        if (StringUtils.hasText(modifier) && modifier.trim().length() >= 2) qw.like(Manufacturer::getModifier, modifier.trim());
+
+        // 日期范围查询
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        if (StringUtils.hasText(createDateStart)) {
+            LocalDateTime start = LocalDate.parse(createDateStart, dtf).atStartOfDay();
+            qw.ge(Manufacturer::getCreateTime, start);
+        }
+        if (StringUtils.hasText(createDateEnd)) {
+            LocalDateTime end = LocalDate.parse(createDateEnd, dtf).atTime(LocalTime.MAX);
+            qw.le(Manufacturer::getCreateTime, end);
+        }
+        if (StringUtils.hasText(updateDateStart)) {
+            LocalDateTime start = LocalDate.parse(updateDateStart, dtf).atStartOfDay();
+            qw.ge(Manufacturer::getUpdateTime, start);
+        }
+        if (StringUtils.hasText(updateDateEnd)) {
+            LocalDateTime end = LocalDate.parse(updateDateEnd, dtf).atTime(LocalTime.MAX);
+            qw.le(Manufacturer::getUpdateTime, end);
+        }
+        if (StringUtils.hasText(expiryDateStart)) {
+            qw.ge(Manufacturer::getExpiryDate, expiryDateStart);
+        }
+        if (StringUtils.hasText(expiryDateEnd)) {
+            qw.le(Manufacturer::getExpiryDate, expiryDateEnd);
+        }
+
         applySort(page, qw, sortField, sortOrder);
         manufacturerMapper.selectPage(page, qw);
         return new PageResult<>(page.getRecords(), page.getTotal(), page.getCurrent(), page.getSize());
+    }
+
+    public PageResult<Manufacturer> advancedSearch(long current, long size,
+            List<SearchCondition> conditions, String sortField, String sortOrder) {
+        if (conditions == null || conditions.isEmpty()) {
+            return list(current, size, null, sortField, sortOrder,
+                    null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        }
+        // 将 conditions 转为独立参数，复用 list 方法（MyBatis-Plus 处理中文编码正确）
+        String manufacturerCode = null, boothNo = null, boothType = null, name = null, contact1 = null;
+        String phone1 = null, mobile1 = null, mainCard = null, subCard = null, remark = null;
+        String address = null, certificate = null, registrant = null, modifier = null, television = null;
+        String createDateStart = null, createDateEnd = null, updateDateStart = null, updateDateEnd = null;
+        String expiryDateStart = null, expiryDateEnd = null;
+
+        for (SearchCondition c : conditions) {
+            if (!c.isValid()) continue;
+            String val = c.getValue();
+            String op = c.getOperator();
+            switch (c.getField()) {
+                case "manufacturerCode": if ("like".equals(op)) manufacturerCode = val; break;
+                case "name": if ("like".equals(op)) name = val; break;
+                case "boothNo": if ("like".equals(op)) boothNo = val; break;
+                case "boothType": if ("like".equals(op)) boothType = val; break;
+                case "contact1": if ("like".equals(op)) contact1 = val; break;
+                case "phone1": if ("like".equals(op)) phone1 = val; break;
+                case "mobile1": if ("like".equals(op)) mobile1 = val; break;
+                case "mainCard": if ("like".equals(op)) mainCard = val; break;
+                case "subCard": if ("like".equals(op)) subCard = val; break;
+                case "remark": if ("like".equals(op)) remark = val; break;
+                case "address": if ("like".equals(op)) address = val; break;
+                case "certificate": if ("like".equals(op)) certificate = val; break;
+                case "registrant": if ("like".equals(op)) registrant = val; break;
+                case "modifier": if ("like".equals(op)) modifier = val; break;
+                case "television": if ("like".equals(op)) television = val; break;
+                case "createTime":
+                    if ("ge".equals(op)) createDateStart = val;
+                    else if ("le".equals(op)) createDateEnd = val;
+                    break;
+                case "updateTime":
+                    if ("ge".equals(op)) updateDateStart = val;
+                    else if ("le".equals(op)) updateDateEnd = val;
+                    break;
+                case "expiryDate":
+                    if ("ge".equals(op)) expiryDateStart = val;
+                    else if ("le".equals(op)) expiryDateEnd = val;
+                    break;
+            }
+        }
+        return list(current, size, null, sortField, sortOrder,
+                manufacturerCode, boothNo, boothType, name, contact1, phone1, mobile1,
+                null, null, null, mainCard, subCard, remark, null, address,
+                certificate, registrant, modifier,
+                createDateStart, createDateEnd, updateDateStart, updateDateEnd,
+                expiryDateStart, expiryDateEnd, television);
     }
 
     private void applySort(Page<Manufacturer> page, LambdaQueryWrapper<Manufacturer> qw, String sortField, String sortOrder) {
