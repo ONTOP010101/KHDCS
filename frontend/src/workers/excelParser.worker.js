@@ -18,7 +18,7 @@ self.onmessage = async (e) => {
       type: 'array',
       cellFormula: false,
       cellStyles: false,
-      cellDates: true,
+      cellDates: false,
       sheetStubs: false,
       bookVBA: false,
       bookFiles: false
@@ -62,7 +62,7 @@ self.onmessage = async (e) => {
     self.postMessage({ type: 'progress', stage: '正在提取表格数据...', progress: 35 })
 
     // 转为二维数组
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' })
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false })
 
     self.postMessage({ type: 'progress', stage: '正在检测表头...', progress: 45 })
 

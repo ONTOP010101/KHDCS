@@ -108,9 +108,10 @@ public class SampleController {
     @PostMapping("/match-by-codes")
     public Result<java.util.List<Sample>> matchByCodes(@RequestBody java.util.Map<String, Object> body) {
         String type = (String) body.get("type");
+        String manufacturerCode = (String) body.get("manufacturerCode");
         @SuppressWarnings("unchecked")
         java.util.List<String> codes = (java.util.List<String>) body.get("codes");
-        return Result.success(sampleService.matchByCodes(type, codes));
+        return Result.success(sampleService.matchByCodes(type, codes, manufacturerCode));
     }
 
     @PostMapping("/import")

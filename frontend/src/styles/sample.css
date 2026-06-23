@@ -4104,8 +4104,10 @@
   padding: 0 12px !important;
 }
 .bmc-btn.active {
-  outline: 2px solid #007aff;
-  outline-offset: -2px;
+  color: #fff;
+  background: linear-gradient(135deg, #007aff 0%, #0a84ff 100%);
+  box-shadow: 0 2px 8px rgba(0,122,255,0.25);
+  border-color: transparent;
 }
 .bmc-btn[disabled] {
   opacity: 0.6;
@@ -4605,10 +4607,39 @@
   border: 1px solid rgba(0,122,255,0.08);
 }
 
+.import-filter-btn {
+  background: #fff !important;
+  border-color: #d0d5dd !important;
+  color: #555 !important;
+  transition: all .15s;
+}
+
+.import-filter-btn.active.import-filter-cat {
+  background: #ffeaea !important;
+  border-color: #e74c3c !important;
+  color: #c0392b !important;
+}
+
+.import-filter-btn.active.import-filter-pkg {
+  background: #fff8e1 !important;
+  border-color: #f39c12 !important;
+  color: #b8730a !important;
+}
+
+.import-filter-btn.active.import-filter-dup {
+  background: #e8f5e9 !important;
+  border-color: #27ae60 !important;
+  color: #1e8449 !important;
+}
+
 .import-stat {
   font-size: 13px;
   font-weight: 600;
   color: rgba(29,29,31,0.65);
+}
+
+.sr-toast {
+  z-index: 999999 !important;
 }
 
 .import-stat strong {

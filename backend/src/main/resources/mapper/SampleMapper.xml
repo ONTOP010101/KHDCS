@@ -19,6 +19,7 @@
         </if>
         ORDER BY
         <choose>
+            <when test="sortField == 'recent'">GREATEST(COALESCE(update_time,'1970-01-01'), COALESCE(create_time,'1970-01-01'))</when>
             <when test="sortField == 'sample_name'">sample_name</when>
             <when test="sortField == 'category'">category</when>
             <when test="sortField == 'supplier'">supplier</when>

@@ -376,7 +376,9 @@ public class ImageService {
 
     public String getImageExtByHash(String hash) {
         LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Image::getHash, hash).select(Image::getFilePath);
+        wrapper.eq(Image::getHash, hash)
+                .orderByDesc(Image::getCreateTime)
+                .last("LIMIT 1");
         Image image = imageMapper.selectOne(wrapper);
         if (image != null && image.getFilePath() != null) {
             String name = image.getFilePath();
@@ -388,7 +390,9 @@ public class ImageService {
 
     public byte[] loadImage(String hash) {
         LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Image::getHash, hash);
+        wrapper.eq(Image::getHash, hash)
+                .orderByDesc(Image::getCreateTime)
+                .last("LIMIT 1");
         Image image = imageMapper.selectOne(wrapper);
         if (image == null) throw new BusinessException(404, "\u56fe\u7247\u4e0d\u5b58\u5728");
 
@@ -402,15 +406,26 @@ public class ImageService {
 
     public Resource loadImageAsResource(String hash) {
         LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Image::getHash, hash);
+        wrapper.eq(Image::getHash, hash)
+                .orderByDesc(Image::getCreateTime)
+                .last("LIMIT 1");
         Image image = imageMapper.selectOne(wrapper);
         if (image == null) throw new BusinessException(404, "\u56fe\u7247\u4e0d\u5b58\u5728");
 
+        if (imagePath == null || image.getFilePath() == null || image.getFilePath().isEmpty()) {
+            throw new BusinessException(404, "\u56fe\u7247\u6587\u4ef6\u8def\u5f84\u65e0\u6548");
+        }
+
         try {
             Path fullPath = Paths.get(imagePath, image.getFilePath());
+            if (!Files.exists(fullPath)) {
+                throw new BusinessException(404, "\u56fe\u7247\u6587\u4ef6\u4e0d\u5b58\u5728");
+            }
             InputStream is = Files.newInputStream(fullPath);
             return new InputStreamResource(is);
-        } catch (IOException e) {
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
             throw new BusinessException(404, "\u56fe\u7247\u6587\u4ef6\u4e0d\u5b58\u5728");
         }
     }

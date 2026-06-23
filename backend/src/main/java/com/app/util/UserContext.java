@@ -24,6 +24,15 @@ public class UserContext {
         return null;
     }
 
+    public static String getRealName() {
+        HttpServletRequest request = getRequest();
+        if (request != null) {
+            Object realName = request.getAttribute("realName");
+            return realName != null ? (String) realName : null;
+        }
+        return null;
+    }
+
     public static Long getRoleId() {
         HttpServletRequest request = getRequest();
         if (request != null) {

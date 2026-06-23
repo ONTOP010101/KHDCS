@@ -99,6 +99,8 @@ public class SampleService {
         FIELD_COL_MAP.put("cartonHeight", "carton_height");
         FIELD_COL_MAP.put("createTime", "create_time");
         FIELD_COL_MAP.put("updateTime", "update_time");
+        FIELD_COL_MAP.put("registrant", "registrant");
+        FIELD_COL_MAP.put("modifier", "modifier");
     }
 
     static {
@@ -301,11 +303,13 @@ public class SampleService {
         Long total = jdbcTemplate.queryForObject(countSql, Long.class, params.toArray());
 
         // Sort
-        String dbSortField = FIELD_COL_MAP.getOrDefault(sortField, "create_time");
         boolean asc = !"desc".equalsIgnoreCase(sortOrder);
         if ("hasThumbnail".equals(sortField)) {
             sql.append(" ORDER BY (SELECT COUNT(1) FROM sample_thumbnail WHERE sample_id = samples.id) ").append(asc ? "ASC" : "DESC");
+        } else if ("recent".equals(sortField)) {
+            sql.append(" ORDER BY GREATEST(COALESCE(update_time,'1970-01-01'), COALESCE(create_time,'1970-01-01')) ").append(asc ? "ASC" : "DESC");
         } else {
+            String dbSortField = FIELD_COL_MAP.getOrDefault(sortField, "create_time");
             sql.append(" ORDER BY ").append(dbSortField).append(" ").append(asc ? "ASC" : "DESC");
         }
 
@@ -395,6 +399,12 @@ public class SampleService {
                 if ("image".equals(cond.getField())) {
                     if (where.length() > 0) where.append(" AND ");
                     where.append("EXISTS (SELECT 1 FROM sample_thumbnail WHERE sample_id = samples.id)");
+                    continue;
+                }
+
+                if ("video".equals(cond.getField())) {
+                    if (where.length() > 0) where.append(" AND ");
+                    where.append("EXISTS (SELECT 1 FROM videos WHERE sample_id = samples.id)");
                     continue;
                 }
 
@@ -495,6 +505,8 @@ public class SampleService {
         boolean asc = !"desc".equalsIgnoreCase(sortOrder);
         if ("hasThumbnail".equals(sortField)) {
             orderClause = "ORDER BY (SELECT COUNT(1) FROM sample_thumbnail WHERE sample_id = samples.id) " + (asc ? "ASC" : "DESC");
+        } else if ("recent".equals(sortField)) {
+            orderClause = "ORDER BY GREATEST(COALESCE(update_time,'1970-01-01'), COALESCE(create_time,'1970-01-01')) " + (asc ? "ASC" : "DESC");
         } else if (sortField != null && !sortField.isEmpty()) {
             String sortCol = FIELD_COL_MAP.get(sortField);
             if (sortCol == null) sortCol = "create_time";
@@ -555,6 +567,9 @@ public class SampleService {
         Long userId = UserContext.getUserId();
         sample.setCreateBy(userId);
         sample.setUpdateBy(userId);
+        if (sample.getRegistrant() == null) {
+            sample.setRegistrant(UserContext.getRealName());
+        }
         sampleMapper.insert(sample);
         return sample;
     }
@@ -567,6 +582,7 @@ public class SampleService {
         }
         sample.setId(id);
         sample.setUpdateBy(UserContext.getUserId());
+        sample.setUpdateTime(null); // 清空后由MyBatis-Plus自动填充当前时间
         sampleMapper.updateById(sample);
     }
 
@@ -621,7 +637,7 @@ public class SampleService {
         return null;
     }
 
-    public java.util.List<Sample> matchByCodes(String type, java.util.List<String> codes) {
+    public java.util.List<Sample> matchByCodes(String type, java.util.List<String> codes, String manufacturerCode) {
         if (codes == null || codes.isEmpty()) {
             return new java.util.ArrayList<>();
         }
@@ -631,8 +647,12 @@ public class SampleService {
         } else {
             wrapper.in(Sample::getSampleCode, codes);
         }
-        wrapper.select(Sample::getId, Sample::getSampleCode, Sample::getFactoryCode, Sample::getSampleName, Sample::getManufacturerCode);
-        return sampleMapper.selectList(wrapper);
+        if (manufacturerCode != null && !manufacturerCode.isEmpty()) {
+            wrapper.eq(Sample::getManufacturerCode, manufacturerCode);
+        }
+        java.util.List<Sample> result = sampleMapper.selectList(wrapper);
+        fillThumbnails(result);
+        return result;
     }
 
     @Transactional
@@ -743,8 +763,13 @@ public class SampleService {
                 // 复合列拆分
                 applySplits(sample, compositeValues);
 
-                // 自动生成公司编号：公司编号为空但样品名称有值时，基于现有编号最大值+1生成
-                if (!StringUtils.hasText(sample.getSampleCode()) && StringUtils.hasText(sample.getSampleName())) {
+                // 必须提供厂商编号或公司编号
+                if (!StringUtils.hasText(sample.getManufacturerCode()) && !StringUtils.hasText(sample.getSampleCode())) {
+                    rowErrors.append("厂商编号和公司编号至少需要一个; ");
+                }
+
+                // 自动生成公司编号：有厂商编号、无公司编号、有样品名称时 → 新增，自动生成编号
+                if (!StringUtils.hasText(sample.getSampleCode()) && StringUtils.hasText(sample.getManufacturerCode()) && StringUtils.hasText(sample.getSampleName())) {
                     Set<String> allExisting = new HashSet<>(existingCodes);
                     allExisting.addAll(importedCodes);
                     String generatedCode = generateNextSampleCode(allExisting);
@@ -808,10 +833,13 @@ public class SampleService {
                     }
                 }
 
+                if (sample.getRegistrant() == null) {
+                    sample.setRegistrant(UserContext.getRealName());
+                }
                 sampleMapper.insert(sample);
                 successCount++;
             } catch (Exception e) {
-                log.warn("导入第{}行失败: {}", i + 1, e.getMessage());
+                log.warn("导入第{}行失败", i + 1, e.getMessage());
                 Map<String, String> failRow = new LinkedHashMap<>();
                 failRow.put("row", String.valueOf(i + 1));
                 for (int j = 0; j < headers.size(); j++) {
@@ -860,8 +888,13 @@ public class SampleService {
                 StringBuilder rowErrors = new StringBuilder();
                 boolean isDuplicate = false;
 
-                // 自动生成公司编号：公司编号为空但样品名称有值时，基于现有编号最大值+1生成
-                if (!StringUtils.hasText(sample.getSampleCode()) && StringUtils.hasText(sample.getSampleName())) {
+                // 必须提供厂商编号或公司编号
+                if (!StringUtils.hasText(sample.getManufacturerCode()) && !StringUtils.hasText(sample.getSampleCode())) {
+                    rowErrors.append("厂商编号和公司编号至少需要一个; ");
+                }
+
+                // 自动生成公司编号：有厂商编号、无公司编号、有样品名称时 → 新增，自动生成编号
+                if (!StringUtils.hasText(sample.getSampleCode()) && StringUtils.hasText(sample.getManufacturerCode()) && StringUtils.hasText(sample.getSampleName())) {
                     Set<String> allExisting = new HashSet<>(CACHED_EXISTING_CODES.keySet());
                     allExisting.addAll(importedCodes);
                     String generatedCode = generateNextSampleCode(allExisting);
@@ -949,11 +982,14 @@ public class SampleService {
                     }
                 }
 
+                if (sample.getRegistrant() == null) {
+                    sample.setRegistrant(UserContext.getRealName());
+                }
                 sampleMapper.insert(sample);
 
                 successCount++;
             } catch (Exception e) {
-                log.warn("批量导入第{}条失败: {}", i + 1, e.getMessage());
+                log.warn("批量导入第{}条失败", i + 1, e.getMessage());
                 Map<String, String> failRow = new LinkedHashMap<>();
                 failRow.put("row", String.valueOf(i + 1));
                 failRow.put("公司编号", sample.getSampleCode() != null ? sample.getSampleCode() : "");

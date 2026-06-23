@@ -4,7 +4,10 @@
       <div class="sample-form-top">
         <div class="sample-form-title">
         </div>
-        <div class="sample-form-actions">
+        <div class="sample-form-actions" style="margin-right:180px">
+          <button v-if="currentSample && currentSample.id && sampleVideos.length > 0" class="sample-btn sample-btn-blue" :title="'查看视频 (' + sampleVideos.length + ')'" @click="showVideoPreviewModal = true">
+            <VideoIcon :size="14" /> {{ sampleVideos.length }}
+          </button>
           <template v-if="formMode === 'readonly' && currentSample">
             <button class="sample-btn sample-btn-ghost" title="重置" @click="resetForm">
               <RotateCcw :size="14" />
@@ -19,9 +22,6 @@
           <button class="sample-btn sample-btn-ghost" :title="formVisible ? '隐藏展示区' : '显示展示区'" @click="formVisible = !formVisible">
             <EyeOff v-if="formVisible" :size="14" />
             <Eye v-else :size="14" />
-          </button>
-          <button v-if="currentSample && currentSample.id && sampleVideos.length > 0" class="sample-btn sample-btn-ghost" :title="'查看视频 (' + sampleVideos.length + ')'" @click="showVideoPreviewModal = true">
-            <VideoIcon :size="14" />
           </button>
         </div>
       </div>
@@ -55,6 +55,7 @@
                     :title="formData[sf.key] || ''"
                     :style="sf.width ? { flex: '0 0 ' + sf.width + 'px', minWidth: sf.width + 'px' } : {}"
                     v-model="formData[sf.key]"
+                    @input="onGroupInput(sf.key)"
                   />
                 </div>
               </div>
@@ -78,7 +79,7 @@
             <div class="sample-image-strip-single">
               <img
                 :src="currentSampleImages[stripIndex]?.thumbnailPath ? '/thumbnails/' + currentSampleImages[stripIndex]?.thumbnailPath : '/images/' + currentSampleImages[stripIndex]?.filePath"
-                @click="viewOriginal"
+                @click.stop="viewOriginal"
                 style="cursor:pointer"
               />
               <button v-if="currentSampleImages.length > 1" class="spm-strip-nav spm-strip-prev" @click="stripPrev">
@@ -214,7 +215,7 @@
           :row-config="{ isHover: true, isCurrent: true, keyField: 'id' }"
           :cell-config="{ height: 44 }"
           :checkbox-config="{ highlight: true, range: true }"
-          :sort-config="{ trigger: 'header', remote: true, defaultSort: { field: 'createTime', order: 'desc' } }"
+          :sort-config="{ trigger: 'header', remote: true, defaultSort: { field: 'recent', order: 'desc' } }"
           :scroll-y="{ enabled: true, gt: 0, oSize: 0, rSize: 60, rHeight: 44 }"
           :virtual-y-config="{ enabled: true, gt: 0 }"
           :virtual-x-config="{ enabled: true, gt: 20 }"
@@ -260,7 +261,7 @@
                 <div class="card-checkbox" :class="{ checked: isCardSelected(item) }" @click.stop="toggleCardSelect(item)">
                   <Check v-if="isCardSelected(item)" :size="14" />
                 </div>
-                <img v-if="item.firstImageHash || item.thumbnail" :src="item.firstImageHash ? '/images/view/hash/' + item.firstImageHash : '/thumbnails/' + item.thumbnail" :data-thumb="item.thumbnail" @error="onCardImgError" @click.stop="openPhotoModalFor(item)" loading="lazy" decoding="async" />
+                <img v-if="item.thumbnail || item.firstImageHash" :src="item.thumbnail ? '/thumbnails/' + item.thumbnail : '/images/view/hash/' + item.firstImageHash" :data-thumb="item.thumbnail" @error="onCardImgError" @click.stop="openPhotoModalFor(item)" loading="lazy" decoding="async" />
                 <div v-else class="sample-card-no-img" @click.stop="openPhotoModalFor(item)"><ImageIcon :size="36" /></div>
               </div>
               <div class="sample-card-body">
@@ -270,7 +271,7 @@
                   <span class="card-label">货号</span><span class="card-val" :title="item.factoryCode">{{ item.factoryCode || '-' }}</span>
                 </div>
                 <div class="sample-card-field">
-                  <span class="card-label">装量</span><span class="card-val" :title="(item.innerBoxCount ?? '-') + ' / ' + (item.cartonCapacity ?? '-')">{{ item.innerBoxCount != null ? item.innerBoxCount : '-' }} / {{ item.cartonCapacity != null ? item.cartonCapacity : '-' }}</span>
+                  <span class="card-label">装量</span><span class="card-val" :title="(item.innerBoxCount ?? '0') + ' / ' + (item.cartonCapacity ?? '0')">{{ item.innerBoxCount != null ? item.innerBoxCount : '0' }} / {{ item.cartonCapacity != null ? item.cartonCapacity : '0' }}</span>
                   <span class="card-label">毛/净</span><span class="card-val" :title="(item.cartonGrossWeight ?? '-') + ' / ' + (item.cartonNetWeight ?? '-')">{{ item.cartonGrossWeight != null ? item.cartonGrossWeight : '-' }} / {{ item.cartonNetWeight != null ? item.cartonNetWeight : '-' }}</span>
                 </div>
                 <div class="sample-card-field">
@@ -410,6 +411,72 @@
         </div>
       </div>
     </div>
+
+    </Teleport>
+
+    <!-- 货号重复冲突解决模态框 -->
+    <Teleport to="body">
+    <div v-if="showBatchConflictModal" class="batch-conflict-modal-overlay" @click.self="cancelBatchConflict">
+      <div class="batch-conflict-modal">
+        <div class="batch-conflict-modal-header">
+          <strong>货号重复 - 请选择目标样品</strong>
+          <span class="bm-info-hint" style="margin-left:12px">以下货号在厂商内存在多条记录，请为每个货号指定目标</span>
+          <div style="flex:1"></div>
+          <button class="modal-close-btn" @click="cancelBatchConflict"><X :size="16" /></button>
+        </div>
+        <div class="batch-conflict-modal-body">
+          <div v-for="conflict in batchConflicts" :key="conflict.code" class="batch-conflict-group">
+            <div class="batch-conflict-group-header">
+              <img v-if="conflict.uploadPreviewUrl" :src="conflict.uploadPreviewUrl" class="batch-conflict-upload-img" @click="conflictPreviewSrc = conflict.uploadPreviewUrl" />
+              <div style="flex:1">
+                <span class="batch-conflict-code-label">货号: <strong>{{ conflict.code }}</strong></span>
+                <span class="batch-conflict-count">共 {{ conflict.samples.length }} 条匹配</span>
+              </div>
+              <button class="batch-conflict-remove-btn" @click="removeConflictCode(conflict.code)"><Trash2 :size="14" /> 移除本条</button>
+            </div>
+            <vxe-grid
+              :columns="conflictGridColumns"
+              :data="conflict.samples"
+              :row-config="{ isCurrent: false, isHover: true }"
+              :checkbox-config="{ highlight: true, range: true }"
+              @checkbox-change="({ row }) => toggleConflictRow(conflict, row)"
+              @checkbox-all="({ records }) => toggleConflictAll(conflict, records)"
+              max-height="280"
+              size="small"
+              border
+              class="batch-conflict-table"
+              header-align="center"
+              :toolbar-config="{ zoom: true, custom: true }"
+            >
+              <template #conflictImage="{ row }">
+                <img
+                  v-if="row._thumb || row.thumbnail || row.firstImageHash"
+                  :src="row._thumb ? '/thumbnails/' + row._thumb : (row.thumbnail ? '/thumbnails/' + row.thumbnail : '/images/view/hash/' + row.firstImageHash)"
+                  style="width:48px;height:48px;object-fit:cover;border-radius:4px;cursor:pointer"
+                  @click="conflictPreviewSrc = row.firstImageHash ? '/images/view/hash/' + row.firstImageHash : (row._thumb ? '/thumbnails/' + row._thumb : (row.thumbnail ? '/thumbnails/' + row.thumbnail : ''))"
+                />
+                <span v-else style="color:#ccc;font-size:12px">暂无</span>
+              </template>
+            </vxe-grid>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <span v-if="conflictValidationMsg" class="conflict-validation-msg">{{ conflictValidationMsg }}</span>
+          <button class="sample-btn sample-btn-ghost" @click="cancelBatchConflict">取消</button>
+          <button class="sample-btn sample-btn-primary" @click="confirmConflictSelection">
+            确认选择并继续匹配
+          </button>
+        </div>
+      </div>
+    </div>
+    </Teleport>
+
+    <!-- 冲突图片预览 -->
+    <Teleport to="body">
+    <div v-if="conflictPreviewSrc" class="conflict-img-preview-overlay" @click.self="conflictPreviewSrc = ''">
+      <button class="conflict-img-preview-close" @click="conflictPreviewSrc = ''"><X :size="24" /></button>
+      <img :src="conflictPreviewSrc" style="max-width:90vw;max-height:90vh;object-fit:contain;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.3)" />
+    </div>
     </Teleport>
 
     <Teleport to="body">
@@ -529,7 +596,12 @@
           </template>
         </div>
         <div class="modal-footer">
-          <button class="sample-btn sample-btn-primary" @click="showBatchResultModal = false">知道了</button>
+          <template v-if="(batchResult.failFiles?.length || 0) + (batchResult.unmatchedFiles?.length || 0) > 0">
+            <button class="sample-btn sample-btn-primary" @click="downloadFailedZip">
+              <Download :size="14" /> 下载失败/未匹配图片 ({{ (batchResult.failFiles?.length || 0) + (batchResult.unmatchedFiles?.length || 0) }} 张 ZIP)
+            </button>
+          </template>
+          <button class="sample-btn sample-btn-ghost" @click="showBatchResultModal = false">关闭</button>
         </div>
       </div>
     </div>
@@ -565,7 +637,7 @@
                   <div><span style="color:rgba(29,29,31,0.4)">出厂货号：</span>{{ scanPrintResult.factoryCode || scanPrintResult.packageCode || '-' }}</div>
                   <div><span style="color:rgba(29,29,31,0.4)">摊位号：</span>{{ scanPrintResult.boothNo || '-' }}</div>
                   <div><span style="color:rgba(29,29,31,0.4)">中文包装：</span>{{ scanPrintResult.packagingCn || '-' }}</div>
-                  <div><span style="color:rgba(29,29,31,0.4)">内盒/装箱：</span>{{ scanPrintResult.innerBoxCount || '-' }}/{{ scanPrintResult.cartonCapacity || '-' }}</div>
+                  <div><span style="color:rgba(29,29,31,0.4)">内盒/装箱：</span>{{ scanPrintResult.innerBoxCount != null ? scanPrintResult.innerBoxCount : '0' }}/{{ scanPrintResult.cartonCapacity || '-' }}</div>
                 </div>
                 <div style="margin-top:6px;font-size:12px;color:rgba(29,29,31,0.7)">
                   <span style="color:rgba(29,29,31,0.4)">样品名称：</span>{{ scanPrintResult.sampleName || '-' }}
@@ -759,13 +831,13 @@
           <div v-else class="video-preview-list">
             <div v-for="(video, idx) in sampleVideos" :key="video.id" class="video-preview-item" :class="{ active: videoPreviewIndex === idx }" @click="videoPreviewIndex = idx">
               <button class="video-preview-del" @click.stop="deleteSampleVideo(video.id, idx)"><X :size="12" /></button>
-              <video :src="'/videos/file/' + video.filePath" preload="metadata" class="video-preview-thumb"></video>
+              <video :src="'/videos/file/' + video.sampleId + '/' + (video.fileName || video.filePath)" preload="metadata" class="video-preview-thumb"></video>
               <div class="video-preview-name">{{ video.fileName }}</div>
               <div class="video-preview-size">{{ formatFileSize(video.fileSize) }}</div>
             </div>
           </div>
           <div v-if="sampleVideos.length > 0" class="video-preview-player">
-            <video :src="'/videos/file/' + sampleVideos[videoPreviewIndex].filePath" controls style="width:100%;max-height:400px;display:block;background:#000"></video>
+            <video :src="'/videos/file/' + sampleVideos[videoPreviewIndex].sampleId + '/' + (sampleVideos[videoPreviewIndex].fileName || sampleVideos[videoPreviewIndex].filePath)" controls style="width:100%;max-height:400px;display:block;background:#000"></video>
             <div class="video-preview-info">
               <span>{{ sampleVideos[videoPreviewIndex].fileName }}</span>
               <button class="sample-btn sample-btn-ghost" style="font-size:11px;padding:2px 10px;height:24px" @click="deleteSampleVideo(sampleVideos[videoPreviewIndex].id, videoPreviewIndex)"><X :size="12" /> 删除</button>
@@ -866,7 +938,7 @@
     <div v-if="showPhotoModal" class="sample-photo-modal" :style="photoModalStyle">
       <div class="spm-header" @mousedown="startDragModal">
         <span class="spm-header-title">照片预览</span>
-        <button class="spm-header-close" @click="showPhotoModal = false">&times;</button>
+        <button class="spm-header-close" @click="closePhotoModal">&times;</button>
       </div>
       <div class="spm-body">
         <div class="spm-body-left">
@@ -906,7 +978,7 @@
             </div>
             <div class="spm-field-row">
               <div class="spm-field"><span class="spm-field-label">包装方式</span><span class="spm-field-value" :title="photoModalSample.packagingCn || '-'">{{ photoModalSample.packagingCn || '-' }}</span></div>
-              <div class="spm-field"><span class="spm-field-label">内盒/装箱量</span><span class="spm-field-value" :title="(photoModalSample.innerBoxCount||'-') + ' / ' + (photoModalSample.cartonCapacity||'-')">{{ (photoModalSample.innerBoxCount||'-') + ' / ' + (photoModalSample.cartonCapacity||'-') }}</span></div>
+              <div class="spm-field"><span class="spm-field-label">内盒/装箱量</span><span class="spm-field-value" :title="(photoModalSample.innerBoxCount != null ? photoModalSample.innerBoxCount : '0') + ' / ' + (photoModalSample.cartonCapacity||'-')">{{ (photoModalSample.innerBoxCount != null ? photoModalSample.innerBoxCount : '0') + ' / ' + (photoModalSample.cartonCapacity||'-') }}</span></div>
             </div>
             <div class="spm-field-row">
               <div class="spm-field"><span class="spm-field-label">外箱规格</span><span class="spm-field-value" :title="fmt3(photoModalSample.cartonLength,photoModalSample.cartonWidth,photoModalSample.cartonHeight)+' CM'">{{ fmt3(photoModalSample.cartonLength,photoModalSample.cartonWidth,photoModalSample.cartonHeight) }} CM</span></div>
@@ -959,7 +1031,7 @@
               <div class="spm-field"><span class="spm-field-label">内盒</span><input class="spm-input spm-input-sm" v-model="editData.innerBoxCount" /><span class="spm-field-label">/ 装入</span><input class="spm-input spm-input-sm" v-model="editData.cartonCapacity" /></div>
             </div>
             <div class="spm-field-row">
-              <div class="spm-field"><span class="spm-field-label">外箱规格</span><span class="spm-field-dim"><input class="spm-input spm-input-sm" v-model="editData.cartonLength" /> x <input class="spm-input spm-input-sm" v-model="editData.cartonWidth" /> x <input class="spm-input spm-input-sm" v-model="editData.cartonHeight" /> CM</span></div>
+              <div class="spm-field"><span class="spm-field-label">外箱规格</span><span class="spm-field-dim"><input class="spm-input spm-input-sm" v-model="editData.cartonLength" @input="onEditCartonInput" /> x <input class="spm-input spm-input-sm" v-model="editData.cartonWidth" @input="onEditCartonInput" /> x <input class="spm-input spm-input-sm" v-model="editData.cartonHeight" @input="onEditCartonInput" /> CM</span></div>
               <div class="spm-field"><span class="spm-field-label">毛/净</span><input class="spm-input spm-input-sm" v-model="editData.cartonGrossWeight" /><span class="spm-field-label">/</span><input class="spm-input spm-input-sm" v-model="editData.cartonNetWeight" /> KG</div>
             </div>
             <div class="spm-field-row">
@@ -1007,7 +1079,7 @@
             <button class="spm-btn-save" @click="saveModalEdit">保存</button>
             <button class="spm-btn-close" @click="cancelModalEdit">取消</button>
           </template>
-          <button v-if="!editing" class="spm-btn-close" @click="showPhotoModal = false">关闭</button>
+          <button v-if="!editing" class="spm-btn-close" @click="closePhotoModal">关闭</button>
         </div>
       </div>
     </div>
@@ -1080,13 +1152,6 @@
             <button class="sample-btn sample-btn-ghost" style="font-size:11px;padding:2px 10px;height:26px" :disabled="importSelectedRows.length === 0" @click="deleteSelectedPreviewRows">
               <Trash2 :size="13" /> 批量删除
             </button>
-            <span style="margin-left:auto"></span>
-            <button class="sample-btn sample-btn-ghost" :class="{ active: importPreviewCatFilter }" style="font-size:11px;padding:2px 10px;height:26px;background:#ffeaea;border-color:#e74c3c" @click="onTogglePreviewFilter('cat')">
-              <AlertTriangle :size="12" /> 筛选种类不符
-            </button>
-            <button class="sample-btn sample-btn-ghost" :class="{ active: importPreviewPkgFilter }" style="font-size:11px;padding:2px 10px;height:26px;background:#fff8e1;border-color:#f39c12" @click="onTogglePreviewFilter('pkg')">
-              <AlertTriangle :size="12" /> 筛选包装不符
-            </button>
           </div>
 
           <div ref="importPreviewWrapRef" class="import-preview-table-wrap">
@@ -1100,10 +1165,11 @@
               :column-config="{ resizable: true }"
               :row-config="{ isHover: true, keyField: '_rowIndex' }"
               :checkbox-config="{ highlight: true, range: true }"
-              :edit-config="{ mode: 'cell', trigger: 'dblclick', showStatus: true, enabled: true, keepSource: true }"
-              :virtual-y-config="{ enabled: true, gt: 15, oSize: 5 }"
-              :virtual-x-config="{ enabled: true, gt: 15 }"
-              :optimization="{ animat: false, delayHover: 250, scrollX: { gt: 0, oSize: 100, rSize: 100 }, scrollY: { gt: 0, oSize: 0, rSize: 60, rHeight: 44 } }"
+              :edit-config="IMPORT_PREVIEW_EDIT_CONFIG"
+              :keep-source="true"
+              :virtual-y-config="{ enabled: true, gt: 20, oSize: 60 }"
+              :virtual-x-config="{ enabled: true, gt: 30 }"
+              :optimization="{ animat: false, delayHover: 250, scrollY: { gt: 0, oSize: 60, rSize: 200, rHeight: 44 } }"
               :border="true"
               :header-cell-style="{ background: '#ffffff', borderColor: '#a0bddb', color: '#1d1d1f', fontWeight: 600, textAlign: 'center' }"
               :cell-style="importArea.cellAreaStyle"
@@ -1155,18 +1221,36 @@
                   >
                     翻译勾选
                   </button>
+                  <button
+                    class="sample-btn sample-btn-ghost"
+                    style="font-size:12px;padding:4px 12px;height:30px;margin-left:4px"
+                    @click="batchAbandonUpdate"
+                  >
+                    批量放弃更新
+                  </button>
+                  <span style="margin-left:12px;width:1px;height:22px;background:rgba(0,0,0,0.1)"></span>
+                  <button class="sample-btn sample-btn-ghost import-filter-btn import-filter-cat" :class="{ active: importPreviewCatFilter }" style="font-size:11px;padding:2px 10px;height:26px" @click="onTogglePreviewFilter('cat')">
+                    <AlertTriangle :size="12" /> 种类不符
+                  </button>
+                  <button class="sample-btn sample-btn-ghost import-filter-btn import-filter-pkg" :class="{ active: importPreviewPkgFilter }" style="font-size:11px;padding:2px 10px;height:26px" @click="onTogglePreviewFilter('pkg')">
+                    <AlertTriangle :size="12" /> 包装不符
+                  </button>
+                  <button class="sample-btn sample-btn-ghost import-filter-btn import-filter-dup" :class="{ active: importPreviewDupFilter }" style="font-size:11px;padding:2px 10px;height:26px" @click="onTogglePreviewFilter('dup')">
+                    <ShieldAlert :size="12" /> 货号重复
+                  </button>
                 </div>
               </template>
               <template #import_warnings="{ row }">
                 <div v-if="row._warnings && row._warnings.length > 0" style="display:flex;flex-direction:column;gap:2px;align-items:center">
-                  <span v-for="(w, wi) in row._warnings" :key="wi" style="color:#e67e22;font-size:11px;white-space:nowrap;">{{ w }}</span>
+                  <span v-for="(w, wi) in row._warnings" :key="wi" style="color:#e67e22;font-size:11px;">{{ w }}</span>
                 </div>
                 <span v-else style="color:#27ae60;font-size:11px;">正常</span>
               </template>
               <template #import_action="{ row }">
-                <div style="display:flex;gap:4px;justify-content:center">
-                  <button class="sample-table-action" style="color:#007aff;font-size:11px;padding:2px 8px;height:24px" @click.stop="restorePreviewRow(row)">还原</button>
-                  <button class="sample-table-action" style="color:#ff3b30;font-size:11px;padding:2px 8px;height:24px" @click.stop="deletePreviewRow(row)">删除</button>
+                <div style="display:flex;gap:4px;justify-content:center;flex-wrap:nowrap">
+                  <button v-if="row._status === 'dup_warning'" class="sample-table-action" style="color:#27ae60;font-size:11px;padding:2px 8px;height:24px;white-space:nowrap" @click.stop="openDupDetail(row)">查看</button>
+                  <button class="sample-table-action" style="color:#007aff;font-size:11px;padding:2px 8px;height:24px;white-space:nowrap" @click.stop="restorePreviewRow(row)">还原</button>
+                  <button class="sample-table-action" style="color:#ff3b30;font-size:11px;padding:2px 8px;height:24px;white-space:nowrap" @click.stop="deletePreviewRow(row)">删除</button>
                 </div>
               </template>
             </vxe-grid>
@@ -1223,6 +1307,69 @@
     </Teleport>
 
     <Teleport to="body">
+    <div v-if="showDupDetailModal" class="batch-image-modal-overlay" @click.self="cancelDupDetail">
+      <div class="batch-image-modal import-preview-modal">
+        <div class="batch-image-modal-header">
+          <strong>重复资料详情 — 选择要覆盖的记录</strong>
+          <button class="modal-close-btn" @click="cancelDupDetail">
+            <X :size="16" />
+          </button>
+        </div>
+        <div class="batch-image-modal-body import-preview-body">
+          <vxe-grid
+            ref="dupDetailGridRef"
+            :columns="DUP_DETAIL_COLUMNS"
+            :data="dupDetailRows"
+            height="360"
+            :auto-resize="true"
+            :row-config="{ isHover: true }"
+            :checkbox-config="{ highlight: true, trigger: 'row' }"
+            :toolbar-config="{ custom: true }"
+            :column-config="{ resizable: true, drag: true }"
+            :border="true"
+            :header-cell-style="{ background: '#ffffff', borderColor: '#a0bddb', color: '#1d1d1f', fontWeight: 600, textAlign: 'center' }"
+            :cell-style="{ textAlign: 'center' }"
+            :custom-column-config="{ checkMethod: ({ column }) => column.type !== 'checkbox' }"
+            @checkbox-change="onDupDetailCheckChange"
+          >
+            <template #dup_detail_image="{ row }">
+              <div style="display:flex;align-items:center;justify-content:center;height:100%">
+                <img
+                  v-if="row.thumbnail"
+                  :src="'/thumbnails/' + row.thumbnail"
+                  loading="lazy"
+                  style="width:48px;height:36px;object-fit:cover;border-radius:4px;cursor:pointer"
+                  @click.stop="openDupImage(row.firstImageHash, row.thumbnail)"
+                />
+                <span v-else style="color:rgba(29,29,31,0.25);font-size:11px">无图</span>
+              </div>
+            </template>
+          </vxe-grid>
+        </div>
+        <div class="modal-footer import-preview-footer" style="justify-content:flex-end!important">
+          <div class="import-toolbar-right">
+            <button class="sample-btn sample-btn-ghost" @click="cancelDupDetail">放弃更新</button>
+            <button class="sample-btn sample-btn-primary" :disabled="!dupDetailSelectedId" @click="confirmDupOverwrite">
+              <Check :size="14" /> 确认更新
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    </Teleport>
+
+    <Teleport to="body">
+    <div v-if="showDupImageModal" class="batch-image-modal-overlay" @click.self="closeDupImage">
+      <div class="batch-image-modal" style="max-width:90vw;max-height:90vh;background:transparent;box-shadow:none;padding:0">
+        <button class="modal-close-btn" style="position:fixed;top:16px;right:16px;background:rgba(0,0,0,0.5);color:#fff;border-radius:50%;width:36px;height:36px" @click="closeDupImage">
+          <X :size="20" />
+        </button>
+        <img :src="dupImageUrl" style="max-width:90vw;max-height:90vh;object-fit:contain;border-radius:8px" @click.stop />
+      </div>
+    </div>
+    </Teleport>
+
+    <Teleport to="body">
     <div v-if="showBatchImageModal" class="batch-image-modal-overlay" @click.self="closeBatchModal">
       <div class="batch-image-modal">
         <div class="batch-image-modal-header">
@@ -1244,6 +1391,13 @@
                 <span>出厂货号</span>
               </label>
             </div>
+          </div>
+          <div v-if="batchImageType === 'factory-code' && (manufacturerCode || (currentSample && currentSample.manufacturerCode))" class="batch-manufacturer-info">
+            <span class="bm-info-label">关联厂商</span>
+            <span class="bm-info-value">编号: <strong>{{ manufacturerCode || (currentSample && currentSample.manufacturerCode) }}</strong></span>
+            <span v-if="currentSample && currentSample.supplier" class="bm-info-value">名称: <strong>{{ currentSample.supplier }}</strong></span>
+            <span v-if="currentSample && currentSample.boothNo" class="bm-info-value">摊位号: <strong>{{ currentSample.boothNo }}</strong></span>
+            <div v-if="!currentSample || !currentSample.supplier" class="bm-info-hint">请先在表格中选中一行样品以显示完整厂商信息</div>
           </div>
           <div v-if="batchMatched.length === 0"
             class="upload-area"
@@ -1300,11 +1454,14 @@
                   <span>公司编号: <strong>{{ batchMatched[batchCurrentIndex].sampleCode || '-' }}</strong></span>
                   <span>样品名称: <strong>{{ batchMatched[batchCurrentIndex].sampleName || '-' }}</strong></span>
                   <span>出厂货号: <strong>{{ batchMatched[batchCurrentIndex].factoryCode || '-' }}</strong></span>
+                  <span>厂商编号: <strong>{{ batchMatched[batchCurrentIndex].manufacturerCode || '-' }}</strong></span>
+                  <span>厂商名称: <strong>{{ batchMatched[batchCurrentIndex].supplier || '-' }}</strong></span>
+                  <span>摊位号: <strong>{{ batchMatched[batchCurrentIndex].boothNo || '-' }}</strong></span>
                 </div>
                 <div class="bmc-actions">
                   <button class="sample-btn sample-btn-ghost bmc-btn" :class="{ active: batchMatched[batchCurrentIndex].action === 'skip' }" @click="batchMatched[batchCurrentIndex].action = 'skip'">跳过</button>
                   <button class="sample-btn sample-btn-ghost bmc-btn" :class="{ active: batchMatched[batchCurrentIndex].action === 'cover' }" @click="batchMatched[batchCurrentIndex].action = 'cover'">覆盖</button>
-                  <button class="sample-btn sample-btn-primary bmc-btn" :class="{ active: batchMatched[batchCurrentIndex].action === 'append' }" @click="batchMatched[batchCurrentIndex].action = 'append'">追加</button>
+                  <button class="sample-btn sample-btn-ghost bmc-btn" :class="{ active: batchMatched[batchCurrentIndex].action === 'append' }" @click="batchMatched[batchCurrentIndex].action = 'append'">追加</button>
                   <span class="bmc-remove" @click="removeBatchFile(batchCurrentIndex)"><X :size="14" /></span>
                 </div>
               </template>
@@ -1324,7 +1481,7 @@
               <div class="bmf-right">
                 <button class="sample-btn sample-btn-ghost" @click="setBatchActionAll('skip')">全部跳过</button>
                 <button class="sample-btn sample-btn-ghost" @click="setBatchActionAll('cover')">全部覆盖</button>
-                <button class="sample-btn sample-btn-primary" @click="setBatchActionAll('append')">全部追加</button>
+                <button class="sample-btn sample-btn-ghost" @click="setBatchActionAll('append')">全部追加</button>
               </div>
             </div>
           </div>
@@ -1365,7 +1522,7 @@
             </div>
           </div>
           <div class="adv-field"><label>种类名称</label><input v-model="advForm.category" placeholder="请输入种类名称" /></div>
-          <div class="adv-field"><label>种类编号</label><select v-model="advForm.categoryCode"><option value="">请选择种类</option></select></div>
+          <div class="adv-field"><label>种类编号</label><input v-model="advForm.categoryCode" placeholder="请输入种类编号" /></div>
           <!-- Row 5 -->
           <div class="adv-field adv-field-range">
             <label>外箱数量</label>
@@ -1379,11 +1536,12 @@
           <div class="adv-field"><label>中文包装</label><input v-model="advForm.packagingCn" placeholder="请输入中文包装" /></div>
           <!-- Row 6 -->
           <div class="adv-field"><label>产品认证</label><input v-model="advForm.certification" placeholder="请输入产品认证" /></div>
-          <div class="adv-field"><label>侵权</label><select v-model="advForm.infringement"><option value="">请选择侵权状态</option><option value="1">是</option><option value="0">否</option></select></div>
+          <div class="adv-field"><label>侵权</label><select v-model="advForm.infringement"><option value="">请选择侵权状态</option><option value="侵权">侵权</option><option value="不侵权">不侵权</option><option value="其他">其他</option></select></div>
           <div class="adv-field adv-field-checks">
-            <label>有无图片</label>
+            <label>筛选条件</label>
             <div class="check-group">
               <label class="chk-item"><input type="checkbox" v-model="advForm.hasImage" /> 有图片</label>
+              <label class="chk-item"><input type="checkbox" v-model="advForm.hasVideo" /> 有视频</label>
             </div>
           </div>
           <!-- Row 7 - 尺寸范围 -->
@@ -1440,19 +1598,22 @@
           <div class="adv-field adv-field-range">
             <label>登记日期</label>
             <div class="range-inputs">
-              <input type="date" v-model="advForm.createTimeMin" />
-              <span>-</span>
-              <input type="date" v-model="advForm.createTimeMax" />
+              <VxeDatePicker v-model="advForm.createTimeMin" type="date" placeholder="开始日期" clearable />
+              <span>至</span>
+              <VxeDatePicker v-model="advForm.createTimeMax" type="date" placeholder="结束日期" clearable />
             </div>
           </div>
           <div class="adv-field adv-field-range">
             <label>修改日期</label>
             <div class="range-inputs">
-              <input type="date" v-model="advForm.updateTimeMin" />
-              <span>-</span>
-              <input type="date" v-model="advForm.updateTimeMax" />
+              <VxeDatePicker v-model="advForm.updateTimeMin" type="date" placeholder="开始日期" clearable />
+              <span>至</span>
+              <VxeDatePicker v-model="advForm.updateTimeMax" type="date" placeholder="结束日期" clearable />
             </div>
           </div>
+          <!-- Row 12 -->
+          <div class="adv-field"><label>登记人</label><input v-model="advForm.registrant" placeholder="请输入登记人" /></div>
+          <div class="adv-field"><label>修改人</label><input v-model="advForm.modifier" placeholder="请输入修改人" /></div>
         </div>
         <div class="adv-search-footer">
           <button class="sample-btn sample-btn-ghost" @click="clearAdvForm">清空条件</button>
@@ -1931,9 +2092,11 @@
     </Teleport>
 
     <!-- Toast -->
+    <Teleport to="body">
     <Transition name="toast-fade">
-      <div v-if="toast.show" class="sr-toast" :class="toast.type">{{ toast.message }}</div>
+      <div v-if="toast.show" class="sr-toast" :class="toast.type" style="z-index:999999!important;position:fixed">{{ toast.message }}</div>
     </Transition>
+    </Teleport>
 
     <!-- 对照资料管理弹窗 -->
     <Teleport to="body">
@@ -2097,18 +2260,29 @@
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, onActivated, nextTick, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api'
-import { useAreaSelection } from '@/composables/useAreaSelection'
+import { useToast } from '@/composables/useToast'
+import JSZip from 'jszip'
+import { useCrop } from '@/composables/useCrop'
+import { useModalDrag } from '@/composables/useModalDrag'
+import { useCardMode } from '@/composables/useCardMode'
+import { useSampleForm } from '@/composables/useSampleForm'
+import { useImport } from '@/composables/useImport'
+import { useDeletedRestore } from '@/composables/useDeletedRestore'
+import { useAuth } from '@/stores/auth'
+import { useBatchImage } from '@/composables/useBatchImage'
+import { useBatchVideo } from '@/composables/useBatchVideo'
+import { useScanPrint } from '@/composables/useScanPrint'
+import { useExport } from '@/composables/useExport'
+import { useRefData } from '@/composables/useRefData'
+import { useAdvancedSearch } from '@/composables/useAdvancedSearch'
 import '@/styles/sample.css'
 import '@/styles/sample-form.css'
-import ExcelParserWorker from '@/workers/excelParser.worker.js?worker'
-import * as XLSX from 'xlsx'
-import QRCode from 'qrcode'
 import {
   Database, Search, Plus, Pencil, Trash2, Save, X, Upload, Download,
   FileUp, FileDown, FileSpreadsheet, FileOutput, MoreHorizontal, Settings,
   ChevronsUp, ChevronsDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
   MapPin, Crosshair, Filter, Columns3, ImagePlus, Coins, Package, PackageOpen, DollarSign, Printer, Loader2,
-  Image as ImageIcon, RotateCcw, AlertTriangle, AlertCircle, Check, CheckCircle, CheckCircle as CheckCircleIcon, Info, Video as VideoIcon, List, ListChecks, LayoutGrid, Copy, GripVertical, RotateCw, ChevronDown, Eye, EyeOff, ChevronsDownUp
+  Image as ImageIcon, RotateCcw, AlertTriangle, AlertCircle, Check, CheckCircle, CheckCircle as CheckCircleIcon, Info, Video as VideoIcon, List, ListChecks, LayoutGrid, Copy, GripVertical, RotateCw, ChevronDown, Eye, EyeOff, ChevronsDownUp, ShieldAlert
 } from 'lucide-vue-next'
 
 // 批量翻译：通过后端代理调用百度翻译 API
@@ -2132,165 +2306,13 @@ async function baiduTranslateBatch(texts, from = 'zh', to = 'en') {
 
 const router = useRouter()
 
-// ===== Toast 提示 =====
-const toast = reactive({ show: false, message: '', type: 'info' })
-let toastTimer = null
-function showToast(msg, type = 'info') {
-  toast.message = msg
-  toast.type = type
-  toast.show = true
-  clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => { toast.show = false }, 2500)
-}
+const { toast, showToast, showConfirm, confirmMessage, showConfirmDialog, onConfirmOk, onConfirmCancel, showAlert, alertMessage, alertType, showAlertDialog, onAlertClose } = useToast()
 const route = useRoute()
 
-const allFormFields = [
-  { key: 'sampleCode', label: '公司编号', labelWidth: 84, labelJustify: true, width: 180 },
-  { group: true, key: 'g-packaging', label: '包装方式', labelWidth: 84, labelJustify: true, width: 0, fields: [
-    { key: 'packageCode', placeholder: '包装编号', width: 60 },
-    { key: 'packagingCn', placeholder: '中文包装', width: 130 },
-    { key: 'packagingEn', placeholder: '英文包装', width: 48 },
-  ]},
-  { group: true, key: 'g-category', label: '种类名称', labelWidth: 84, labelJustify: true, width: 0, fields: [
-    { key: 'categoryCode', placeholder: '种类编号', width: 44 },
-    { key: 'category', placeholder: '种类名称', width: 100 },
-  ]},
-  { key: 'sampleName', label: '样品名称', labelWidth: 84, labelJustify: true, width: 500 },
-  { key: 'factoryCode', label: '出厂货号', labelWidth: 84, labelJustify: true, width: 180 },
-  { group: true, key: 'g-cartonSize', label: '外箱规格', labelWidth: 84, labelJustify: true, width: 0, fields: [
-    { key: 'cartonLength', placeholder: '外箱长', width: 80 },
-    { key: 'cartonWidth', placeholder: '外箱宽', width: 79 },
-    { key: 'cartonHeight', placeholder: '外箱高', width: 79 },
-  ]},
-  { key: 'factoryPrice', label: '出厂价', labelWidth: 84, labelJustify: true, color: 'red', width: 150 },
-  { key: 'remark', label: '中文备注', labelWidth: 84, labelJustify: true, width: 500 },
-  { group: true, key: 'g-innerBox', label: '内盒/外箱装量', labelWidth: 84, labelJustify: true, width: 0, fields: [
-    { key: 'innerBoxCount', placeholder: '内盒数', width: 60 },
-    { key: 'cartonCapacity', placeholder: '装箱量', width: 114 },
-  ]},
-  { group: true, key: 'g-sampleSize', label: '包装规格', labelWidth: 84, labelJustify: true, width: 0, fields: [
-    { key: 'packageLength', placeholder: '包装长', width: 80 },
-    { key: 'packageWidth', placeholder: '包装宽', width: 79 },
-    { key: 'packageHeight', placeholder: '包装高', width: 79 },
-  ]},
-  { group: true, key: 'g-cartonVol', label: '材积/体积', labelWidth: 84, labelJustify: true, width: 0, fields: [
-    { key: 'cartonMaterialVolume', placeholder: '材积', width: 72 },
-    { key: 'cartonVolume', placeholder: '体积', width: 72 },
-  ]},
-  { key: 'certification', label: '产品认证', labelWidth: 84, labelJustify: true, width: 500 },
-  { key: 'infringement', label: '是否侵权', labelWidth: 84, labelJustify: true, width: 180 },
-  { group: true, key: 'g-productSize', label: '产品规格', labelWidth: 84, labelJustify: true, width: 0, fields: [
-    { key: 'sampleLength', placeholder: '产品长', width: 80 },
-    { key: 'sampleWidth', placeholder: '产品宽', width: 79 },
-    { key: 'sampleHeight', placeholder: '产品高', width: 79 },
-  ]},
-  { group: true, key: 'g-cartonWeight', label: '外箱毛/净重', labelWidth: 84, labelJustify: true, width: 0, fields: [
-    { key: 'cartonGrossWeight', placeholder: '外箱毛重', width: 72 },
-    { key: 'cartonNetWeight', placeholder: '外箱净重', width: 72 },
-  ]},
-  { key: 'batteryInfo', label: '电池信息', labelWidth: 84, labelJustify: true, width: 500 },
-  { key: 'supplier', label: '厂商名称', labelWidth: 84, labelJustify: true, width: 180 },
-  { key: 'boothNo', label: '摊位号', labelWidth: 84, labelJustify: true, width: 250 },
-  { key: 'manufacturerCode', label: '厂商编号', labelWidth: 84, labelJustify: true, width: 150 },
-  { key: 'createTime', label: '登记日期', labelWidth: 84, labelJustify: true, width: 195 },
-  { key: 'updateTime', label: '修改日期', labelWidth: 84, labelJustify: true, width: 195 },
-  { key: 'mobile', label: '手机', labelWidth: 84, labelJustify: true, width: 180 },
-  { key: 'contactPhone', label: '电话', labelWidth: 84, labelJustify: true, width: 250 },
-  { key: 'qq', label: 'QQ', labelWidth: 84, labelJustify: true, width: 150 },
-  { key: 'modifier', label: '修改人', labelWidth: 84, labelJustify: true, width: 195 },
-  { key: 'registrant', label: '登记人', labelWidth: 84, labelJustify: true, width: 195 },
-  { key: 'contactPerson', label: '联系人', labelWidth: 84, labelJustify: true, width: 180 },
-  { key: 'fax', label: '传真', labelWidth: 84, labelJustify: true, width: 250 },
-  { key: 'taxPrice', label: '税点价', labelWidth: 84, labelJustify: true, color: 'red', width: 150 },
-  { key: 'color', label: '颜色', labelWidth: 84, labelJustify: true, width: 195 },
-  { key: 'englishName', label: '英文名称', labelWidth: 84, labelJustify: true, width: 180 },
-]
-
-const fieldVisible = reactive({})
-allFormFields.forEach(f => { fieldVisible[f.key] = true })
-
-const visibleFormFields = computed(() => allFormFields.filter(f => fieldVisible[f.key]))
-
-const showFieldSettings = ref(false)
-const toggleFieldSettings = () => { showFieldSettings.value = !showFieldSettings.value }
-
-const cardMode = ref(false)
 const gridToolbarConfig = { custom: true }
 
-// ===== 卡片虚拟滚动 =====
-const cardOverlayRef = ref(null)
-const cardScrollTop = ref(0)
-const cardContainerWidth = ref(1200)
-
-const CARD_COLS = 6
-const CARD_GAP = 14
-const CARD_BODY_H = 80
-
-const cardRowHeight = computed(() => {
-  const w = cardContainerWidth.value
-  const cardW = (w - (CARD_COLS - 1) * CARD_GAP) / CARD_COLS
-  return cardW + CARD_BODY_H + CARD_GAP
-})
-
-const cardVisibleRange = computed(() => {
-  const h = cardOverlayRef.value?.clientHeight || 600
-  const rh = cardRowHeight.value
-  if (rh <= 0) return { start: 0, end: 24 }
-  const buffer = 2
-  const start = Math.max(0, Math.floor(cardScrollTop.value / rh) - buffer)
-  const end = Math.ceil((cardScrollTop.value + h) / rh) + buffer
-  return { start, end }
-})
-
-const cardTotalRows = computed(() => Math.ceil(tableData.value.length / CARD_COLS))
-
-const cardVisibleItems = computed(() => {
-  const { start, end } = cardVisibleRange.value
-  return tableData.value.slice(start * CARD_COLS, end * CARD_COLS)
-})
-
-const cardSpacerTop = computed(() => cardVisibleRange.value.start * cardRowHeight.value)
-
-const cardSpacerBottom = computed(() => {
-  const total = cardTotalRows.value
-  const end = cardVisibleRange.value.end
-  return Math.max(0, (total - end) * cardRowHeight.value)
-})
-
-watch(cardMode, async (v) => {
-  if (v) {
-    formExpanded.value = false
-    await nextTick()
-    cardScrollTop.value = 0
-    if (cardOverlayRef.value) {
-      cardContainerWidth.value = cardOverlayRef.value.clientWidth
-    }
-  }
-})
-
-function onCardScroll() {
-  if (cardOverlayRef.value) {
-    cardScrollTop.value = cardOverlayRef.value.scrollTop
-    cardContainerWidth.value = cardOverlayRef.value.clientWidth
-  }
-}
-
-const showMultiPrintModal = ref(false)
-const multiPrintType = ref('barcode')
-const multiPrintBatchCopies = ref(1)
-const multiPrintRecords = ref([])
-const mpGridRef = ref(null)
-
 const showScanPrintModal = ref(false)
-const scanPrintCode = ref('')
-const scanPrintResult = ref(null)
-const scanPrintImageSrc = ref('')
-const scanPrintError = ref('')
-const scanPrintType = ref('barcode')
-const scanPrintLoading = ref(false)
-const scanPrintContinuous = ref(false)
-const scanPrintCount = ref(1)
-const scanPrintInputRef = ref(null)
+const showMultiPrintModal = ref(false)
 
 const showImageSearchModal = ref(false)
 const imageSearchImages = ref([])
@@ -2305,32 +2327,7 @@ const imageSearchDone = ref(false)
 const imageSearching = ref(false)
 
 const thumbGridRef = ref(null)
-const cropEditorRef = ref(null)
-const cropImgRef = ref(null)
-const cropState = reactive({ startX: 0, startY: 0, x: 0, y: 0, w: 0, h: 0, active: false, done: false })
-const cropDraggingHandle = ref('')
-const cropImgNaturalW = ref(0)
-const cropImgNaturalH = ref(0)
-const cropDisplayScale = ref(1)
-const cropSelecting = computed(() => cropState.active && !cropState.done)
-const cropDone = computed(() => cropState.done)
-const cropX = computed(() => Math.round(cropState.x))
-const cropY = computed(() => Math.round(cropState.y))
-const cropW = computed(() => Math.round(Math.abs(cropState.w)))
-const cropH = computed(() => Math.round(Math.abs(cropState.h)))
-const cropOverlayStyle = computed(() => ({
-  display: (cropSelecting.value || cropDone.value) ? 'block' : 'none'
-}))
-const cropBoxStyle = computed(() => {
-  const x = cropState.w < 0 ? cropState.x + cropState.w : cropState.x
-  const y = cropState.h < 0 ? cropState.y + cropState.h : cropState.y
-  return {
-    left: x + 'px',
-    top: y + 'px',
-    width: Math.abs(cropState.w) + 'px',
-    height: Math.abs(cropState.h) + 'px'
-  }
-})
+const { cropEditorRef, cropImgRef, cropSelecting, cropDone, cropX, cropY, cropW, cropH, cropOverlayStyle, cropBoxStyle, cropDisplayScale, resetCropState, resetCrop, onCropImgLoad, onCropMouseDown, onCropMouseMove, onCropMouseUp, onHandleDown } = useCrop()
 
 const mpColumns = [
   { type: 'seq', width: 60, title: '序号' },
@@ -2340,25 +2337,15 @@ const mpColumns = [
   { field: 'copies', title: '打印张数', width: 100, slots: { default: 'copies_edit' } }
 ]
 
-const totalPrintPages = computed(() => {
-  return multiPrintRecords.value.reduce((sum, r) => sum + (r.copies || 0), 0)
-})
-
-const batchSetCopies = () => {
-  const n = multiPrintBatchCopies.value || 1
-  multiPrintRecords.value.forEach(r => { r.copies = n })
-}
-
-const formExpanded = ref(true)
-const formVisible = ref(true)
-const formMode = ref('readonly')
-const formData = reactive({})
+const { allFormFields, fieldVisible, visibleFormFields, showFieldSettings, toggleFieldSettings, formExpanded, formVisible, formMode, formData } = useSampleForm()
+const auth = useAuth()
 
 const currentSample = ref(null)
 const currentSampleImages = ref([])
 const stripIndex = ref(0)
 
 const tableData = ref([])
+const { cardMode, cardOverlayRef, cardScrollTop, cardContainerWidth, cardRowHeight, cardVisibleRange, cardTotalRows, cardVisibleItems, cardSpacerTop, cardSpacerBottom, onCardScroll } = useCardMode(tableData, formExpanded)
 const tableLoading = ref(false)
 const tableWrapHeight = ref(600)
 const tableLoaded = ref(false)
@@ -2377,7 +2364,7 @@ const pageSize = ref(2000)
 const pageSizeOptions = [500, 1000, 2000, 4000, 5000]
 const totalRecords = ref(0)
 const totalPages = computed(() => Math.max(1, Math.ceil(totalRecords.value / pageSize.value)))
-const currentSortField = ref('createTime')
+const currentSortField = ref('recent')
 const currentSortOrder = ref('desc')
 const selectedIds = ref([])
 const lastCheckboxIndex = ref(-1)
@@ -2432,8 +2419,7 @@ const hideTaxPrice = ref(false)
 const hideSupplierInfo = ref(false)
 const editing = ref(false)
 const editData = reactive({})
-const photoModalPos = reactive({ x: 0, y: 0 })
-const photoModalW = ref(1000)
+const { photoModalPos, photoModalW, photoModalH, photoModalInit, startDragModal } = useModalDrag()
 
 const showImagePreview = ref(false)
 const imagePreviewList = ref([])
@@ -2462,429 +2448,35 @@ const currentPreviewSrc = computed(() => {
   if (img.hash) return '/images/view/hash/' + img.hash
   return '/thumbnails/' + img.thumbnailPath
 })
-const photoModalH = ref(680)
-const photoModalInit = () => {
-  photoModalW.value = Math.min(1000, window.innerWidth - 40)
-  photoModalH.value = Math.min(680, window.innerHeight - 40)
-  photoModalPos.x = Math.round((window.innerWidth - photoModalW.value) / 2)
-  photoModalPos.y = Math.round((window.innerHeight - photoModalH.value) / 2)
-}
 const photoModalStyle = computed(() => ({
   display: showPhotoModal.value ? 'flex' : 'none',
   flexDirection: 'column',
   width: photoModalW.value + 'px',
-  height: photoModalH.value + 'px',
+  maxHeight: photoModalH.value + 'px',
   top: photoModalPos.y + 'px',
   left: photoModalPos.x + 'px',
   position: 'fixed'
 }))
-let dragStart = null
-const startDragModal = (e) => {
-  dragStart = { x: e.clientX - photoModalPos.x, y: e.clientY - photoModalPos.y }
-  const onMove = (ev) => {
-    photoModalPos.x = Math.max(0, Math.min(ev.clientX - dragStart.x, window.innerWidth - photoModalW.value))
-    photoModalPos.y = Math.max(0, Math.min(ev.clientY - dragStart.y, window.innerHeight - photoModalH.value))
-  }
-  const onUp = () => {
-    document.removeEventListener('mousemove', onMove)
-    document.removeEventListener('mouseup', onUp)
-  }
-  document.addEventListener('mousemove', onMove)
-  document.addEventListener('mouseup', onUp)
-}
 
-const showImportModal = ref(false)
-const importFile = ref(null)
-const importUploading = ref(false)
 const showBatchResultModal = ref(false)
-const batchResult = reactive({ successCount: 0, failCount: 0, duplicateCount: 0, updatedCount: 0, unmatchedCount: 0, failedRows: [], failList: [], unmatchedList: [] })
-
-const showImportPreview = ref(false)
-const importPreviewAllRows = ref([])   // 全量数据
-const importPreviewData = ref([])      // 当前页数据（给 vxe-grid 渲染）
-const importOriginalData = ref([])
-const importPreviewHeaders = ref([])
-const importSelectedRows = ref([])
-const importSelectedRowIndexes = ref(new Set())  // 跨页跟踪勾选
-const importPreviewGridRef = ref(null)
-const importPreviewWrapRef = ref(null)   // 导入预览表格外层容器
-const importPreviewPage = ref(1)
-const importPreviewPageSize = ref(3000)
-// ===== 导入预览区域选取 =====
-const importArea = useAreaSelection({
-  wrapperRef: importPreviewWrapRef,
-  gridRef: importPreviewGridRef,
-  tableData: importPreviewAllRows,
-  keyField: '_rowIndex',
-  handleClass: 'import-area-handle',
-  selectingClass: 'import-area-selecting'
-})
-const batchEditField = ref('packagingCn')   // 批量修改-选择的字段
-const batchEditValue = ref('')             // 批量修改-输入的值
-const batchEditDropdownOpen = ref(false)   // 下拉面板开关
-const batchEditFields = [
-  { value: 'packagingCn', label: '中文包装' },
-  { value: 'category', label: '种类名称' },
-  { value: 'factoryPrice', label: '出厂价' },
-  { value: 'cartonLength', label: '外箱长' },
-  { value: 'cartonWidth', label: '外箱宽' },
-  { value: 'cartonHeight', label: '外箱高' },
-  { value: 'packageLength', label: '包装长' },
-  { value: 'packageWidth', label: '包装宽' },
-  { value: 'packageHeight', label: '包装高' },
-  { value: 'sampleLength', label: '样品长' },
-  { value: 'sampleWidth', label: '样品宽' },
-  { value: 'sampleHeight', label: '样品高' },
-  { value: 'cartonGrossWeight', label: '箱毛重' },
-  { value: 'cartonNetWeight', label: '箱净重' },
-  { value: 'innerBoxCount', label: '内盒' },
-  { value: 'cartonCapacity', label: '装箱量' },
-  { value: 'hideFromXzx', label: '不在小竹熊显示' },
-  { value: 'infringement', label: '侵权' }
-]
-
-const showImportConfirmModal = ref(false)
-const importConfirmCount = ref(0)
-const importProgress = ref(0)
-const importParsing = ref(false)
-const importParsingProgress = ref(0)
-const importParsingStage = ref('')
+const batchResult = reactive({ successCount: 0, failCount: 0, duplicateCount: 0, updatedCount: 0, unmatchedCount: 0, failedRows: [], failList: [], failFiles: [], unmatchedList: [], unmatchedFiles: [] })
 
 const showRestoreDeletedModal = ref(false)
-const deletedGridRef = ref(null)
-const deletedData = ref([])
-const deletedLoading = ref(false)
-const deletedTotal = ref(0)
-const deletedSelected = ref([])
-
-const deletedAllData = ref([])
-const deletedFilterField = ref('')
-const deletedFilterKeyword = ref('')
-const deletedFullscreen = ref(false)
-const deletedFullscreenSearch = ref('')
-const deletedGridMaxHeight = computed(() => deletedFullscreen.value ? window.innerHeight - 120 : 480)
-const showDeletedBatchQuery = ref(false)
-const deletedBatchField = ref('sampleCode')
-const deletedBatchInput = ref('')
 const showMainBatchQuery = ref(false)
 const mainBatchField = ref('sampleCode')
 const mainBatchInput = ref('')
 const mainBatchQueryActive = ref(false)
-const deletedSortMethod = ({ data, sortList }) => {
-  if (!sortList || sortList.length === 0) return data
-  const { field, order } = sortList[0]
-  return data.sort((a, b) => {
-    const va = String(a[field] ?? '')
-    const vb = String(b[field] ?? '')
-    const cmp = va.localeCompare(vb)
-    return order === 'asc' ? cmp : -cmp
-  })
-}
-const deletedFilterActive = ref(false)
-
-const deletedGridColumns = [
-  { type: 'checkbox', width: 44, fixed: 'left' },
-  { field: 'id', title: 'ID', width: 70, sortable: true, sortType: 'number' },
-  { field: 'sampleCode', title: '公司编号', width: 130, showOverflow: true, sortable: true },
-  { field: 'manufacturerCode', title: '厂商编号', width: 100, sortable: true },
-  { field: 'sampleName', title: '样品名称', minWidth: 180, showOverflow: true, sortable: true },
-  { field: 'category', title: '种类', width: 110, sortable: true },
-  { field: 'categoryCode', title: '种类编号', width: 90, sortable: true },
-  { field: 'factoryCode', title: '出厂货号', width: 110, sortable: true },
-  { field: 'registrant', title: '登记人', width: 90, sortable: true },
-  { field: 'updateTime', title: '删除时间', width: 160, sortable: true, formatter: ({ cellValue }) => cellValue ? new Date(cellValue).toLocaleString('zh-CN', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-' }
-]
-const importProgressText = ref('')
-const importUpdateMode = ref(false)
-const importPreviewCatFilter = ref(false)
-const importPreviewPkgFilter = ref(false)
-
-const importPreviewDisplayData = computed(() => importPreviewData.value)
-
-const importPreviewFilteredCount = computed(() => {
-  let list = importPreviewAllRows.value
-  if (importPreviewCatFilter.value) {
-    list = list.filter(r => r._status === 'cat_error')
-  }
-  if (importPreviewPkgFilter.value) {
-    list = list.filter(r => r._status === 'pkg_warning' || r._status === 'cat_error')
-  }
-  return list.length
-})
-
-const importPreviewTotalPages = computed(() =>
-  Math.ceil(importPreviewFilteredCount.value / importPreviewPageSize.value) || 1
-)
-
-/** 从全量数据同步当前页（应用筛选+分页） */
-const syncPreviewPage = () => {
-  let list = importPreviewAllRows.value
-  if (importPreviewCatFilter.value) {
-    list = list.filter(r => r._status === 'cat_error')
-  }
-  if (importPreviewPkgFilter.value) {
-    list = list.filter(r => r._status === 'pkg_warning' || r._status === 'cat_error')
-  }
-  const totalPages = Math.ceil(list.length / importPreviewPageSize.value) || 1
-  if (importPreviewPage.value > totalPages) importPreviewPage.value = totalPages
-  const start = (importPreviewPage.value - 1) * importPreviewPageSize.value
-  importPreviewData.value = list.slice(start, start + importPreviewPageSize.value)
-}
-
-/** 切换分页大小，回到第1页 */
-const onPreviewPageSizeChange = (size) => {
-  importPreviewPageSize.value = size
-  importPreviewPage.value = 1
-  syncPreviewPage()
-}
-
-/** 切换页码 */
-const onPreviewPageChange = (page) => {
-  importPreviewPage.value = page
-  syncPreviewPage()
-}
-
-/** 切换筛选，回到第1页 */
-const onTogglePreviewFilter = (type) => {
-  if (type === 'cat') importPreviewCatFilter.value = !importPreviewCatFilter.value
-  else importPreviewPkgFilter.value = !importPreviewPkgFilter.value
-  importPreviewPage.value = 1
-  syncPreviewPage()
-}
-
-// 缓存的对照表名称集合，供编辑时重新校验
-const importValidCatNames = ref(new Set())
-const importValidPkgNames = ref(new Set())
-const importPkgList = ref([])  // 完整包装列表，供编辑时重新关键词匹配
-const importCatList = ref([])  // 完整种类列表，供编辑时查找编码
-
-const showConfirm = ref(false)
-const confirmMessage = ref('')
-let confirmResolve = null
-
-const showConfirmDialog = (msg) => {
-  return new Promise((resolve) => {
-    confirmMessage.value = msg
-    confirmResolve = resolve
-    showConfirm.value = true
-  })
-}
-
-const onConfirmOk = () => {
-  showConfirm.value = false
-  if (confirmResolve) confirmResolve(true)
-}
-
-const onConfirmCancel = () => {
-  showConfirm.value = false
-  if (confirmResolve) confirmResolve(false)
-}
-
-const showAlert = ref(false)
-const alertMessage = ref('')
-const alertType = ref('info')
-let alertResolve = null
-
-const showAlertDialog = (msg, type = 'info') => {
-  return new Promise((resolve) => {
-    alertMessage.value = msg
-    alertType.value = type
-    alertResolve = resolve
-    showAlert.value = true
-  })
-}
-
-const onAlertClose = () => {
-  showAlert.value = false
-  if (alertResolve) alertResolve()
-}
-
-const HEADER_TO_FIELD = {
-  '厂商编号': 'manufacturerCode', '公司编号': 'sampleCode', '种类编号': 'categoryCode',
-  '种类名称': 'category', '样品名称': 'sampleName', '英文名称': 'englishName',
-  '出厂货号': 'factoryCode', '货号': 'factoryCode',
-  '样品单位': 'sampleUnit', '样品英文单位': 'sampleUnitEn',
-  '中文包装': 'originalPackagingCn', '原始中文包装': 'originalPackagingCn', '英文包装': 'packagingEn', '包装编号': 'packageCode',
-  '出厂价': 'factoryPrice', '价格': 'factoryPrice', '单价': 'factoryPrice',
-  '税点价': 'taxPrice', '样品长度': 'sampleLength', '样品宽度': 'sampleWidth', '样品高度': 'sampleHeight',
-  '样品毛重': 'sampleGrossWeight', '样品净重': 'sampleNetWeight',
-  '外箱长度': 'cartonLength', '外箱宽度': 'cartonWidth', '外箱高度': 'cartonHeight',
-  '外箱材积': 'cartonMaterialVolume', '外箱体积': 'cartonVolume',
-  '内盒个数': 'innerBoxCount', '外箱装量': 'cartonCapacity',
-  '装箱单位': 'packingUnit', '外箱毛重': 'cartonGrossWeight', '外箱净重': 'cartonNetWeight',
-  '包装长度': 'packageLength', '包装宽度': 'packageWidth', '包装高度': 'packageHeight',
-  '产品认证': 'certification', '认证总数': 'certificationCount', '颜色': 'color',
-  '英文颜色': 'colorEn', '备注': 'remark', '英文备注': 'remarkEn',
-  '厂商名称': 'supplier', '摊位号': 'boothNo', '联系人': 'contactPerson',
-  '电话': 'contactPhone', '手机': 'mobile', '传真': 'fax', 'QQ': 'qq',
-  '登记人': 'registrant', '修改人': 'modifier', '侵权': 'infringement',
-  '电池信息': 'batteryInfo', '电话/信息': 'contactPhone',
-  '不在小竹熊显示': 'hideFromXzx', '是否不在小竹熊显示': 'hideFromXzx',
-  // 复合列 → 后续拆分
-  '品名': 'sampleName', '产品名称': 'sampleName',
-  '包装': 'originalPackagingCn',
-  '包装规格': '_pkgDimensions', '包装尺寸': '_pkgDimensions',
-  '外箱规格': '_cartonDimensions', '外箱尺寸': '_cartonDimensions', '规格': '_cartonDimensions', '箱规': '_cartonDimensions',
-  '产品规格': '_productDimensions', '产品尺寸': '_productDimensions', '尺寸': '_productDimensions',
-  '毛/净重': '_grossNetWeight', '毛净重': '_grossNetWeight',
-}
-
-// 表头匹配函数：去除空格后查找
-function resolveHeader(rawHeader) {
-  const cleaned = rawHeader.replace(/\s+/g, '')
-  if (HEADER_TO_FIELD[cleaned]) return HEADER_TO_FIELD[cleaned]
-  // 再试模糊匹配（兼容已存在的空格写法如"样品 长度"）
-  if (HEADER_TO_FIELD[rawHeader]) return HEADER_TO_FIELD[rawHeader]
-  return null
-}
-
-// 尺寸拆分：支持 * x X 分隔，自动去 CM/cm 后缀
-function splitDimensions(raw) {
-  if (!raw) return null
-  const cleaned = raw.toString().trim().replace(/cm$/i, '')
-  const parts = cleaned.split(/[*xX]/).map(s => s.trim()).filter(Boolean)
-  if (parts.length >= 3) {
-    const [l, w, h] = parts.map(Number)
-    if (!isNaN(l) && !isNaN(w) && !isNaN(h)) return { l, w, h }
-  }
-  return null
-}
-
-// 毛净重拆分：支持 / 分隔，大值=毛重
-function splitGrossNet(raw) {
-  if (!raw) return null
-  const parts = raw.toString().trim().split('/').map(s => s.trim()).filter(Boolean)
-  if (parts.length >= 2) {
-    const [a, b] = [Number(parts[0]), Number(parts[1])]
-    if (!isNaN(a) && !isNaN(b)) {
-      return { gross: Math.max(a, b), net: Math.min(a, b) }
-    }
-  }
-  return null
-}
-
-// 应用拆分结果到行对象
-function applySplits(rowObj) {
-  // 包装规格 → 包装长宽高
-  if (rowObj._pkgDimensions) {
-    const dim = splitDimensions(rowObj._pkgDimensions)
-    if (dim) { rowObj.packageLength = dim.l; rowObj.packageWidth = dim.w; rowObj.packageHeight = dim.h; rowObj.originalPackagingCn = rowObj.originalPackagingCn || rowObj._pkgDimensions }
-    delete rowObj._pkgDimensions
-  }
-  // 外箱规格 → 外箱长宽高
-  if (rowObj._cartonDimensions) {
-    const dim = splitDimensions(rowObj._cartonDimensions)
-    if (dim) { rowObj.cartonLength = dim.l; rowObj.cartonWidth = dim.w; rowObj.cartonHeight = dim.h }
-    delete rowObj._cartonDimensions
-  }
-  // 产品规格 → 产品长宽高
-  if (rowObj._productDimensions) {
-    const dim = splitDimensions(rowObj._productDimensions)
-    if (dim) { rowObj.sampleLength = dim.l; rowObj.sampleWidth = dim.w; rowObj.sampleHeight = dim.h }
-    delete rowObj._productDimensions
-  }
-  // 毛/净重 → 外箱毛重/净重
-  if (rowObj._grossNetWeight) {
-    const gn = splitGrossNet(rowObj._grossNetWeight)
-    if (gn) { rowObj.cartonGrossWeight = gn.gross; rowObj.cartonNetWeight = gn.net }
-    delete rowObj._grossNetWeight
-  }
-}
-
-const EDIT_RENDER = { name: 'input' }
-
-// 隐藏列无需 editRender，减少 vxe-grid 初始化开销（23列×可见行×编辑渲染器）
-const IMPORT_PREVIEW_ALL_COLUMNS = [
-  { type: 'checkbox', width: 44, fixed: 'left' },
-  { type: 'seq', title: '序号', width: 60, fixed: 'left' },
-  { field: 'manufacturerCode', title: '厂商编号', width: 200, showOverflow: true, editRender: EDIT_RENDER, sortable: true },
-  { field: 'sampleCode', title: '公司编号', width: 200, showOverflow: true, editRender: EDIT_RENDER, sortable: true },
-  { field: 'categoryCode', title: '种类编号', width: 200, showOverflow: true, editRender: EDIT_RENDER, sortable: true },
-  { field: 'category', title: '种类名称', width: 200, showOverflow: true, editRender: EDIT_RENDER, sortable: true },
-  { field: 'sampleName', title: '样品名称', width: 200, showOverflow: true, editRender: EDIT_RENDER, sortable: true },
-  { field: 'englishName', title: '英文名称', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'factoryCode', title: '出厂货号', width: 200, showOverflow: true, editRender: EDIT_RENDER, sortable: true },
-  { field: 'infringement', title: '侵权', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'batteryInfo', title: '电池信息', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'hideFromXzx', title: '不在小竹熊显示', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'packageCode', title: '包装编号', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'packagingCn', title: '中文包装', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'packagingEn', title: '英文包装', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'factoryPrice', title: '价格', width: 200, showOverflow: true, editRender: EDIT_RENDER, sortable: true },
-  { field: 'sampleLength', title: '样品长度', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'sampleWidth', title: '样品宽度', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'sampleHeight', title: '样品高度', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'packageLength', title: '包装长度', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'packageWidth', title: '包装宽度', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'packageHeight', title: '包装高度', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'cartonLength', title: '外箱长度', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'cartonWidth', title: '外箱宽度', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'cartonHeight', title: '外箱高度', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'sampleGrossWeight', title: '样品毛重', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'sampleNetWeight', title: '样品净重', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'cartonMaterialVolume', title: '外箱材积', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'cartonVolume', title: '外箱体积', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'innerBoxCount', title: '内盒个数', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'cartonCapacity', title: '外箱装量', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'cartonGrossWeight', title: '外箱毛重', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'cartonNetWeight', title: '外箱净重', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'certification', title: '产品认证', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  { field: 'remark', title: '备注', width: 200, showOverflow: true, editRender: EDIT_RENDER },
-  // --- 以下默认隐藏 ---
-  { field: 'originalPackagingCn', title: '原始中文包装', width: 200, showOverflow: true, className: 'col-original-pkg', editRender: EDIT_RENDER, visible: false },
-  { field: 'sampleUnit', title: '样品单位', width: 200, visible: false },
-  { field: 'sampleUnitEn', title: '英文单位', width: 200, visible: false },
-  { field: 'taxPrice', title: '税点价', width: 200, visible: false },
-  { field: 'color', title: '颜色', width: 200, visible: false },
-  { field: 'colorEn', title: '英文颜色', width: 200, visible: false },
-  { field: 'packingUnit', title: '装箱单位', width: 200, visible: false },
-  { field: 'supplier', title: '厂商名称', width: 200, showOverflow: true, editRender: EDIT_RENDER, sortable: true, visible: false },
-  { field: 'boothNo', title: '摊位号', width: 200, visible: false },
-  { field: 'contactPerson', title: '联系人', width: 200, showOverflow: true, editRender: EDIT_RENDER, visible: false },
-  { field: 'contactPhone', title: '电话', width: 200, showOverflow: true, editRender: EDIT_RENDER, visible: false },
-  { field: 'mobile', title: '手机', width: 200, visible: false },
-  { field: 'fax', title: '传真', width: 200, visible: false },
-  { field: 'qq', title: 'QQ', width: 200, visible: false },
-  { field: 'certificationCount', title: '认证数', width: 200, visible: false },
-  { field: 'remarkEn', title: '英文备注', width: 200, visible: false },
-  { field: 'registrant', title: '登记人', width: 200, visible: false },
-  { title: '校验警告', width: 100, fixed: 'right', slots: { default: 'import_warnings' } },
-  { title: '操作', width: 120, fixed: 'right', slots: { default: 'import_action' } }
-]
 
 const showBatchImageModal = ref(false)
-const batchImageType = ref('company-code')
-const batchFiles = ref([])
-const batchUploading = ref(false)
-const batchUploadProgress = ref({ done: 0, total: 0, success: 0, fail: 0 })
-const batchMatched = ref([])
-const batchMatchLoading = ref(false)
-const batchCurrentIndex = ref(0)
+const batchImageType = ref('factory-code')
 
 const showBatchVideoModal = ref(false)
-const batchVideoFiles = ref([])
-const batchVideoMatched = ref([])
-const videoMatchLoading = ref(false)
-const videoUploading = ref(false)
-const videoUploadProgress = ref({ done: 0, total: 0, success: 0, fail: 0, currentFileName: '', currentProgress: 0 })
-const videoCurrentIndex = ref(0)
 const batchVideoType = ref('company-code')
-const customMatchSubType = ref('company-code')
-const customManufacturerCode = ref('')
-const customCodesText = ref('')
 
 const showVideoPreviewModal = ref(false)
 const sampleVideos = ref([])
 const videoPreviewIndex = ref(0)
 
-const goToPrev = () => {
-  if (batchCurrentIndex.value > 0) batchCurrentIndex.value--
-}
-const goToNext = () => {
-  if (batchCurrentIndex.value < batchMatched.value.length - 1) batchCurrentIndex.value++
-}
-
-const showAdvancedSearch = ref(false)
 const activeSearchConditions = ref(null)  // 保存当前活跃的综合查询条件
 
 const allColumns = [
@@ -2952,9 +2544,14 @@ const loadTableData = async () => {
   try {
     // 如果有活跃的综合查询条件，走搜索接口
     if (activeSearchConditions.value && activeSearchConditions.value.length > 0) {
+      const conditions = [...activeSearchConditions.value]
+      // 确保厂商筛选条件存在
+      if (manufacturerCode.value && !conditions.some(c => c.field === 'manufacturerCode')) {
+        conditions.push({ field: 'manufacturerCode', operator: 'eq', value: manufacturerCode.value })
+      }
       const res = await api(`/samples/search?current=${currentPage.value}&size=${pageSize.value}&sortField=${currentSortField.value}&sortOrder=${currentSortOrder.value}`, {
         method: 'POST',
-        body: JSON.stringify({ conditions: activeSearchConditions.value })
+        body: JSON.stringify({ conditions })
       })
       const data = res.data || res || {}
       tableData.value = data.records || data.list || data || []
@@ -2978,6 +2575,158 @@ const loadTableData = async () => {
   } finally {
     tableLoading.value = false
     clearAreaSelection()
+  }
+}
+
+const { showImportModal, importFile, importUploading, showImportPreview, importPreviewAllRows, importPreviewData, importOriginalData, importPreviewHeaders, importSelectedRows, importSelectedRowIndexes, importPreviewGridRef, importPreviewWrapRef, importPreviewPage, importPreviewPageSize, importArea, batchEditField, batchEditValue, batchEditDropdownOpen, batchEditFields, showImportConfirmModal, importConfirmCount, importProgress, importUpdateMode, importParsing, importParsingProgress, importParsingStage, importProgressText, importPreviewCatFilter, importPreviewPkgFilter, importPreviewDupFilter, importValidCatNames, importValidPkgNames, importPkgList, importCatList, importPreviewDisplayData, importPreviewFilteredCount, importPreviewTotalPages, IMPORT_PREVIEW_ALL_COLUMNS, showDupDetailModal, dupDetailRows, dupDetailGridRef, dupDetailSelectedId, showDupImageModal, dupImageUrl, DUP_DETAIL_COLUMNS, IMPORT_PREVIEW_EDIT_CONFIG, openDupDetail, confirmDupOverwrite, cancelDupDetail, batchAbandonUpdate, onDupDetailCheckChange, openDupImage, closeDupImage, openImportModal: _importOpenModal, onImportFileChange, onImportDrop, doConfirmImport, executeImport, exportImportFailedRows, doImport, syncPreviewPage, onPreviewPageSizeChange, onPreviewPageChange, onTogglePreviewFilter, restorePreviewRow, deletePreviewRow, deleteSelectedPreviewRows, batchEditRun, onImportPreviewCheckChange, onImportCellEdit, cancelImportPreview, selectAllPreviewRows, clearPreviewSelection, exportSelectedRows } = useImport(loadTableData, showBatchResultModal, batchResult, showToast, baiduTranslateBatch)
+
+const openImportModal = () => {
+  showMoreDropdown.value = false
+  _importOpenModal()
+}
+
+const { deletedGridRef, deletedData, deletedLoading, deletedTotal, deletedSelected, deletedAllData, deletedFilterField, deletedFilterKeyword, deletedFullscreen, deletedFullscreenSearch, deletedGridMaxHeight, showDeletedBatchQuery, deletedBatchField, deletedBatchInput, deletedFilterActive, deletedSortMethod, deletedGridColumns, openRestoreDeletedModal, fetchDeletedSamples, applyDeletedFilter, doDeletedFilter, doDeletedResetFilter, onDeletedZoom, onDeletedToolbarClick, openDeletedBatchQuery, doDeletedBatchQuery, onDeletedCheckChange, doRestoreDeleted, onDeletedFullscreenSearch, clearDeletedFullscreenSearch } = useDeletedRestore(showRestoreDeletedModal, showMoreDropdown, showAlertDialog, showConfirmDialog, loadTableData)
+
+const { batchFiles, batchUploading, batchUploadProgress, batchMatched, batchMatchLoading, batchCurrentIndex, showBatchConflictModal, batchConflicts, batchConflictSelected, resolveBatchConflicts, cancelBatchConflict, removeConflictCode, goToPrev, goToNext, openBatchImageModal, onDragOver, onDragLeave, onBatchDrop, onBatchFileChange, removeBatchFile, doBatchMatch, setBatchActionAll, closeBatchModal, doBatchImageUpload } = useBatchImage(showMoreDropdown, showBatchImageModal, batchImageType, showBatchResultModal, batchResult, showToast, tableData, manufacturerCode, currentSample)
+
+const conflictGridColumns = [
+  { type: 'checkbox', width: 44 },
+  { title: '图片', width: 72, slots: { default: 'conflictImage' }, align: 'center' },
+  { field: 'sampleName', title: '样品名称', minWidth: 120, align: 'center' },
+  { field: 'sampleCode', title: '公司编号', minWidth: 100, align: 'center' },
+  { field: 'factoryCode', title: '出厂货号', minWidth: 100, align: 'center' },
+  { field: 'manufacturerCode', title: '厂商编号', width: 100, align: 'center' },
+  { field: 'remark', title: '中文备注', minWidth: 120, align: 'center' },
+  { field: 'boothNo', title: '摊位号', width: 80, align: 'center' }
+]
+
+// 多选：toggle 单行，选中的 ID 存入数组
+function toggleConflictRow(conflict, row) {
+  conflictValidationMsg.value = ''
+  if (!batchConflictSelected.value[conflict.code]) {
+    batchConflictSelected.value[conflict.code] = []
+  }
+  const arr = batchConflictSelected.value[conflict.code]
+  const idx = arr.indexOf(row.id)
+  if (idx > -1) {
+    arr.splice(idx, 1)
+  } else {
+    arr.push(row.id)
+  }
+}
+
+// 全选/取消全选（vxe @checkbox-all 返回当前页 visibleData）
+function toggleConflictAll(conflict, records) {
+  const allIds = conflict.samples.map(s => s.id)
+  const current = batchConflictSelected.value[conflict.code] || []
+  if (allIds.length > 0 && allIds.every(id => current.includes(id))) {
+    // 已全选 → 取消
+    batchConflictSelected.value[conflict.code] = []
+  } else {
+    batchConflictSelected.value[conflict.code] = [...allIds]
+  }
+}
+
+// 确认冲突选择：每个货号至少选一条
+const conflictValidationMsg = ref('')
+function confirmConflictSelection() {
+  const missing = batchConflicts.value.filter(c => {
+    const sel = batchConflictSelected.value[c.code]
+    return !sel || sel.length === 0
+  })
+  if (missing.length > 0) {
+    conflictValidationMsg.value = `以下货号至少选择一条：${missing.map(c => c.code).join('、')}`
+    return
+  }
+  conflictValidationMsg.value = ''
+  resolveBatchConflicts(batchConflictSelected.value)
+}
+
+const conflictPreviewSrc = ref('')
+watch(showBatchConflictModal, (val) => { if (!val) conflictPreviewSrc.value = '' })
+
+const downloadFailedZip = async () => {
+  const files = [
+    ...(batchResult.failFiles || []),
+    ...(batchResult.unmatchedFiles || [])
+  ]
+  if (files.length === 0) return
+  const zip = new JSZip()
+  files.forEach(f => {
+    if (f.file instanceof File) zip.file(f.name, f.file)
+  })
+  const blob = await zip.generateAsync({ type: 'blob' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `导入失败图片_${new Date().toISOString().slice(0, 10)}.zip`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+const { batchVideoFiles, batchVideoMatched, videoMatchLoading, videoUploading, videoUploadProgress, videoCurrentIndex, customMatchSubType, customManufacturerCode, customCodesText, openBatchVideoModal, closeBatchVideoModal, onVideoDragOver, onVideoDrop, onVideoFileChange, goToVideoPrev, goToVideoNext, removeVideoFile, setVideoActionAll, doBatchVideoUpload
+} = useBatchVideo(showBatchVideoModal, batchVideoType, showAlertDialog)
+
+const {
+  scanPrintCode, scanPrintResult, scanPrintImageSrc, scanPrintError,
+  scanPrintType, scanPrintLoading, scanPrintContinuous, scanPrintCount, scanPrintInputRef,
+  openScanPrintModal, searchScanPrint, doScanPrint,
+  doPrintTable, doPrintQuarterTable, doPrintAllLabels, doPrintWithImages,
+  multiPrintType, multiPrintBatchCopies, multiPrintRecords, totalPrintPages, batchSetCopies,
+  doPrintMultiCopies, confirmMultiPrint
+} = useScanPrint(
+  showScanPrintModal, showMultiPrintModal, showPrintDropdown,
+  gridRef, tableData, totalRecords, currentPage, pageSize, loadTableData,
+  showToast, showConfirmDialog
+)
+
+const {
+  downloadTemplate,
+  showExportModal, exportFields, dragIndex, checkedExportFieldCount,
+  templateName, currentTemplate, exportTemplates, showTplMenu, showTplSaveInput, tplSaveRef,
+  initExportFields, loadExportTemplates, saveExportTemplate, loadExportTemplate, deleteExportTemplate,
+  selectAllExportFields, deselectAllExportFields,
+  onExportDragStart, onExportDragOver, onExportDrop, onExportDragEnd,
+  doExport, exportExcel,
+  showVendorConfirmModal, vcExporting, vcLogoInputRef, vcConfig,
+  vcFields, visibleVcFields, checkedVcFieldCount, vcPreviewData,
+  initVcFields, selectAllVcFields, deselectAllVcFields,
+  onVcLogoUpload, saveVcConfigToLocal, doVendorConfirmExport,
+  showTemplateSelect, availableTemplates, selectedTemplateId, templateSearchKeyword,
+  vcSessionLoading, filteredTemplates,
+  openVendorConfirmReport, confirmTemplateAndOpen,
+} = useExport(
+  selectedIds, gridRef, showToast, showAlertDialog, showMoreDropdown, showPrintDropdown
+)
+
+// ===== 对照资料管理 =====
+const {
+  showRefDataModal, refActiveTab, openReferenceDataModal,
+  refCategories, refCatTreeData, refCatKeyword, refSelectedCatIds, refCatGridRef,
+  showRefCatForm, refEditingCat, refCatForm, refLevel1Cats,
+  refLoadCategories, refFilterCategories, refExpandAllCat,
+  openRefCategoryAdd, refEditCategory, refSaveCategory, refDeleteCategory, refDeleteSelectedCats, saveRefCatKeywords,
+  refPackagings, refPkgKeyword, refSelectedPkgIds, refPkgGridRef,
+  showRefPkgForm, refEditingPkg, refPkgForm, refLoadPackagings,
+  openRefPackagingAdd, refEditPackaging, refSavePackaging, refDeletePackaging, refDeleteSelectedPkgs,
+} = useRefData(showMoreDropdown, showToast)
+
+const {
+  showAdvancedSearch, advForm,
+  saveAdvForm, restoreAdvForm, clearAdvForm, openAdvancedSearch, doAdvancedSearch: _doAdvancedSearch,
+} = useAdvancedSearch(tableData, totalRecords, currentPage, pageSize, currentSortField, currentSortOrder, activeSearchConditions, manufacturerCode)
+
+const doAdvancedSearch = async () => {
+  const ok = await _doAdvancedSearch()
+  if (ok) {
+    nextTick(() => {
+      if (tableData.value.length > 0 && gridRef.value) {
+        gridRef.value.setCurrentRow(tableData.value[0])
+        selectSample(tableData.value[0])
+      }
+    })
   }
 }
 
@@ -3306,6 +3055,8 @@ const handlePreviewDrop = async (e) => {
 
 const viewOriginal = () => {
   if (!currentSample.value) return
+  showPhotoModal.value = false
+  photoModalImages.value = []
   imagePreviewList.value = currentSampleImages.value
   imagePreviewIndex.value = stripIndex.value
   imagePreviewSelected.value = new Set()
@@ -3318,6 +3069,7 @@ const openFullPreview = () => {
   imagePreviewIndex.value = photoModalIndex.value
   imagePreviewSelected.value = new Set()
   showPhotoModal.value = false
+  editing.value = false
   showImagePreview.value = true
 }
 
@@ -3388,7 +3140,14 @@ const clearSearch = () => {
   locateKeyword.value = ''
   activeSearchConditions.value = null  // 清除综合查询条件
   currentPage.value = 1
-  loadTableData()
+  loadTableData().then(() => {
+    nextTick(() => {
+      if (tableData.value.length > 0 && gridRef.value) {
+        gridRef.value.setCurrentRow(tableData.value[0])
+        selectSample(tableData.value[0])
+      }
+    })
+  })
 }
 
 const goPage = (p) => {
@@ -3771,6 +3530,11 @@ const formatFormDate = (obj) => {
       result[key] = result[key].replace('T', ' ')
     }
   })
+  if (!result.infringement) result.infringement = '其他'
+  // 产品规格/包装规格空值默认显示0
+  ;['sampleLength','sampleWidth','sampleHeight','packageLength','packageWidth','packageHeight','cartonLength','cartonWidth','cartonHeight'].forEach(k => {
+    if (result[k] == null || result[k] === '') result[k] = '0'
+  })
   return result
 }
 
@@ -3805,13 +3569,16 @@ const resetForm = () => {
 const saveSample = async () => {
   try {
     const payload = { ...formData }
+    const userName = auth.state.userInfo?.realName || auth.state.userInfo?.username || ''
     if (formMode.value === 'add') {
+      payload.registrant = userName
       const res = await api('/samples', { method: 'POST', body: JSON.stringify(payload) })
       if (res.code === 200 || res.id) {
         formMode.value = 'readonly'
         await loadTableData()
       }
     } else if (formMode.value === 'edit') {
+      payload.modifier = userName
       const id = payload.id || currentSample.value?.id
       const res = await api(`/samples/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
       if (res.code === 200 || res.id) {
@@ -3944,7 +3711,7 @@ const onThumbMouseEnter = (e, row) => {
   if (!row.thumbnail) return
   // 优先用原图，缩略图兜底
   const thumbSrc = '/thumbnails/' + row.thumbnail
-  const src = row.firstImageHash ? '/images/view/hash/' + row.firstImageHash : thumbSrc
+  const src = row.thumbnail ? thumbSrc : (row.firstImageHash ? '/images/view/hash/' + row.firstImageHash : thumbSrc)
   const rect = e.target.getBoundingClientRect()
   const gap = 12
   const previewSize = 620
@@ -4003,6 +3770,9 @@ const fetchPhotoModalImages = async (sampleId) => {
 }
 
 const fmt3 = (a, b, c) => {
+  if ((a == null || a === '') && (b == null || b === '') && (c == null || c === '')) {
+    return '0'
+  }
   return [(a != null && a !== '' ? a : '0'), (b != null && b !== '' ? b : '0'), (c != null && c !== '' ? c : '0')].join('x')
 }
 
@@ -4049,7 +3819,7 @@ const saveModalEdit = async () => {
   const s = photoModalSample.value
   if (!s) return
   try {
-    const payload = { ...editData, id: s.id }
+    const payload = { ...editData, id: s.id, modifier: auth.state.userInfo?.realName || auth.state.userInfo?.username || '' }
     const res = await api(`/samples/${s.id}`, { method: 'PUT', body: JSON.stringify(payload) })
     if (res.code === 200 || res.id) {
       Object.assign(s, editData)
@@ -4062,6 +3832,11 @@ const saveModalEdit = async () => {
 }
 
 const cancelModalEdit = () => {
+  editing.value = false
+}
+
+const closePhotoModal = () => {
+  showPhotoModal.value = false
   editing.value = false
 }
 
@@ -4113,161 +3888,9 @@ const closeDropdowns = (e) => {
   importArea.onDocClick(e)
 }
 
-const downloadTemplate = () => {
-  showMoreDropdown.value = false
-  const a = document.createElement('a')
-  a.href = '/samples/template'
-  a.download = 'template.csv'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-}
-
 const batchSetPrice = () => {
   showMoreDropdown.value = false
   showToast('批量设置价格功能开发中', 'info')
-}
-
-const openRestoreDeletedModal = () => {
-  showMoreDropdown.value = false
-  showRestoreDeletedModal.value = true
-  deletedSelected.value = []
-  deletedFilterField.value = ''
-  deletedFilterKeyword.value = ''
-  deletedFilterActive.value = false
-  fetchDeletedSamples()
-}
-
-const fetchDeletedSamples = async () => {
-  deletedLoading.value = true
-  try {
-    const res = await api('/samples/deleted?current=1&size=99999')
-    if (res.code === 200 && res.data) {
-      deletedAllData.value = res.data.records || []
-      deletedTotal.value = res.data.total || 0
-      applyDeletedFilter()
-    }
-  } catch (e) {
-    showAlertDialog('获取已删除数据失败: ' + (e.message || '未知错误'), 'error')
-  } finally {
-    deletedLoading.value = false
-  }
-}
-
-const applyDeletedFilter = () => {
-  const all = deletedAllData.value || []
-  const field = deletedFilterField.value
-  const keyword = deletedFilterKeyword.value.trim()
-  if (!keyword) {
-    deletedFilterActive.value = false
-    deletedData.value = all
-    deletedTotal.value = all.length
-    return
-  }
-  deletedFilterActive.value = true
-  let filtered = all
-  if (field === 'updateTime') {
-    filtered = all.filter(item => {
-      const t = item.updateTime
-      if (!t) return false
-      const d = new Date(t)
-      const ds = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
-      return ds.includes(keyword)
-    })
-  } else if (field) {
-    const kw = keyword.toLowerCase()
-    filtered = all.filter(item => {
-      const val = item[field]
-      return val != null && String(val).toLowerCase().includes(kw)
-    })
-  } else {
-    const kw = keyword.toLowerCase()
-    filtered = all.filter(item => {
-      return ['sampleCode', 'manufacturerCode', 'sampleName', 'category', 'factoryCode', 'registrant'].some(f => {
-        const val = item[f]
-        return val != null && String(val).toLowerCase().includes(kw)
-      })
-    })
-  }
-  deletedData.value = filtered
-  deletedTotal.value = filtered.length
-  deletedSelected.value = []
-  if (deletedGridRef.value) {
-    deletedGridRef.value.clearCheckboxRow()
-  }
-}
-
-const doDeletedFilter = () => {
-  applyDeletedFilter()
-}
-
-const doDeletedResetFilter = () => {
-  deletedFilterField.value = ''
-  deletedFilterKeyword.value = ''
-  applyDeletedFilter()
-}
-
-const onDeletedZoom = ({ type }) => {
-  deletedFullscreen.value = (type === 'max')
-  if (!deletedFullscreen.value) {
-    deletedFullscreenSearch.value = ''
-    doDeletedResetFilter()
-    nextTick(() => {
-      if (deletedGridRef.value) {
-        deletedGridRef.value.refreshColumn()
-        deletedGridRef.value.refreshScroll()
-      }
-    })
-  }
-}
-
-const onDeletedToolbarClick = ({ code }) => {
-  if (code === 'refresh') {
-    fetchDeletedSamples()
-  }
-}
-
-const onDeletedFullscreenSearch = () => {
-  const keyword = deletedFullscreenSearch.value.trim().toLowerCase()
-  if (!keyword) {
-    doDeletedResetFilter()
-    return
-  }
-  const all = deletedAllData.value || []
-  deletedFilterActive.value = true
-  deletedData.value = all.filter(item =>
-    Object.values(item).some(v => String(v || '').toLowerCase().includes(keyword))
-  )
-}
-
-const clearDeletedFullscreenSearch = () => {
-  deletedFullscreenSearch.value = ''
-  doDeletedResetFilter()
-}
-
-const openDeletedBatchQuery = () => {
-  showDeletedBatchQuery.value = true
-}
-
-const doDeletedBatchQuery = () => {
-  const raw = deletedBatchInput.value.trim()
-  if (!raw) {
-    showAlertDialog('请输入至少一个编号', 'warning')
-    return
-  }
-  const codes = raw.split(/[\n,，]+/).map(s => s.trim()).filter(Boolean)
-  if (codes.length === 0) {
-    showAlertDialog('请输入至少一个编号', 'warning')
-    return
-  }
-  const field = deletedBatchField.value
-  const all = deletedAllData.value || []
-  const codeSet = new Set(codes)
-  deletedFilterActive.value = true
-  deletedData.value = all.filter(item => codeSet.has(String(item[field] || '').trim()))
-  deletedFullscreenSearch.value = ''
-  deletedBatchInput.value = ''
-  showDeletedBatchQuery.value = false
 }
 
 const openMainBatchQuery = () => {
@@ -4307,368 +3930,11 @@ const doMainBatchQuery = async () => {
   }
 }
 
-const onDeletedCheckChange = () => {
-  const grid = deletedGridRef.value
-  if (grid) {
-    deletedSelected.value = grid.getCheckboxRecords()
-  }
-}
-
-const doRestoreDeleted = async () => {
-  if (deletedSelected.value.length === 0) return
-  if (!(await showConfirmDialog(`确定恢复选中的 ${deletedSelected.value.length} 条记录吗？`))) return
-  const ids = deletedSelected.value.map(r => r.id)
-  try {
-    const res = await api('/samples/restore', { method: 'POST', body: JSON.stringify(ids) })
-    if (res.code === 200) {
-      showAlertDialog(`成功恢复 ${res.data || ids.length} 条记录`, 'success')
-      deletedSelected.value = []
-      fetchDeletedSamples()
-      loadTableData()
-    } else {
-      showAlertDialog('恢复失败: ' + (res.message || '未知错误'), 'error')
-    }
-  } catch (e) {
-    showAlertDialog('恢复失败: ' + (e.message || '未知错误'), 'error')
-  }
-}
-
-// ===================== 导出字段选择 =====================
-const EXPORT_FIELD_CONFIG = [
-  { key: 'sampleCode', label: '公司编号', default: true },
-  { key: 'factoryCode', label: '出厂货号', default: true },
-  { key: 'manufacturerCode', label: '厂商编号' },
-  { key: 'category', label: '种类名称' },
-  { key: 'sampleName', label: '样品名称', default: true },
-  { key: 'englishName', label: '英文名称' },
-  { key: 'factoryPrice', label: '出厂价', default: true },
-  { key: 'taxPrice', label: '报出价' },
-  { key: 'packagingCn', label: '包装规格' },
-  { key: 'packagingEn', label: '包装规格(英)' },
-  { key: 'packingUnit', label: '包装单位' },
-  { key: 'innerBoxCount', label: '内盒数' },
-  { key: 'cartonCapacity', label: '装箱量' },
-  { key: 'cartonLength', label: '外箱长' },
-  { key: 'cartonWidth', label: '外箱宽' },
-  { key: 'cartonHeight', label: '外箱高' },
-  { key: 'cartonGrossWeight', label: '外箱毛重' },
-  { key: 'cartonNetWeight', label: '外箱净重' },
-  { key: 'sampleLength', label: '产品长' },
-  { key: 'sampleWidth', label: '产品宽' },
-  { key: 'sampleHeight', label: '产品高' },
-  { key: 'sampleGrossWeight', label: '产品毛重' },
-  { key: 'sampleNetWeight', label: '产品净重' },
-  { key: 'cartonVolume', label: '体积' },
-  { key: 'cartonMaterialVolume', label: '材积' },
-  { key: 'boothNo', label: '摊位号' },
-  { key: 'supplier', label: '厂商名称' },
-  { key: 'contactPerson', label: '联系人' },
-  { key: 'contactPhone', label: '联系电话' },
-  { key: 'mobile', label: '手机' },
-  { key: 'fax', label: '传真' },
-  { key: 'qq', label: 'QQ' },
-  { key: 'material', label: '材料' },
-  { key: 'color', label: '颜色' },
-  { key: 'colorEn', label: '颜色(英)' },
-  { key: 'size', label: '尺寸' },
-  { key: 'origin', label: '原产地' },
-  { key: 'sampleUnit', label: '样品单位' },
-  { key: 'sampleUnitEn', label: '样品单位(英)' },
-  { key: 'certification', label: '认证' },
-  { key: 'certificationCount', label: '认证数量' },
-  { key: 'batteryInfo', label: '电池信息' },
-  { key: 'infringement', label: '侵权信息' },
-  { key: 'remark', label: '中文备注' },
-  { key: 'remarkEn', label: '备注(英)' },
-  { key: 'registrant', label: '登记人' },
-  { key: 'modifier', label: '修改人' },
-  { key: 'createTime', label: '登记时间' },
-  { key: 'updateTime', label: '修改时间' },
-]
-
-const showExportModal = ref(false)
-const exportFields = ref([])
-const dragIndex = ref(-1)
-
-const initExportFields = () => {
-  // 尝试从 localStorage 恢复上次保存的模板
-  const saved = localStorage.getItem('export_template_last')
-  if (saved) {
-    try {
-      const last = JSON.parse(saved)
-      const keySet = new Set(last.fields)
-      exportFields.value = EXPORT_FIELD_CONFIG.map(f => ({ ...f, checked: keySet.has(f.key) }))
-      currentTemplate.value = { name: last.name, fields: last.fields }
-      return
-    } catch (e) {}
-  }
-  exportFields.value = EXPORT_FIELD_CONFIG.map(f => ({ ...f }))
-  currentTemplate.value = null
-}
-
-const checkedExportFieldCount = computed(() => exportFields.value.filter(f => f.checked).length)
-
-// 模板相关
-const templateName = ref('')
-const currentTemplate = ref(null)
-const exportTemplates = ref([])
-const showTplMenu = ref(false)
-const showTplSaveInput = ref(false)
-const tplSaveRef = ref(null)
-
-const loadExportTemplates = () => {
-  try {
-    exportTemplates.value = JSON.parse(localStorage.getItem('export_templates') || '[]')
-  } catch (e) { exportTemplates.value = [] }
-}
-
-const saveExportTemplate = () => {
-  const name = templateName.value.trim()
-  if (!name) return
-  const checked = exportFields.value.filter(f => f.checked).map(f => f.key)
-  if (checked.length === 0) return
-  const templates = JSON.parse(localStorage.getItem('export_templates') || '[]')
-  const idx = templates.findIndex(t => t.name === name)
-  const obj = { name, fields: checked }
-  if (idx >= 0) templates[idx] = obj
-  else templates.push(obj)
-  localStorage.setItem('export_templates', JSON.stringify(templates))
-  exportTemplates.value = templates
-  currentTemplate.value = obj
-  templateName.value = ''
-  showTplSaveInput.value = false
-}
-
-const loadExportTemplate = (t) => {
-  const keySet = new Set(t.fields)
-  exportFields.value = EXPORT_FIELD_CONFIG.map(f => ({ ...f, checked: keySet.has(f.key) }))
-  currentTemplate.value = t
-}
-
-const deleteExportTemplate = () => {
-  if (!currentTemplate.value) return
-  const templates = JSON.parse(localStorage.getItem('export_templates') || '[]').filter(t => t.name !== currentTemplate.value.name)
-  localStorage.setItem('export_templates', JSON.stringify(templates))
-  exportTemplates.value = templates
-  currentTemplate.value = null
-}
-
-const selectAllExportFields = () => exportFields.value.forEach(f => f.checked = true)
-const deselectAllExportFields = () => exportFields.value.forEach(f => f.checked = false)
-
-// 拖拽排序
-const onExportDragStart = (e, i) => {
-  dragIndex.value = i
-  e.dataTransfer.effectAllowed = 'move'
-}
-const onExportDragOver = (e, i) => {
-  if (dragIndex.value === -1 || dragIndex.value === i) return
-  const arr = [...exportFields.value]
-  const [removed] = arr.splice(dragIndex.value, 1)
-  arr.splice(i, 0, removed)
-  exportFields.value = arr
-  dragIndex.value = i
-}
-const onExportDrop = (i) => { dragIndex.value = -1 }
-const onExportDragEnd = () => { dragIndex.value = -1 }
-
-const doExport = async () => {
-  const selected = exportFields.value.filter(f => f.checked).map(f => f.key)
-  if (selected.length === 0 || selectedIds.value.length === 0) return
-  try {
-    const resp = await fetch('/samples/export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
-      body: JSON.stringify({ fields: selected, ids: selectedIds.value })
-    })
-    if (!resp.ok) throw new Error('导出失败')
-    const blob = await resp.blob()
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    const today = new Date()
-    const dateStr = today.getFullYear() + String(today.getMonth() + 1).padStart(2, '0') + String(today.getDate()).padStart(2, '0')
-    a.download = '样品资料' + dateStr + '.xlsx'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    window.URL.revokeObjectURL(url)
-    // 保存最后使用的模板
-    if (currentTemplate.value) {
-      localStorage.setItem('export_template_last', JSON.stringify(currentTemplate.value))
-    } else {
-      localStorage.setItem('export_template_last', JSON.stringify({ name: '_auto', fields: selected }))
-    }
-    showExportModal.value = false
-    // 清除勾选
-    selectedIds.value = []
-    if (gridRef.value) gridRef.value.setCheckboxRow([], false)
-  } catch (e) {
-    console.error('导出失败', e)
-  }
-}
-
-const exportExcel = () => {
-  showMoreDropdown.value = false
-  loadExportTemplates()
-  initExportFields()
-  showExportModal.value = true
-}
-
 // 在新标签页中打开报表设计器，避免覆盖主页面
 const openReportDesigner = () => {
   showMoreDropdown.value = false
   const url = router.resolve({ name: 'ReportDesigner' }).href
   window.open(url, '_blank')
-}
-
-// ===== 厂商确认表（带图） =====
-const showVendorConfirmModal = ref(false)
-const vcExporting = ref(false)
-const vcLogoInputRef = ref(null)
-
-// 抬头配置
-const vcConfig = reactive({
-  logoBase64: '',
-  companyName: '',
-  address: '',
-  phone: '',
-  title: '厂商确认表'
-})
-
-// 字段列表（复用导出字段，默认选中常用字段）
-const vcFields = ref([])
-const defaultVcKeys = ['sampleCode', 'factoryCode', 'sampleName', 'factoryPrice', 'packagingCn', 'cartonCapacity', 'supplier', 'boothNo', 'remark']
-
-const initVcFields = () => {
-  vcFields.value = EXPORT_FIELD_CONFIG.map(f => ({
-    ...f,
-    checked: defaultVcKeys.includes(f.key)
-  }))
-  // 恢复本地保存的配置
-  loadVcConfigFromLocal()
-}
-
-const visibleVcFields = computed(() => vcFields.value.filter(f => f.checked))
-const checkedVcFieldCount = computed(() => vcFields.value.filter(f => f.checked).length)
-
-const selectAllVcFields = () => vcFields.value.forEach(f => f.checked = true)
-const deselectAllVcFields = () => vcFields.value.forEach(f => f.checked = false)
-
-// 预览数据：从表格中获取勾选行的数据
-const vcPreviewData = computed(() => {
-  if (!gridRef.value || selectedIds.value.length === 0) return []
-  const records = gridRef.value.getCheckboxRecords() || []
-  return records.map(r => ({ id: r.id, ...r }))
-})
-
-// Logo 上传
-const onVcLogoUpload = (e) => {
-  const file = e.target.files[0]
-  if (!file) return
-  const reader = new FileReader()
-  reader.onload = (ev) => { vcConfig.logoBase64 = ev.target.result }
-  reader.readAsDataURL(file)
-  e.target.value = ''
-}
-
-// 配置持久化
-const saveVcConfigToLocal = () => {
-  const obj = { ...vcConfig, fields: vcFields.value.filter(f => f.checked).map(f => f.key) }
-  localStorage.setItem('vendor_confirm_config', JSON.stringify(obj))
-  showToast('配置已保存', 'success')
-}
-
-const loadVcConfigFromLocal = () => {
-  try {
-    const saved = JSON.parse(localStorage.getItem('vendor_confirm_config') || '{}')
-    if (saved.companyName) vcConfig.companyName = saved.companyName
-    if (saved.address) vcConfig.address = saved.address
-    if (saved.phone) vcConfig.phone = saved.phone
-    if (saved.title) vcConfig.title = saved.title
-    if (saved.logoBase64) vcConfig.logoBase64 = saved.logoBase64
-    if (saved.fields && saved.fields.length > 0) {
-      const keySet = new Set(saved.fields)
-      vcFields.value.forEach(f => { f.checked = keySet.has(f.key) })
-    }
-  } catch (e) {}
-}
-
-// 打开厂商确认报表（新标签页）
-const showTemplateSelect = ref(false)
-const availableTemplates = ref([])
-const selectedTemplateId = ref('')
-const templateSearchKeyword = ref('')
-const vcSessionLoading = ref(false)
-
-const filteredTemplates = computed(() => {
-  const kw = templateSearchKeyword.value.trim().toLowerCase()
-  if (!kw) return availableTemplates.value
-  return availableTemplates.value.filter(tpl =>
-    (tpl.title || '').toLowerCase().includes(kw) ||
-    (tpl.description || '').toLowerCase().includes(kw)
-  )
-})
-
-const openVendorConfirmReport = async () => {
-  const records = gridRef.value?.getCheckboxRecords() || []
-  if (records.length === 0) {
-    showAlertDialog('请先勾选要打印的样品', 'warn')
-    return
-  }
-  // 从后端加载已保存的报表模板
-  let templates = []
-  try {
-    const resp = await api('/report-templates/all')
-    if (resp.code === 200) {
-      templates = resp.data || []
-    }
-  } catch (e) {
-    console.error('加载模板失败', e)
-  }
-
-  if (templates.length === 0) {
-    showAlertDialog('未找到报表模板，请先在报表设计器中设计模板并「保存为模板」', 'warn')
-    return
-  }
-  availableTemplates.value = templates
-  selectedTemplateId.value = ''
-  templateSearchKeyword.value = ''
-  // 关闭其他打印下拉
-  showPrintDropdown.value = false
-  showTemplateSelect.value = true
-}
-
-// 用户选择模板后，创建会话并打开预览
-const confirmTemplateAndOpen = async () => {
-  if (!selectedTemplateId.value) return
-  const records = gridRef.value?.getCheckboxRecords() || []
-  const sampleIds = records.map(r => r.id)
-  const token = sessionStorage.getItem('token') || localStorage.getItem('token')
-
-  vcSessionLoading.value = true
-  try {
-    const resp = await fetch('/samples/vendor-confirm-session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (token || '') },
-      body: JSON.stringify({ sampleIds })
-    })
-    const result = await resp.json()
-    const cacheKey = result.key
-    const params = new URLSearchParams()
-    if (token) params.set('token', token)
-    params.set('key', cacheKey)
-    params.set('templateId', selectedTemplateId.value)
-    params.set('viewOnly', '1')
-    const url = `/#/report/designer?${params.toString()}`
-    showTemplateSelect.value = false
-    window.open(url, '_blank')
-  } catch (e) {
-    console.error('厂商确认表打开失败', e)
-    showAlertDialog('打开失败，请稍后重试', 'error')
-  } finally {
-    vcSessionLoading.value = false
-  }
 }
 
 const finishProgress = () => {
@@ -4686,17 +3952,14 @@ const closeReportModal = () => {
   reportModalUrl.value = ''
   reportModalLoading.value = false
   reportModalProgress.value = 0
-  // 清理进度条定时器
   if (reportModalProgressTimer) {
     clearInterval(reportModalProgressTimer)
     reportModalProgressTimer = null
   }
-  // 断开分页观察器
   if (paginationObserver) {
     paginationObserver.disconnect()
     paginationObserver = null
   }
-  // 断开内容就绪观察器
   if (contentReadyObserver) {
     contentReadyObserver.disconnect()
     contentReadyObserver = null
@@ -4705,28 +3968,21 @@ const closeReportModal = () => {
 
 let paginationObserver = null
 let reportModalProgressTimer = null
-let contentReadyObserver = null // 监听内容渲染完成
+let contentReadyObserver = null
 
 const onReportIframeLoad = () => {
   const elapsed = ((Date.now() - reportModalStartTime) / 1000).toFixed(1)
-  console.log(`[厂商确认表] iframe load事件触发，已耗时: ${elapsed}秒，开始注入CSS...`)
-  // 注入CSS到iframe内（同源后应该能访问）
   try {
     const frame = document.getElementById('reportIframe')
     if (!frame) return
     const doc = frame.contentDocument || frame.contentWindow.document
     if (!doc) {
-      console.warn('无法访问iframe文档，可能仍存在跨域')
       reportModalLoading.value = false
       return
     }
-
-    // 监听iframe内部内容渲染完成（表格出现时）
     const checkContentReady = () => {
       const table = doc.querySelector('table')
       if (table && table.rows && table.rows.length > 1) {
-        const elapsed = ((Date.now() - reportModalStartTime) / 1000).toFixed(1)
-        console.log(`[厂商确认表] 报表内容渲染完成，总耗时: ${elapsed}秒 (表格${table.rows.length}行)`)
         reportModalLoading.value = false
         finishProgress()
         if (contentReadyObserver) {
@@ -4737,18 +3993,11 @@ const onReportIframeLoad = () => {
       }
       return false
     }
-
-    // 启动内容就绪检测
     contentReadyObserver = new MutationObserver(() => { checkContentReady() })
     contentReadyObserver.observe(doc.body, { childList: true, subtree: true })
-    // 立即检查一次（表格可能已存在）
     checkContentReady()
-
-    // 超时兜底（最多等10秒）
     setTimeout(() => {
       if (reportModalLoading.value) {
-        const elapsed = ((Date.now() - reportModalStartTime) / 1000).toFixed(1)
-        console.log(`[厂商确认表] 超时兜底关闭loading，已等待: ${elapsed}秒`)
         reportModalLoading.value = false
         finishProgress()
         if (contentReadyObserver) {
@@ -4757,11 +4006,8 @@ const onReportIframeLoad = () => {
         }
       }
     }, 10000)
-
-    // 隐藏查询栏
     const style = doc.createElement('style')
     style.textContent = `
-      /* 隐藏查询栏 */
       div[class*="search"], div[class*="query"], div[class*="filter"],
       div[class*="Search"], div[class*="Query"], div[class*="Filter"],
       [class*="-search-"], [class*="-query-"],
@@ -4770,8 +4016,6 @@ const onReportIframeLoad = () => {
       }
     `
     doc.head.appendChild(style)
-
-    // MutationObserver实时隐藏分页
     const findAndHide = () => {
       const w = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT)
       while (w.nextNode()) {
@@ -4795,15 +4039,11 @@ const onReportIframeLoad = () => {
     findAndHide()
     paginationObserver = new MutationObserver(() => { if (findAndHide()) { paginationObserver?.disconnect(); paginationObserver=null } })
     paginationObserver.observe(doc.body, { childList:true, subtree:true })
-
-    // 缩放
-    const containerEl = frame.parentElement // .report-modal-body
+    const containerEl = frame.parentElement
     const bodyWidth = doc.body.scrollWidth || doc.documentElement.scrollWidth
-    console.log('报表原始宽度:', bodyWidth, '模态框容器宽度:', containerEl?.clientWidth)
     if (containerEl && bodyWidth > 0) {
-      const containerWidth = containerEl.clientWidth - 4 // 留2px边距
+      const containerWidth = containerEl.clientWidth - 4
       const ratio = Math.min(1, containerWidth / bodyWidth)
-      console.log('缩放比例:', ratio)
       if (ratio < 1) {
         const zoomStyle = doc.createElement('style')
         zoomStyle.textContent = `
@@ -4815,14 +4055,10 @@ const onReportIframeLoad = () => {
           }
         `
         doc.head.appendChild(zoomStyle)
-        // 调整iframe高度以适应缩放后的内容
         frame.style.height = `${containerEl.clientHeight / ratio + 60}px`
       }
     }
-    console.log('报表CSS注入成功')
-  } catch (e) {
-    console.warn('CSS注入失败:', e.message)
-  }
+  } catch (e) {}
 }
 
 const doReportPrint = () => {
@@ -4831,12 +4067,10 @@ const doReportPrint = () => {
   try {
     const doc = frame.contentDocument || frame.contentWindow.document
     if (!doc || !doc.body) { frame.contentWindow.print(); return }
-    // 临时移除zoom并展开iframe为完整尺寸
     const savedFrameW = frame.style.width
     const savedFrameH = frame.style.height
     const savedBodyZoom = doc.body.style.zoom
     const savedBodyTransform = doc.body.style.transform
-    // 找到并移除zoom相关style标签
     const removedStyles = []
     doc.querySelectorAll('style').forEach(s => {
       if (s.textContent && /zoom|transform.*scale/.test(s.textContent)) {
@@ -4844,14 +4078,12 @@ const doReportPrint = () => {
         s.remove()
       }
     })
-    // 展开iframe到完整内容尺寸
     const fullW = doc.body.scrollWidth || doc.documentElement.scrollWidth || 1500
     const fullH = doc.body.scrollHeight || doc.documentElement.scrollHeight || 2000
     frame.style.width = (fullW + 40) + 'px'
     frame.style.height = (fullH + 40) + 'px'
     doc.body.style.zoom = '1'
     doc.body.style.transform = 'none'
-    // 注入打印专用样式
     const ps = doc.createElement('style')
     ps.id = 'print-temp'
     ps.textContent = `@media print{@page{size:landscape;margin:8mm}*{overflow:visible!important}}`
@@ -4859,7 +4091,6 @@ const doReportPrint = () => {
     setTimeout(() => {
       frame.contentWindow.focus()
       frame.contentWindow.print()
-      // 打印后恢复
       setTimeout(() => {
         frame.style.width = savedFrameW || ''
         frame.style.height = savedFrameH || ''
@@ -4874,7 +4105,6 @@ const doReportPrint = () => {
   }
 }
 
-// ESC关闭报表模态框
 const onReportEscKey = (e) => {
   if (e.key === 'Escape' && showReportModal.value) {
     closeReportModal()
@@ -4889,7 +4119,6 @@ const onAreaCopyKey = (e) => {
   const vals = getAreaSelectedValues()
   if (vals.length === 0) return
   const text = vals.map(v => v.value != null ? String(v.value) : '').join('\n')
-  // 创建临时 textarea 并选中，让浏览器触发 copy 事件
   areaCopyTextarea = document.createElement('textarea')
   areaCopyTextarea.value = text
   areaCopyTextarea.style.position = 'absolute'
@@ -4908,364 +4137,20 @@ const onAreaCopyEvent = (e) => {
   const text = vals.map(v => v.value != null ? String(v.value) : '').join('\n')
   e.clipboardData.setData('text/plain', text)
   e.preventDefault()
-  // 清理临时 textarea
   if (areaCopyTextarea && document.body.contains(areaCopyTextarea)) {
     document.body.removeChild(areaCopyTextarea)
     areaCopyTextarea = null
   }
 }
 
-// 打开模态框（保留旧入口，如需使用原弹窗可改名调用）
 const openVendorConfirmModal = () => {
   initVcFields()
   showVendorConfirmModal.value = true
 }
 
-// 导出厂商确认表
-const doVendorConfirmExport = async () => {
-  if (checkedVcFieldCount.value === 0 || selectedIds.value.length === 0) return
-  vcExporting.value = true
-  try {
-    const fields = visibleVcFields.value.map(f => f.key)
-    const resp = await fetch('/samples/vendor-confirm', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
-      body: JSON.stringify({
-        ids: selectedIds.value,
-        fields,
-        header: {
-          companyName: vcConfig.companyName,
-          address: vcConfig.address,
-          phone: vcConfig.phone,
-          title: vcConfig.title,
-          logoBase64: vcConfig.logoBase64 ? vcConfig.logoBase64.split(',')[1] : ''
-        }
-      })
-    })
-    if (!resp.ok) throw new Error('导出失败')
-    const blob = await resp.blob()
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    const today = new Date()
-    const dateStr = today.getFullYear() + String(today.getMonth() + 1).padStart(2, '0') + String(today.getDate()).padStart(2, '0')
-    a.download = '厂商确认表' + dateStr + '.xlsx'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    window.URL.revokeObjectURL(url)
-    showVendorConfirmModal.value = false
-    selectedIds.value = []
-    if (gridRef.value) gridRef.value.setCheckboxRow([], false)
-  } catch (e) {
-    console.error('厂商确认表导出失败', e)
-    showToast('导出失败，请重试', 'error')
-  } finally {
-    vcExporting.value = false
-  }
-}
-
 const printTable = () => {
   showMoreDropdown.value = false
   window.print()
-}
-
-const doPrintTable = () => {
-  showPrintDropdown.value = false
-  const records = gridRef.value ? gridRef.value.getCheckboxRecords() : []
-  if (!records || records.length === 0) {
-    showToast('请先勾选要打印的样品数据', 'warn')
-    return
-  }
-  generateBarcodeLabels(records)
-}
-
-const doPrintAllLabels = async () => {
-  showPrintDropdown.value = false
-  const ok = await showConfirmDialog('确认打印全部数据的大条码标签？')
-  if (!ok) return
-  const savedSize = pageSize.value
-  const savedPage = currentPage.value
-  pageSize.value = totalRecords.value || 5000
-  currentPage.value = 1
-  await loadTableData()
-  setTimeout(() => {
-    const records = tableData.value || []
-    if (records.length > 0) {
-      generateBarcodeLabels(records)
-    } else {
-      showToast('没有数据可打印', 'warn')
-    }
-    pageSize.value = savedSize
-    currentPage.value = savedPage
-    loadTableData()
-  }, 1000)
-}
-
-const generateBarcodeLabels = async (records) => {
-  const LABEL_W_MM = 50
-  const LABEL_H_MM = 40
-  const DPI = 96
-  const MM_TO_PX = DPI / 25.4
-  const LABEL_PX_W = Math.round(LABEL_W_MM * MM_TO_PX)
-  const LABEL_PX_H = Math.round(LABEL_H_MM * MM_TO_PX)
-
-  let html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>大条码标签</title>' +
-    '<style>' +
-    '*{margin:0;padding:0;box-sizing:border-box}' +
-    'body{font-family:"SimSun","宋体",sans-serif;-webkit-text-stroke:0.5px}' +
-    '.label{width:' + LABEL_PX_W + 'px;height:' + LABEL_PX_H + 'px;' +
-    'background:#ff5733;color:#000;display:flex;flex-direction:column;position:relative;' +
-    'padding:2px 3px;font-size:13px;font-weight:bold;line-height:1;overflow:hidden;page-break-after:always;' +
-    '-webkit-text-stroke:0.35px}' +
-    '.label:last-child{page-break-after:auto}' +
-    '.lb-hdr{text-align:center;font-size:15px;font-weight:bold;line-height:1;letter-spacing:1px}' +
-    '.lb-row{display:flex;align-items:center;font-weight:bold;line-height:1;margin-top:3px;padding-left:5px;min-height:13px}' +
-    '.lb-code{font-weight:bold;font-size:13px;flex:1;min-width:0;line-height:1}' +
-    '.lb-qr{position:absolute;top:24px;right:20px;width:60px;height:60px;z-index:1}' +
-    '.lb-qr svg,.lb-qr img{width:100%;height:100%;display:block}' +
-    '.lb-pair{flex:1;min-width:0;font-weight:bold;font-size:10px}' +
-    '.lb-pack{font-weight:bold;font-size:13px;overflow:hidden;line-height:1}' +
-    '.lb-box{white-space:nowrap;line-height:1;font-weight:bold;font-size:12px}' +
-    '.lb-name{font-weight:bold;font-size:12px;white-space:normal;word-break:break-all;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1;padding-left:5px;min-height:12px}' +
-    '.lb-booth{font-weight:bold;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1}' +
-    '@media print{@page{size:' + LABEL_W_MM + 'mm ' + LABEL_H_MM + 'mm;margin:0;padding:0}' +
-    'body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}' +
-    '</style></head><body>'
-
-  for (let i = 0; i < records.length; i++) {
-    const r = records[i]
-    const code = r.sampleCode || ''
-    const qrDataUrl = await QRCode.toDataURL(code, { width: 160, margin: 1, scale: 5 })
-
-    const inner = r.innerBoxCount || ''
-    const cap = r.cartonCapacity || ''
-    const gw = r.cartonGrossWeight || ''
-    const nw = r.cartonNetWeight || ''
-    const cl = r.cartonLength || ''
-    const cw = r.cartonWidth || ''
-    const ch = r.cartonHeight || ''
-    const cv = r.cartonMaterialVolume || ''
-    const vol = r.cartonVolume || ''
-    const booth = r.boothNo || ''
-    const boothLen = booth.length
-    const boothSize = boothLen > 21 ? '8px' : '12px'
-
-    const factoryCodeText = r.factoryCode || r.packageCode || ''
-    const factoryCodeLen = factoryCodeText.length
-    const factoryCodeSize = factoryCodeLen > 23 ? '7px' : factoryCodeLen > 15 ? '8px' : factoryCodeLen > 12 ? '10px' : '13px'
-    let factoryCodeHtml = esc(factoryCodeText)
-    if (factoryCodeLen > 23) {
-      const mid = Math.ceil(factoryCodeLen / 2)
-      factoryCodeHtml = esc(factoryCodeText.slice(0, mid)) + '<br>' + esc(factoryCodeText.slice(mid))
-    }
-
-    const sampleNameText = r.sampleName || ''
-    const sampleNameLen = sampleNameText.length
-    const sampleNameSize = sampleNameLen > 39 ? '8px' : sampleNameLen > 20 ? '10px' : '12px'
-
-    html += '<div class="label">' +
-      '<div class="lb-hdr">新悦翔玩具展馆</div>' +
-      '<div class="lb-row">' +
-        '<div class="lb-code">' + esc(code) + '</div>' +
-      '</div>'
-
-    html += '<div class="lb-row"><span class="lb-pack" style="font-size:' + factoryCodeSize + '">' + factoryCodeHtml + '</span></div>'
-
-    html += '<div class="lb-row">' +
-        '<span class="lb-pair" style="flex:0 0 auto;margin-right:20px">' + esc(inner) + '/' + esc(cap) + '</span>' +
-        '<span class="lb-pair" style="flex:0 0 auto">' + esc(gw) + '/' + esc(nw) + '</span>' +
-      '</div>' +
-      '<div class="lb-row"><span class="lb-pack">' + esc(r.packagingCn || '') + '</span></div>' +
-      '<div class="lb-row">' +
-        '<span class="lb-box" style="flex:0 0 auto;margin-right:25px">' + esc(cl) + '*' + esc(cw) + '*' + esc(ch) + '</span>' +
-        '<span class="lb-box" style="flex:0 0 auto">' + esc(vol) + '/' + esc(cv) + '</span>' +
-      '</div>' +
-      '<div class="lb-row" style="margin-top:5px">' +
-        '<span class="lb-booth" style="flex:0 0 auto;font-size:' + boothSize + '">' + esc(booth) + '</span>' +
-        '<span class="lb-booth" style="flex:0 0 auto;margin-left:80px">B01</span>' +
-      '</div>' +
-      '<div class="lb-name" style="margin-top:5px;font-size:' + sampleNameSize + '" title="' + escAttr(sampleNameText) + '">' + esc(sampleNameText) + '</div>' +
-      '<div class="lb-qr"><img src="' + qrDataUrl + '" /></div>' +
-      '</div>'
-  }
-
-  html += '</body></html>'
-  printHtml(html)
-}
-
-const doPrintQuarterTable = () => {
-  showPrintDropdown.value = false
-  const records = gridRef.value ? gridRef.value.getCheckboxRecords() : []
-  if (!records || records.length === 0) {
-      showToast('请先勾选要打印的样品数据', 'warn')
-      return
-    }
-  generateQuarterLabels(records)
-}
-
-const generateQuarterLabels = async (records) => {
-  const LABEL_W_MM = 25
-  const LABEL_H_MM = 25
-  const DPI = 96
-  const MM_TO_PX = DPI / 25.4
-  const LABEL_PX_W = Math.round(LABEL_W_MM * MM_TO_PX)
-  const LABEL_PX_H = Math.round(LABEL_H_MM * MM_TO_PX)
-  const QR_PX = Math.round(15 * MM_TO_PX)
-
-  let html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>小条码标签</title>' +
-    '<style>' +
-    '*{margin:0;padding:0;box-sizing:border-box}' +
-    'body{font-family:"SimSun","宋体",sans-serif;-webkit-text-stroke:0.5px}' +
-    '.qlabel{width:' + LABEL_PX_W + 'px;height:' + LABEL_PX_H + 'px;' +
-    'background:#fff;color:#000;display:flex;flex-direction:column;justify-content:center;overflow:hidden;' +
-    'page-break-after:always}' +
-    '.qlabel:last-child{page-break-after:auto}' +
-    '.q-factory{text-align:center;font-weight:bold;font-size:8px;line-height:1.2;flex-shrink:0;margin-top:1px}' +
-    '.q-mid{position:relative;flex:1;overflow:hidden}' +
-    '.q-qr-wrap{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:' + QR_PX + 'px;height:' + QR_PX + 'px}' +
-    '.q-qr-wrap img{width:100%;height:100%;display:block}' +
-    '.q-pack-left{position:absolute;top:75%;left:6px;transform:translateY(-50%) rotate(-90deg);transform-origin:left center;font-weight:bold;font-size:8px;line-height:1;white-space:nowrap}' +
-    '.q-code-right{position:absolute;top:82%;right:6px;transform:translateY(-50%) rotate(90deg);transform-origin:right center;font-weight:bold;font-size:8px;line-height:1;white-space:nowrap}' +
-    '.q-booth{text-align:center;font-weight:bold;font-size:8px;line-height:1.2;flex-shrink:0}' +
-    '@media print{@page{size:' + LABEL_W_MM + 'mm ' + LABEL_H_MM + 'mm;margin:0;padding:0}' +
-    'body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}' +
-    '</style></head><body>'
-
-  for (let i = 0; i < records.length; i++) {
-    const r = records[i]
-    const code = r.sampleCode || ''
-    const qrDataUrl = await QRCode.toDataURL(code, { width: 80, margin: 0, scale: 4 })
-    const factoryCodeText = r.factoryCode || r.packageCode || ''
-    const factoryCodeLen = factoryCodeText.length
-    const factorySize = factoryCodeLen > 8 ? '6px' : '8px'
-    let factoryHtml = esc(factoryCodeText)
-    if (factoryCodeLen > 8) {
-      const mid = Math.ceil(factoryCodeLen / 2)
-      factoryHtml = esc(factoryCodeText.slice(0, mid)) + '<br>' + esc(factoryCodeText.slice(mid))
-    }
-    const packagingText = r.packagingCn || ''
-    const booth = r.boothNo || ''
-    const boothLen = booth.length
-    const boothSize = boothLen > 21 ? '6px' : '8px'
-    let boothHtml = esc(booth)
-    if (boothLen > 21) {
-      const mid = Math.ceil(boothLen / 2)
-      boothHtml = esc(booth.slice(0, mid)) + '<br>' + esc(booth.slice(mid))
-    }
-
-    html += '<div class="qlabel">' +
-      '<div class="q-factory" style="font-size:' + factorySize + '">' + factoryHtml + '</div>' +
-      '<div class="q-mid">' +
-        '<div class="q-pack-left">' + esc(packagingText) + '</div>' +
-        '<div class="q-qr-wrap"><img src="' + qrDataUrl + '" /></div>' +
-        '<div class="q-code-right">' + esc(code) + '</div>' +
-      '</div>' +
-      '<div class="q-booth" style="font-size:' + boothSize + '">' + boothHtml + '</div>' +
-      '</div>'
-  }
-
-  html += '</body></html>'
-  printHtml(html)
-}
-
-const esc = (s) => { if (!s && s !== 0) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
-const escAttr = (s) => { if (!s && s !== 0) return ''; return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
-
-let printIframe = null
-const printHtml = (html) => {
-  return new Promise((resolve) => {
-    if (!printIframe) {
-      printIframe = document.createElement('iframe')
-      printIframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:none;opacity:0;pointer-events:none'
-      document.body.appendChild(printIframe)
-    }
-    let loaded = false
-    printIframe.onload = () => {
-      if (loaded) return
-      loaded = true
-      printIframe.contentWindow.print()
-      printIframe.contentWindow.onafterprint = () => { resolve() }
-    }
-    printIframe.srcdoc = html
-  })
-}
-
-const openScanPrintModal = () => {
-  scanPrintCode.value = ''
-  scanPrintResult.value = null
-  scanPrintImageSrc.value = ''
-  scanPrintError.value = ''
-  scanPrintType.value = 'barcode'
-  scanPrintLoading.value = false
-  scanPrintCount.value = 1
-  showScanPrintModal.value = true
-  nextTick(() => scanPrintInputRef.value?.focus())
-}
-
-const searchScanPrint = async () => {
-  const code = scanPrintCode.value.trim()
-  if (!code) {
-    scanPrintError.value = '请输入公司编号'
-    return
-  }
-  scanPrintError.value = ''
-  scanPrintResult.value = null
-  scanPrintImageSrc.value = ''
-  scanPrintLoading.value = true
-  try {
-    const res = await api('/samples/search?current=1&size=1', {
-      method: 'POST',
-      body: JSON.stringify({ sampleCode: code })
-    })
-    const data = res.data || res || {}
-    const list = data.records || data.list || []
-    if (list.length === 0) {
-      scanPrintError.value = '未找到公司编号为 "' + code + '" 的样品'
-      return
-    }
-    const r = list[0]
-    scanPrintResult.value = r
-    if (r.thumbnail || r.thumbnailName) {
-      const imgName = r.thumbnail || r.thumbnailName
-      scanPrintImageSrc.value = '/thumbnails/' + imgName
-    }
-    if (scanPrintContinuous.value) {
-      nextTick(() => doScanPrint())
-    }
-  } catch (e) {
-    scanPrintError.value = '查询失败：' + (e.message || '网络错误')
-  } finally {
-    scanPrintLoading.value = false
-  }
-}
-
-const doScanPrint = () => {
-  if (!scanPrintResult.value) return
-  const count = scanPrintCount.value || 1
-  const records = []
-  for (let i = 0; i < count; i++) {
-    records.push(scanPrintResult.value)
-  }
-  if (scanPrintContinuous.value) {
-    scanPrintCode.value = ''
-    scanPrintResult.value = null
-    scanPrintImageSrc.value = ''
-    scanPrintError.value = ''
-    nextTick(() => scanPrintInputRef.value?.focus())
-    if (scanPrintType.value === 'barcode') {
-      generateBarcodeLabels(records)
-    } else {
-      generateQuarterLabels(records)
-    }
-  } else {
-    showScanPrintModal.value = false
-    if (scanPrintType.value === 'barcode') {
-      generateBarcodeLabels(records)
-    } else {
-      generateQuarterLabels(records)
-    }
-  }
 }
 
 const openImageSearchModal = async () => {
@@ -5347,98 +4232,6 @@ const removeSearchImage = (idx) => {
   } else {
     resetCropState()
   }
-}
-
-function resetCropState() {
-  cropState.startX = 0
-  cropState.startY = 0
-  cropState.x = 0
-  cropState.y = 0
-  cropState.w = 0
-  cropState.h = 0
-  cropState.active = false
-  cropState.done = false
-  cropDraggingHandle.value = ''
-  cropImgNaturalW.value = 0
-  cropImgNaturalH.value = 0
-  cropDisplayScale.value = 1
-}
-
-const resetCrop = () => { resetCropState() }
-
-const onCropImgLoad = () => {
-  const img = cropImgRef.value
-  if (!img) return
-  cropImgNaturalW.value = img.naturalWidth
-  cropImgNaturalH.value = img.naturalHeight
-  if (img.offsetWidth > 0) {
-    cropDisplayScale.value = img.naturalWidth / img.offsetWidth
-  }
-}
-
-const getCropEditorPos = (e) => {
-  const rect = cropEditorRef.value.getBoundingClientRect()
-  return { x: e.clientX - rect.left, y: e.clientY - rect.top }
-}
-
-const onCropMouseDown = (e) => {
-  if (cropDraggingHandle.value) return
-  const pos = getCropEditorPos(e)
-  cropState.startX = pos.x
-  cropState.startY = pos.y
-  cropState.x = pos.x
-  cropState.y = pos.y
-  cropState.w = 0
-  cropState.h = 0
-  cropState.active = true
-  cropState.done = false
-}
-
-const onCropMouseMove = (e) => {
-  if (!cropState.active) return
-  const pos = getCropEditorPos(e)
-  if (cropDraggingHandle.value) {
-    handleResize(pos)
-  } else {
-    cropState.w = pos.x - cropState.startX
-    cropState.h = pos.y - cropState.startY
-  }
-}
-
-const onCropMouseUp = () => {
-  if (!cropState.active) return
-  if (Math.abs(cropState.w) > 10 && Math.abs(cropState.h) > 10) {
-    cropState.done = true
-  } else {
-    resetCropState()
-  }
-  cropState.active = false
-  cropDraggingHandle.value = ''
-}
-
-const onHandleDown = (e, handle) => {
-  e.preventDefault()
-  cropDraggingHandle.value = handle
-  cropState.active = true
-  const pos = getCropEditorPos(e)
-  cropState.startX = pos.x
-  cropState.startY = pos.y
-}
-
-const handleResize = (pos) => {
-  const h = cropDraggingHandle.value
-  const dx = pos.x - cropState.startX
-  const dy = pos.y - cropState.startY
-  const boxX = cropState.w < 0 ? cropState.x + cropState.w : cropState.x
-  const boxY = cropState.h < 0 ? cropState.y + cropState.h : cropState.y
-  const boxW = Math.abs(cropState.w)
-  const boxH = Math.abs(cropState.h)
-  if (h.includes('r')) { cropState.w = boxW + dx; cropState.x = boxX }
-  if (h.includes('l')) { cropState.w = boxW - dx; cropState.x = boxX + dx }
-  if (h.includes('b')) { cropState.h = boxH + dy; cropState.y = boxY }
-  if (h.includes('t')) { cropState.h = boxH - dy; cropState.y = boxY + dy }
-  cropState.startX = pos.x
-  cropState.startY = pos.y
 }
 
 const getCroppedFile = () => {
@@ -5529,720 +4322,38 @@ const viewImageSearchResult = (item) => {
   }
 }
 
-const doPrintMultiCopies = () => {
-  showPrintDropdown.value = false
-  const records = gridRef.value ? gridRef.value.getCheckboxRecords() : []
-  if (!records || records.length === 0) {
-    showToast('请先勾选要打印的样品数据', 'warn')
-    return
-  }
-  multiPrintBatchCopies.value = 1
-  multiPrintType.value = 'barcode'
-  multiPrintRecords.value = records.map(r => ({
-    ...r,
-    copies: 1,
-    factoryCode: r.factoryCode || r.packageCode || ''
-  }))
-  showMultiPrintModal.value = true
-}
-
-const confirmMultiPrint = () => {
-  const rows = multiPrintRecords.value
-  if (!rows || rows.length === 0) {
-    showToast('没有要打印的数据', 'warn')
-    return
-  }
-  const repeatedRecords = []
-  rows.forEach(r => {
-    const copies = r.copies || 0
-    for (let i = 0; i < copies; i++) {
-      repeatedRecords.push(r)
-    }
-  })
-  if (repeatedRecords.length === 0) {
-    showToast('没有有效的打印张数', 'warn')
-    return
-  }
-  showMultiPrintModal.value = false
-  if (multiPrintType.value === 'barcode') {
-    generateBarcodeLabels(repeatedRecords)
-  } else {
-    generateQuarterLabels(repeatedRecords)
-  }
-}
-
-const doPrintWithImages = () => {
-  showPrintDropdown.value = false
-  const records = tableData.value || []
-  let html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>打印含图片列表</title>' +
-    '<style>' +
-    'body{font-family:"Microsoft YaHei",sans-serif;padding:20px}' +
-    'table{border-collapse:collapse;width:100%;font-size:12px}' +
-    'td,th{border:1px solid #ccc;padding:6px 8px;text-align:left;vertical-align:top}' +
-    'th{background:#f5f5f5;font-weight:600}' +
-    'img{max-width:80px;max-height:80px;object-fit:contain}' +
-    '@media print{body{margin:0;padding:10px}}' +
-    '</style></head><body>' +
-    '<h2 style="text-align:center">样品图片列表</h2>' +
-    '<table><thead><tr>' +
-    '<th>图片</th><th>公司编号</th><th>样品名称</th><th>厂商名称</th><th>种类</th><th>出厂价</th>' +
-    '</tr></thead><tbody>'
-  records.forEach(r => {
-    const imgSrc = r.thumbnail ? '/thumbnails/' + r.thumbnail : ''
-    html += '<tr>' +
-      '<td>' + (imgSrc ? '<img src="' + imgSrc + '" />' : '') + '</td>' +
-      '<td>' + (r.sampleCode || '') + '</td>' +
-      '<td>' + (r.sampleName || '') + '</td>' +
-      '<td>' + (r.supplier || '') + '</td>' +
-      '<td>' + (r.category || '') + '</td>' +
-      '<td>' + (r.factoryPrice || '') + '</td>' +
-      '</tr>'
-  })
-  html += '</tbody></table></body></html>'
-  printHtml(html)
-}
-
-const openImportModal = () => {
-  showMoreDropdown.value = false
-  importFile.value = null
-  showImportModal.value = true
-}
-
-const openBatchImageModal = () => {
-  showMoreDropdown.value = false
-  batchFiles.value = []
-  showBatchImageModal.value = true
-}
-
-const ADV_SEARCH_KEY = 'sample_adv_search_form'
-
-const defaultAdvForm = () => ({
-  manufacturerCode: '', supplier: '', contactPerson: '',
-  contactPhone: '', mobile: '', sampleName: '',
-  sampleCode: '', factoryCode: '', boothNo: '',
-  factoryPriceMin: null, factoryPriceMax: null, category: '', categoryCode: '',
-  cartonCapacityMin: null, cartonCapacityMax: null, packageCode: '', packagingCn: '',
-  certification: '', infringement: '', hasImage: false,
-  sampleLengthMin: null, sampleLengthMax: null,
-  sampleWidthMin: null, sampleWidthMax: null, sampleHeightMin: null, sampleHeightMax: null,
-  packageLengthMin: null, packageLengthMax: null,
-  packageWidthMin: null, packageWidthMax: null, packageHeightMin: null, packageHeightMax: null,
-  cartonLengthMin: null, cartonLengthMax: null,
-  cartonWidthMin: null, cartonWidthMax: null, cartonHeightMin: null, cartonHeightMax: null,
-  innerBoxCountMin: null, innerBoxCountMax: null, batteryInfo: '', keyword: '',
-  createTimeMin: '', createTimeMax: '', updateTimeMin: '', updateTimeMax: ''
-})
-
-const advForm = reactive(defaultAdvForm())
-
-const saveAdvForm = () => {
-  try {
-    localStorage.setItem(ADV_SEARCH_KEY, JSON.stringify({ ...advForm }))
-  } catch (e) { /* ignore quota */ }
-}
-
-const restoreAdvForm = () => {
-  try {
-    const raw = localStorage.getItem(ADV_SEARCH_KEY)
-    if (!raw) return false
-    const saved = JSON.parse(raw)
-    Object.keys(defaultAdvForm()).forEach(k => {
-      if (saved.hasOwnProperty(k)) advForm[k] = saved[k]
-    })
-    return true
-  } catch (e) { return false }
-}
-
-const clearAdvForm = () => {
-  const def = defaultAdvForm()
-  Object.keys(def).forEach(k => { advForm[k] = def[k] })
-  try { localStorage.removeItem(ADV_SEARCH_KEY) } catch (e) {}
-}
-
-const openAdvancedSearch = () => {
-  clearAdvForm()
-  showAdvancedSearch.value = true
-}
-
-const onImportFileChange = async (e) => {
-  const file = e.target.files[0]
-  if (!file) return
-  importFile.value = file
-  // 选择文件后立即显示进度条，不等 FileReader 回调
-  importParsing.value = true
-  importParsingStage.value = '正在读取文件...'
-  importParsingProgress.value = 5
-  const parsingStartTime = Date.now()
-  try {
-    await parseExcelFile(file, parsingStartTime)
-  } catch (err) {
-    // parseExcelFile 内部已处理 toast
-    importParsing.value = false
-    importParsingProgress.value = 0
-    importParsingStage.value = ''
-  }
-}
-
-const parseExcelFile = (file, parsingStartTime) => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = async (e) => {
-      const arrayBuf = e.target.result
-
-      // 创建 Web Worker，将 XLSX 解析放到后台线程执行
-      const worker = new ExcelParserWorker()
-
-      worker.onmessage = async (ev) => {
-        const msg = ev.data
-        if (msg.type === 'progress') {
-          importParsingStage.value = msg.stage
-          importParsingProgress.value = msg.progress
-        } else if (msg.type === 'error') {
-          worker.terminate()
-          importParsing.value = false
-          importParsingProgress.value = 0
-          importParsingStage.value = ''
-          showToast(msg.message || 'Excel 解析失败', 'warn')
-          resolve()
-        } else if (msg.type === 'result') {
-          worker.terminate()
-          const { jsonData } = msg
-
-          try {
-            importParsingStage.value = '正在检测表头...'
-            importParsingProgress.value = 55
-            if (jsonData.length === 0) {
-              importParsing.value = false
-              importParsingProgress.value = 0
-              importParsingStage.value = ''
-              showToast('Excel 文件为空', 'warn')
-              resolve()
-              return
-            }
-
-            // 自动检测表头行：扫描前5行，匹配别名最多的作为表头
-            let bestRow = 0, bestMatch = 0
-            let bestHeaders = []
-            const scanLimit = Math.min(5, jsonData.length)
-            for (let r = 0; r < scanLimit; r++) {
-              const candidate = jsonData[r]
-              if (!candidate || candidate.every(c => !c)) continue
-              let match = 0
-              const tentative = candidate.map(c => String(c || '').trim())
-              tentative.forEach(h => { if (h && resolveHeader(h)) match++ })
-              if (match > bestMatch) {
-                bestMatch = match
-                bestRow = r
-                bestHeaders = tentative
-              }
-            }
-            const headers = bestHeaders
-            const dataStartRow = bestRow + 1
-            importPreviewHeaders.value = headers
-
-            const rows = []
-            const totalDataRows = jsonData.length - dataStartRow
-            importParsingStage.value = `正在提取数据 (${totalDataRows} 行)...`
-            importParsingProgress.value = 65
-            for (let i = dataStartRow; i < jsonData.length; i++) {
-              const rawRow = jsonData[i]
-              if (!rawRow || rawRow.every(cell => !cell && cell !== 0)) continue
-
-              const rowObj = { _rowIndex: i, _status: 'pending', _warnings: [] }
-              headers.forEach((header, idx) => {
-                const fieldName = resolveHeader(header)
-                if (fieldName) {
-                  rowObj[fieldName] = rawRow[idx] != null ? String(rawRow[idx]).trim() : ''
-                }
-              })
-              // 复合列拆分
-              applySplits(rowObj)
-              rows.push(markRaw(rowObj))
-            }
-
-            // 预加载对照表（一次请求复用匹配+校验）
-            importParsingStage.value = '正在加载种类/包装对照表...'
-            importParsingProgress.value = 70
-            let catList = [], pkgList = []
-            try {
-              const [catRes, pkgRes] = await Promise.all([
-                api('/product-categories/all'),
-                api('/packaging-methods/all')
-              ])
-              catList = Array.isArray(catRes?.data) ? catRes.data : []
-              pkgList = Array.isArray(pkgRes?.data) ? pkgRes.data : []
-            } catch (e) { console.warn('对照表加载失败', e) }
-
-            // 构建种类关键词索引：一次性预拆词
-            const catKwsIndex = catList.map(cat => {
-              const rawKws = cat.keywords || cat.name || ''
-              let kws = rawKws.split(/[,，]/).map(k => k.trim().toLowerCase()).filter(Boolean)
-              if (!cat.keywords && cat.name) {
-                for (let i = 0; i < cat.name.length - 1; i++) {
-                  const sub = cat.name.substring(i, i + 2).toLowerCase()
-                  if (!kws.includes(sub)) kws.push(sub)
-                }
-              }
-              return { ...cat, _kws: kws }
-            })
-
-            // 自动匹配种类（预索引免逐个拆词）
-            importParsingStage.value = '正在自动匹配种类...'
-            importParsingProgress.value = 80
-            let autoMatched = 0
-            if (catKwsIndex.length > 0) {
-              rows.forEach(row => {
-                if (row.category && row.category.trim()) return
-                const pname = (row.sampleName || '').trim().toLowerCase()
-                if (!pname) return
-                for (const cat of catKwsIndex) {
-                  if (cat._kws.some(kw => pname.includes(kw))) {
-                    row.category = cat.name
-                    row.categoryCode = cat.code
-                    autoMatched++
-                    break
-                  }
-                }
-              })
-              if (autoMatched > 0) showToast(`已自动匹配 ${autoMatched} 条种类`, 'success')
-            }
-
-            // 自动匹配包装：从原始中文包装匹配包装方式表
-            importParsingStage.value = '正在自动匹配包装...'
-            importParsingProgress.value = 85
-            let pkgAutoMatched = 0
-            if (pkgList.length > 0) {
-              // 构建包装关键词索引
-              const pkgKwsIndex = pkgList.map(pkg => {
-                const name = (pkg.name || '').trim()
-                const kws = [name.toLowerCase()]
-                // 2-gram 滑动窗口拆词："开窗盒" → ["开窗盒", "开窗", "窗盒"]
-                for (let i = 0; i < name.length - 1; i++) {
-                  const sub = name.substring(i, i + 2).toLowerCase()
-                  if (!kws.includes(sub)) kws.push(sub)
-                }
-                return { ...pkg, _kws: kws }
-              })
-              // 按关键词长度降序排列，优先匹配长关键词（"开窗盒" 优先于 "盒"）
-              pkgKwsIndex.sort((a, b) => {
-                const aMax = Math.max(...a._kws.map(k => k.length))
-                const bMax = Math.max(...b._kws.map(k => k.length))
-                return bMax - aMax
-              })
-              rows.forEach(row => {
-                if (row.packagingCn && row.packagingCn.trim()) return  // 已有匹配包装则跳过
-                const orig = (row.originalPackagingCn || '').trim().toLowerCase()
-                if (!orig) return
-                for (const pkg of pkgKwsIndex) {
-                  if (pkg._kws.some(kw => orig.includes(kw))) {
-                    row.packagingCn = pkg.name
-                    row.packageCode = pkg.code
-                    pkgAutoMatched++
-                    break
-                  }
-                }
-                // 没匹配到则用原始值作为中文包装
-                if (!row.packagingCn) row.packagingCn = row.originalPackagingCn
-              })
-              if (pkgAutoMatched > 0) showToast(`已自动匹配 ${pkgAutoMatched} 条包装`, 'success')
-            }
-
-            // 百度翻译：英文名称 + 英文包装（批量请求一次搞定）
-            importParsingStage.value = '正在自动翻译英文...'
-            importParsingProgress.value = 88
-            const translateTexts = []      // 待翻译文本
-            const translateTargets = []    // 对应的 [row, field]
-            rows.forEach(row => {
-              // 英文名称为空时，翻译样品名称
-              if (!row.englishName || !row.englishName.trim()) {
-                const src = (row.sampleName || '').trim()
-                if (src) {
-                  translateTexts.push(src)
-                  translateTargets.push([row, 'englishName'])
-                }
-              }
-              // 英文包装为空时，翻译中文包装
-              if (!row.packagingEn || !row.packagingEn.trim()) {
-                const src = (row.packagingCn || row.originalPackagingCn || '').trim()
-                if (src) {
-                  translateTexts.push(src)
-                  translateTargets.push([row, 'packagingEn'])
-                }
-              }
-              // 英文备注为空时，翻译中文备注
-              if (!row.remarkEn || !row.remarkEn.trim()) {
-                const src = (row.remark || '').trim()
-                if (src) {
-                  translateTexts.push(src)
-                  translateTargets.push([row, 'remarkEn'])
-                }
-              }
-            })
-            if (translateTexts.length > 0) {
-              importParsingStage.value = `正在自动翻译英文 (${translateTexts.length} 条)...`
-              const translated = await baiduTranslateBatch(translateTexts)
-              if (translated && translated.length === translateTexts.length) {
-                translateTargets.forEach(([row, field], i) => {
-                  row[field] = translated[i]
-                })
-                showToast(`已自动翻译 ${translated.length} 条英文`, 'success')
-              } else {
-                showToast('翻译接口异常，已跳过', 'warning')
-              }
-            }
-
-            // 校验种类名称和中文包装是否在对照表中
-            importParsingStage.value = '正在校验数据...'
-            importParsingProgress.value = 92
-            let catErrorCount = 0
-            let pkgWarnCount = 0
-            const validCatNames = new Set(catList.map(r => r.name).filter(Boolean))
-            const validPkgNames = new Set(pkgList.map(r => r.name).filter(Boolean))
-            importValidCatNames.value = validCatNames
-            importValidPkgNames.value = validPkgNames
-            importCatList.value = catList   // 缓存完整种类列表供编辑时查找编码
-            importPkgList.value = pkgList  // 缓存完整包装列表供编辑时重新匹配
-
-            for (const row of rows) {
-              const catName = row.category
-              const pkgName = row.packagingCn
-              let hasCatErr = false, hasPkgWarn = false
-              if (catName && !validCatNames.has(catName)) {
-                row._warnings.push(`种类名称「${catName}」不在对照表中`)
-                row._status = 'cat_error'
-                hasCatErr = true
-              }
-              if (pkgName && !validPkgNames.has(pkgName)) {
-                row._warnings.push(`中文包装「${pkgName}」不在对照表中`)
-                if (!hasCatErr) row._status = 'pkg_warning'
-                hasPkgWarn = true
-              }
-              if (hasCatErr) catErrorCount++
-              if (hasPkgWarn) pkgWarnCount++
-            }
-
-            importPreviewAllRows.value = rows
-            importOriginalData.value = rows.map(r => markRaw({ ...r, _warnings: [...(r._warnings || [])] }))
-            importParsingStage.value = '解析完成，正在渲染预览...'
-            importParsingProgress.value = 95
-            importSelectedRows.value = []
-            importSelectedRowIndexes.value = new Set()
-            importPreviewCatFilter.value = false
-            importPreviewPkgFilter.value = false
-            importPreviewPage.value = 1
-            syncPreviewPage()
-            importParsingProgress.value = 100
-            importParsingStage.value = '完成'
-            // 确保进度条至少显示 600ms，小文件也能感知进度
-            const elapsed = Date.now() - parsingStartTime
-            const minDelay = Math.max(0, 600 - elapsed)
-            setTimeout(() => {
-              importParsing.value = false
-              showImportModal.value = false
-              showImportPreview.value = true
-            }, minDelay)
-
-            if (catErrorCount > 0 || pkgWarnCount > 0) {
-              const msgs = []
-              if (catErrorCount > 0) msgs.push(`${catErrorCount} 行种类名称不符`)
-              if (pkgWarnCount > 0) msgs.push(`${pkgWarnCount} 行中文包装不符`)
-              showToast(msgs.join('，') + '，请核实', 'warn')
-            }
-            resolve()
-          } catch (err) {
-            importParsing.value = false
-            importParsingProgress.value = 0
-            importParsingStage.value = ''
-            console.error('解析 Excel 失败:', err)
-            showToast('解析 Excel 文件失败: ' + err.message, 'error')
-            reject(err)
-          }
-        }
-
-      }
-
-      worker.onerror = (err) => {
-        worker.terminate()
-        importParsing.value = false
-        importParsingProgress.value = 0
-        importParsingStage.value = ''
-        console.error('Worker 错误:', err)
-        showToast('Excel 解析失败', 'error')
-        reject(new Error('Worker error'))
-      }
-
-      worker.postMessage({ type: 'parse', buffer: arrayBuf }, [arrayBuf])
-    }
-
-    reader.onerror = () => {
-      importParsing.value = false
-      importParsingProgress.value = 0
-      importParsingStage.value = ''
-      reject(new Error('文件读取失败'))
-    }
-    reader.readAsArrayBuffer(file)
-  })
-}
-
-const onImportDrop = (e) => {
-  const files = e.dataTransfer.files
-  if (files.length > 0 && files[0].name.endsWith('.xlsx')) {
-    importFile.value = files[0]
-  }
-}
-
-const onDragOver = (e) => {
-  e.currentTarget.classList.add('drag-over')
-}
-
-const onDragLeave = (e) => {
-  e.currentTarget.classList.remove('drag-over')
-}
-
-const onBatchDrop = (e) => {
-  e.currentTarget.classList.remove('drag-over')
-  const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'))
-  batchFiles.value = files
-  if (files.length > 0) doBatchMatch()
-}
-
-const onBatchFileChange = (e) => {
-  batchFiles.value = Array.from(e.target.files)
-  if (batchFiles.value.length > 0) doBatchMatch()
-}
-
-const removeBatchFile = (idx) => {
-  batchFiles.value.splice(idx, 1)
-  batchMatched.value.splice(idx, 1)
-  if (batchMatched.value.length === 0) {
-    batchCurrentIndex.value = 0
-  } else if (batchCurrentIndex.value >= batchMatched.value.length) {
-    batchCurrentIndex.value = batchMatched.value.length - 1
-  }
-}
-
-const doBatchMatch = async () => {
-  if (batchFiles.value.length === 0) return
-  batchMatchLoading.value = true
-  batchCurrentIndex.value = 0
-  batchMatched.value = []
-  try {
-    const codeField = batchImageType.value === 'company-code' ? 'sampleCode' : 'factoryCode'
-    const extractCode = (filename) => {
-      return filename.replace(/\.[^.]+$/, '').replace(/\(\d+\)$/, '').trim()
-    }
-    const codes = batchFiles.value.map(f => extractCode(f.name))
-
-    const matchRes = await api('/samples/match-by-codes', {
-      method: 'POST',
-      body: JSON.stringify({ codes, type: codeField === 'factoryCode' ? 'factoryCode' : 'sampleCode' })
-    })
-    const samples = Array.isArray(matchRes.data) ? matchRes.data : (Array.isArray(matchRes) ? matchRes : [])
-
-    const sampleMap = {}
-    samples.forEach(s => { sampleMap[s[codeField]] = s })
-
-    const matchedIds = []
-    const results = batchFiles.value.map(f => {
-      const code = extractCode(f.name)
-      const sample = sampleMap[code]
-      if (!sample) return { file: f, code, matched: false }
-      matchedIds.push(sample.id)
-      return { file: f, code, matched: true, sampleId: sample.id, sampleCode: sample.sampleCode, factoryCode: sample.factoryCode, sampleName: sample.sampleName, action: 'append', hasExisting: false, existingThumb: null, previewUrl: URL.createObjectURL(f) }
-    })
-
-    if (matchedIds.length > 0) {
-      try {
-        const imgRes = await api('/images/sample-images', { method: 'POST', body: JSON.stringify(matchedIds) })
-        const imgMap = imgRes.data || imgRes || {}
-        results.forEach(r => {
-          if (r.matched && imgMap[r.sampleId]) {
-            r.hasExisting = true
-            r.existingThumb = imgMap[r.sampleId].thumbnailPath || null
-          }
-        })
-      } catch (e) { console.error(e) }
-    }
-
-    batchMatched.value = results.sort((a, b) => b.matched - a.matched)
-  } catch (e) {
-    console.error(e)
-    batchMatched.value = batchFiles.value.map(f => ({ file: f, code: extractCode(f.name), matched: false, previewUrl: URL.createObjectURL(f) }))
-  } finally {
-    batchMatchLoading.value = false
-  }
-}
-
-const doImport = async () => {
-  if (!importFile.value) return
-  importUploading.value = true
-  try {
-    const fd = new FormData()
-    fd.append('file', importFile.value)
-    const res = await api('/samples/import', { method: 'POST', body: fd })
-    showImportModal.value = false
-    importFile.value = null
-    await loadTableData()
-  } catch (e) {
-    console.error(e)
-  } finally {
-    importUploading.value = false
-  }
-}
-
-const restorePreviewRow = (row) => {
-  // 还原整行：直接重新解析标记即可，无需存储原始副本
-  const idx = importPreviewAllRows.value.findIndex(r => r._rowIndex === row._rowIndex)
-  if (idx >= 0) {
-    // 用原始解析数据的浅拷贝来还原（原始数据在第一次解析时就存好了）
-    const orig = importOriginalData.value.find(r => r._rowIndex === row._rowIndex)
-    if (orig) {
-      importPreviewAllRows.value.splice(idx, 1, markRaw({ ...orig }))
-      syncPreviewPage()
-    }
-  }
-}
-
-const deletePreviewRow = (row) => {
-  const idx = importPreviewAllRows.value.findIndex(r => r._rowIndex === row._rowIndex)
-  if (idx >= 0) {
-    importPreviewAllRows.value.splice(idx, 1)
-    importSelectedRowIndexes.value.delete(row._rowIndex)
-    importSelectedRows.value = [...importSelectedRowIndexes.value]
-    syncPreviewPage()
-    onImportPreviewCheckChange()
-  }
-}
-
-const deleteSelectedPreviewRows = () => {
-  if (!importPreviewGridRef.value) return
-  const selectedRecords = importPreviewGridRef.value.getCheckboxRecords()
-  if (selectedRecords.length === 0) return
-  const rowIndexes = new Set(selectedRecords.map(r => r._rowIndex))
-  importPreviewAllRows.value = importPreviewAllRows.value.filter(r => !rowIndexes.has(r._rowIndex))
-  importPreviewGridRef.value.clearCheckboxRow()
-  importSelectedRows.value = []
-  importSelectedRowIndexes.value = new Set()
-  syncPreviewPage()
-}
-
-const batchEditRun = async () => {
-  const val = batchEditValue.value.trim()
-  const field = batchEditField.value
-  if (!val) return
-  const selected = importPreviewAllRows.value.filter(r => importSelectedRowIndexes.value.has(r._rowIndex))
-  if (selected.length === 0) return
-  const fieldLabel = batchEditFields.find(f => f.value === field)?.label || field
-
-  // 包装字段：同步编号和英文
-  let matchedPkg = null
-  if (field === 'packagingCn') {
-    matchedPkg = importPkgList.value.find(p => p.name === val)
-  }
-  // 种类字段：同步种类编号
-  let matchedCat = null
-  if (field === 'category') {
-    matchedCat = importCatList.value.find(c => c.name === val)
-  }
-
-  const needsTranslate = field === 'packagingCn'
-
-  selected.forEach(row => {
-    row[field] = val
-    if (field === 'packagingCn' && matchedPkg) {
-      row.packageCode = matchedPkg.code
-      row.packagingEn = matchedPkg.nameEn || ''
-    }
-    if (field === 'category' && matchedCat) {
-      row.categoryCode = matchedCat.code
-    }
-    // 清除旧警告
-    if (field === 'packagingCn') {
-      row._warnings = row._warnings.filter(w => !w.startsWith('中文包装'))
-    } else if (field === 'category') {
-      row._warnings = row._warnings.filter(w => !w.startsWith('种类'))
-    }
-    // 校验
-    if (field === 'category') {
-      const hasCatErr = val && !importValidCatNames.value.has(val)
-      if (hasCatErr) {
-        row._warnings.push(`种类「${val}」不在对照表中`)
-        row._status = 'cat_error'
-      } else {
-        row._status = 'pending'
-      }
-    } else if (field === 'packagingCn') {
-      const catName = row.category
-      const hasCatErr = catName && !importValidCatNames.value.has(catName)
-      if (val && !importValidPkgNames.value.has(val)) {
-        row._warnings.push(`中文包装「${val}」不在对照表中`)
-        if (!hasCatErr) row._status = 'pkg_warning'
-      } else if (!hasCatErr) {
-        row._status = 'pending'
-      }
-    }
-    // 同步到全量
-    const idx = importPreviewAllRows.value.findIndex(r => r._rowIndex === row._rowIndex)
-    if (idx >= 0) importPreviewAllRows.value.splice(idx, 1, markRaw({ ...row }))
-  })
-
-  batchEditValue.value = ''
-  syncPreviewPage()
-
-  // 翻译同步：中文包装改完后，翻译英文包装
-  let translatedCount = 0
-  if (needsTranslate && !matchedPkg) {
-    // 不在对照表中的才需要翻译
-    const translateTargets = selected.map(r => [r, 'packagingEn'])
-    const translateTexts = selected.map(r => val)
-    try {
-      const translated = await baiduTranslateBatch(translateTexts)
-      if (translated && translated.length === translateTexts.length) {
-        translateTargets.forEach(([row, fieldName], i) => {
-          row[fieldName] = translated[i]
-          // 同步到全量
-          const idx = importPreviewAllRows.value.findIndex(r => r._rowIndex === row._rowIndex)
-          if (idx >= 0) importPreviewAllRows.value.splice(idx, 1, markRaw({ ...row }))
-        })
-        translatedCount = translated.length
-      }
-    } catch (e) {
-      // 翻译失败跳过
-    }
-  }
-
-  let msg = `已批量修改 ${selected.length} 条${fieldLabel}为「${val}」`
-  if (field === 'packagingCn' && matchedPkg) {
-    msg += `，已同步包装编号「${matchedPkg.code}」${matchedPkg.nameEn ? '、英文包装「' + matchedPkg.nameEn + '」' : ''}`
-  } else if (translatedCount > 0) {
-    msg += `，已自动翻译 ${translatedCount} 条英文包装`
-  }
-  if (field === 'category' && matchedCat) {
-    msg += `，已同步种类编号「${matchedCat.code}」`
-  }
-  showToast(msg, 'success')
-}
-
-// 翻译勾选行的中文包装 → 英文包装（覆盖写）
+// 翻译勾选行的中文包装 + 样品名称 → 英文（覆盖写）
 const batchTranslateSelected = async () => {
   const selected = importPreviewAllRows.value.filter(r => importSelectedRowIndexes.value.has(r._rowIndex))
   if (selected.length === 0) return
-  const texts = selected.map(r => (r.packagingCn || '').trim()).filter(Boolean)
-  if (texts.length === 0) { showToast('所选行没有中文包装内容', 'warning'); return }
+
+  // 收集需要翻译的文本：样品名称 + 中文包装
+  const nameTexts = []
+  const nameTargets = []
+  const pkgTexts = []
+  const pkgTargets = []
+  selected.forEach(row => {
+    const name = (row.sampleName || '').trim()
+    if (name) { nameTexts.push(name); nameTargets.push(row) }
+    const pkg = (row.packagingCn || '').trim()
+    if (pkg) { pkgTexts.push(pkg); pkgTargets.push(row) }
+  })
+  const allTexts = [...nameTexts, ...pkgTexts]
+  if (allTexts.length === 0) { showToast('所选行没有可翻译的内容', 'warning'); return }
+
   try {
-    const translated = await baiduTranslateBatch(texts)
-    if (translated && translated.length === texts.length) {
-      let j = 0
+    const translated = await baiduTranslateBatch(allTexts)
+    if (translated && translated.length === allTexts.length) {
+      let k = 0
+      nameTargets.forEach(row => { row.englishName = translated[k++] })
+      pkgTargets.forEach(row => { row.packagingEn = translated[k++] })
       selected.forEach(row => {
-        const src = (row.packagingCn || '').trim()
-        if (src) {
-          row.packagingEn = translated[j++]
-          const idx = importPreviewAllRows.value.findIndex(r => r._rowIndex === row._rowIndex)
-          if (idx >= 0) importPreviewAllRows.value.splice(idx, 1, markRaw({ ...row }))
-        }
+        const idx = importPreviewAllRows.value.findIndex(r => r._rowIndex === row._rowIndex)
+        if (idx >= 0) importPreviewAllRows.value.splice(idx, 1, markRaw({ ...row }))
       })
       syncPreviewPage()
-      showToast(`已翻译 ${texts.length} 条中文包装→英文包装`, 'success')
+      const count = nameTexts.length + pkgTexts.length
+      showToast(`已翻译 ${count} 条（样品名称${nameTexts.length} + 包装${pkgTexts.length}）`, 'success')
     }
   } catch (e) {
     showToast('翻译失败，请稍后重试', 'error')
@@ -6252,786 +4363,8 @@ const batchTranslateSelected = async () => {
 const importRowClassName = ({ row }) => {
   if (row._status === 'cat_error') return 'import-row-cat-error'
   if (row._status === 'pkg_warning') return 'import-row-pkg-warning'
+  if (row._status === 'dup_warning') return 'import-row-dup-warning'
   return ''
-}
-
-const onImportPreviewCheckChange = () => {
-  if (importPreviewGridRef.value) {
-    const records = importPreviewGridRef.value.getCheckboxRecords()
-    // 当前页勾选的 _rowIndex
-    const currentPageIndexes = new Set(records.map(r => r._rowIndex))
-    // 跨页全集：移除当前页的选中（用新状态替换），加入当前页勾选的
-    const currentPageRows = importPreviewData.value
-    currentPageRows.forEach(r => importSelectedRowIndexes.value.delete(r._rowIndex))
-    currentPageIndexes.forEach(idx => importSelectedRowIndexes.value.add(idx))
-    importSelectedRows.value = [...importSelectedRowIndexes.value]
-  }
-}
-
-// 编辑单元格后重新校验该行的种类/包装
-const onImportCellEdit = ({ row, column }) => {
-  const field = column?.field || column?.property
-  if (field !== 'category' && field !== 'packagingCn' && field !== 'originalPackagingCn') return
-
-  // 编辑原始中文包装时，重新关键词匹配
-  if (field === 'originalPackagingCn') {
-    const orig = (row.originalPackagingCn || '').trim().toLowerCase()
-    const pkgList = importPkgList.value
-    if (orig && pkgList.length > 0) {
-      const pkgKwsIndex = pkgList.map(pkg => {
-        const name = (pkg.name || '').trim()
-        const kws = [name.toLowerCase()]
-        for (let i = 0; i < name.length - 1; i++) {
-          const sub = name.substring(i, i + 2).toLowerCase()
-          if (!kws.includes(sub)) kws.push(sub)
-        }
-        return { ...pkg, _kws: kws }
-      })
-      pkgKwsIndex.sort((a, b) => {
-        const aMax = Math.max(...a._kws.map(k => k.length))
-        const bMax = Math.max(...b._kws.map(k => k.length))
-        return bMax - aMax
-      })
-      for (const pkg of pkgKwsIndex) {
-        if (pkg._kws.some(kw => orig.includes(kw))) {
-          row.packagingCn = pkg.name
-          row.packageCode = pkg.code
-          break
-        }
-      }
-      if (!row.packagingCn) row.packagingCn = row.originalPackagingCn
-    }
-  }
-
-  // 清除该行原有校验警告
-  row._warnings = row._warnings.filter(w => !w.startsWith('种类名称') && !w.startsWith('中文包装'))
-
-  const catName = row.category
-  const pkgName = row.packagingCn
-  let hasCatErr = false, hasPkgWarn = false
-
-  if (catName && !importValidCatNames.value.has(catName)) {
-    row._warnings.push(`种类名称「${catName}」不在对照表中`)
-    hasCatErr = true
-  }
-  if (pkgName && !importValidPkgNames.value.has(pkgName)) {
-    row._warnings.push(`中文包装「${pkgName}」不在对照表中`)
-    if (!hasCatErr) hasPkgWarn = true
-  }
-
-  row._status = hasCatErr ? 'cat_error' : (hasPkgWarn ? 'pkg_warning' : 'pending')
-
-  // 同步到全量数据并刷新当前页
-  const idx = importPreviewAllRows.value.findIndex(r => r._rowIndex === row._rowIndex)
-  if (idx >= 0) {
-    importPreviewAllRows.value.splice(idx, 1, markRaw({ ...row }))
-  }
-  syncPreviewPage()
-}
-
-const exportSelectedRows = () => {
-  if (importSelectedRows.value.length === 0) {
-    showToast('请先选择要导出的行', 'warn')
-    return
-  }
-  showToast('已选择 ' + importSelectedRows.value.length + ' 行数据准备导出（功能开发中）', 'info')
-}
-
-const selectAllPreviewRows = () => {
-  // 全选当前筛选结果的所有行（跨页）
-  let list = importPreviewAllRows.value
-  if (importPreviewCatFilter.value) list = list.filter(r => r._status === 'cat_error')
-  if (importPreviewPkgFilter.value) list = list.filter(r => r._status === 'pkg_warning' || r._status === 'cat_error')
-  list.forEach(r => importSelectedRowIndexes.value.add(r._rowIndex))
-  importSelectedRows.value = [...importSelectedRowIndexes.value]
-  // 同步当前页 UI
-  if (importPreviewGridRef.value) {
-    importPreviewGridRef.value.setAllCheckboxRow(true)
-  }
-}
-
-const clearPreviewSelection = () => {
-  importSelectedRowIndexes.value.clear()
-  importSelectedRows.value = []
-  if (importPreviewGridRef.value) {
-    importPreviewGridRef.value.clearCheckboxRow()
-  }
-}
-
-const cancelImportPreview = () => {
-  showImportPreview.value = false
-  importPreviewAllRows.value = []
-  importPreviewData.value = []
-  importPreviewHeaders.value = []
-  importSelectedRows.value = []
-  importSelectedRowIndexes.value = new Set()
-  importOriginalData.value = []  // 释放深拷贝内存
-  importPkgList.value = []
-  importCatList.value = []
-  importPreviewCatFilter.value = false
-  importPreviewPkgFilter.value = false
-  importPreviewPage.value = 1
-  batchEditValue.value = ''
-  importFile.value = null
-}
-
-const doConfirmImport = (mode) => {
-  const filteredData = (() => {
-    let list = importPreviewAllRows.value
-    if (importPreviewCatFilter.value) list = list.filter(r => r._status === 'cat_error')
-    if (importPreviewPkgFilter.value) list = list.filter(r => r._status === 'pkg_warning' || r._status === 'cat_error')
-    return list
-  })()
-  const count = mode === 'all' ? filteredData.length : importSelectedRowIndexes.value.size
-  if (count === 0) {
-    showToast('请至少选择一行数据进行导入', 'warn')
-    return
-  }
-  importConfirmCount.value = count
-  showImportConfirmModal.value = true
-}
-
-const INFRINGEMENT_MAP = { '1': '侵权', '2': '不侵权' }
-
-// 预缓存：避免每条记录都调用 Object.keys(HEADER_TO_FIELD)
-const HEADER_FIELD_KEYS = Object.keys(HEADER_TO_FIELD).filter(h => !HEADER_TO_FIELD[h].startsWith('_'))
-
-const buildSamplesToSend = (records) => {
-  return records.map(row => {
-    const sample = {}
-    HEADER_FIELD_KEYS.forEach(header => {
-      const field = HEADER_TO_FIELD[header]
-      if (row[field] !== undefined && row[field] !== '') {
-        const val = String(row[field]).trim()
-        if (field === 'infringement') {
-          sample[field] = INFRINGEMENT_MAP[val] || '其他'
-        } else {
-          sample[field] = row[field]
-        }
-      }
-    })
-    // packagingCn 和 originalPackagingCn 需要双双发送
-    if (row.packagingCn) sample.packagingCn = row.packagingCn
-    return sample
-  })
-}
-
-const BATCH_SIZE = 50
-
-const executeImport = async () => {
-  showImportConfirmModal.value = false
-  const filteredData = (() => {
-    let list = importPreviewAllRows.value
-    if (importPreviewCatFilter.value) list = list.filter(r => r._status === 'cat_error')
-    if (importPreviewPkgFilter.value) list = list.filter(r => r._status === 'pkg_warning' || r._status === 'cat_error')
-    return list
-  })()
-  const recordsToImport = importConfirmCount.value === filteredData.length
-    ? filteredData
-    : filteredData.filter(r => importSelectedRowIndexes.value.has(r._rowIndex))
-  const allSamples = buildSamplesToSend(recordsToImport)
-  const total = allSamples.length
-
-  importUploading.value = true
-  importProgress.value = 0
-  const isUpdateMode = importUpdateMode.value
-  importProgressText.value = `准备${isUpdateMode ? '更新' : '导入'} ${total} 条数据...`
-
-  let totalSuccess = 0
-  let totalFail = 0
-  let totalDuplicate = 0
-  let totalUpdated = 0
-  const allFailedRows = []
-
-  try {
-    for (let i = 0; i < allSamples.length; i += BATCH_SIZE) {
-      const batch = allSamples.slice(i, i + BATCH_SIZE)
-      const batchNum = Math.floor(i / BATCH_SIZE) + 1
-      const totalBatches = Math.ceil(allSamples.length / BATCH_SIZE)
-      importProgressText.value = `正在${isUpdateMode ? '更新' : '导入'}第 ${batchNum}/${totalBatches} 批 (${i + 1}-${Math.min(i + BATCH_SIZE, total)}/${total})...`
-
-      const res = await api(`/samples/batch-import?updateMode=${isUpdateMode}`, {
-        method: 'POST',
-        body: JSON.stringify(batch),
-        headers: { 'Content-Type': 'application/json' }
-      })
-
-      if (res.code === 200 || res.success) {
-        totalSuccess += (res.data?.successCount || 0)
-        totalFail += (res.data?.failCount || 0)
-        totalDuplicate += (res.data?.duplicateCount || 0)
-        totalUpdated += (res.data?.updatedCount || 0)
-        if (res.data?.failedRows) {
-          allFailedRows.push(...res.data.failedRows)
-        }
-      } else {
-        totalFail += batch.length
-        batch.forEach((s, idx) => {
-          allFailedRows.push({
-            row: String(i + idx + 1),
-            公司编号: s.sampleCode || '',
-            样品名称: s.sampleName || '',
-            失败原因: res.message || '服务端返回错误',
-            类型: '异常'
-          })
-        })
-      }
-
-      importProgress.value = Math.round(((i + batch.length) / total) * 100)
-      if (i + BATCH_SIZE < allSamples.length) {
-        await new Promise(r => setTimeout(r, 150))
-      }
-    }
-
-    importProgressText.value = `${isUpdateMode ? '更新' : '导入'}完成！成功 ${totalSuccess} 条${totalUpdated > 0 ? `，更新 ${totalUpdated} 条` : ''}`
-    importProgress.value = 100
-
-    batchResult.successCount = totalSuccess
-    batchResult.failCount = totalFail
-    batchResult.duplicateCount = totalDuplicate
-    batchResult.updatedCount = totalUpdated
-    batchResult.unmatchedCount = 0
-    batchResult.failedRows = allFailedRows
-    batchResult.failList = []
-    batchResult.unmatchedList = []
-
-    setTimeout(() => {
-      showBatchResultModal.value = true
-      showImportPreview.value = false
-      importPreviewData.value = []
-      importSelectedRows.value = []
-      importOriginalData.value = []
-      importProgress.value = 0
-      importProgressText.value = ''
-      importUploading.value = false
-      loadTableData()
-    }, 500)
-  } catch (e) {
-    console.error(e)
-    importUploading.value = false
-    importProgress.value = 0
-    showToast('导入失败: ' + (e.message || '未知错误'), 'error')
-  }
-}
-
-const exportImportFailedRows = () => {
-  const rows = batchResult.failedRows
-  if (!rows || rows.length === 0) return
-  const headers = ['行号', '公司编号', '样品名称', '失败原因', '类型']
-  const csvLines = [headers.join(',')]
-  rows.forEach(r => {
-    const line = [
-      `"${r.row || ''}"`,
-      `"${(r['公司编号'] || '').replace(/"/g, '""')}"`,
-      `"${(r['样品名称'] || '').replace(/"/g, '""')}"`,
-      `"${(r['失败原因'] || '').replace(/"/g, '""')}"`,
-      `"${(r['类型'] || '')}"`
-    ].join(',')
-    csvLines.push(line)
-  })
-  const BOM = '\uFEFF'
-  const csvContent = BOM + csvLines.join('\n')
-  const dataUrl = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent)
-  const a = document.createElement('a')
-  a.href = dataUrl
-  a.download = `导入失败记录_${new Date().toLocaleDateString()}.csv`
-  a.click()
-}
-
-const doBatchImageUpload = async () => {
-  const uploadList = batchMatched.value.filter(m => m.matched && m.action !== 'skip')
-  const unmatchedList = batchMatched.value.filter(m => !m.matched).map(m => m.file.name)
-  if (uploadList.length === 0 && unmatchedList.length > 0) {
-    batchResult.successCount = 0
-    batchResult.failCount = 0
-    batchResult.unmatchedCount = unmatchedList.length
-    batchResult.failList = []
-    batchResult.unmatchedList = unmatchedList
-    showBatchResultModal.value = true
-    return
-  }
-  if (uploadList.length === 0) {
-    showToast('没有需要上传的图片', 'warn')
-    return
-  }
-
-  let successCount = 0
-  let failCount = 0
-  let submitDone = 0
-  const failList = []
-
-  batchUploading.value = true
-  batchUploadProgress.value = { done: 0, total: uploadList.length, success: 0, fail: 0 }
-
-  try {
-    // 第一步：清除需要覆盖的旧图片 + 提交所有上传任务（秒回）
-    const taskItems = []  // { taskId, sampleId, fileName }
-    for (const item of uploadList) {
-      // 过滤空文件，避免"文件不能为空"错误
-      if (!item.file || item.file.size === 0) {
-        failCount++
-        submitDone++
-        failList.push(`${item.file?.name || '未知文件'}: 文件不能为空`)
-        batchUploadProgress.value = { done: submitDone, total: uploadList.length, success: successCount, fail: failCount }
-        continue
-      }
-
-      if (item.action === 'cover' && item.hasExisting) {
-        try {
-          await api(`/images/sample/${item.sampleId}`, { method: 'DELETE' })
-        } catch (e) {
-          console.warn('[批量上传] 清除旧图片失败:', item.file.name, e.message)
-        }
-      }
-      try {
-        const fd = new FormData()
-        fd.append('file', item.file)
-        fd.append('sampleId', item.sampleId)
-        const res = await api('/images/upload/async', { method: 'POST', body: fd })
-        if (res && res.code === 200 && res.data) {
-          taskItems.push({
-            taskId: res.data.taskId,
-            sampleId: item.sampleId,
-            fileName: item.file.name
-          })
-        } else {
-          failCount++
-          failList.push(`${item.file.name}: 提交失败`)
-        }
-      } catch (e) {
-        failCount++
-        failList.push(`${item.file.name}: ${e.message || '提交失败'}`)
-      }
-      submitDone++
-      batchUploadProgress.value = { done: submitDone, total: uploadList.length, success: successCount, fail: failCount }
-    }
-
-    if (taskItems.length === 0) {
-      batchResult.successCount = 0
-      batchResult.failCount = failCount
-      batchResult.unmatchedCount = unmatchedList.length
-      batchResult.failList = failList
-      batchResult.unmatchedList = unmatchedList
-      showBatchResultModal.value = true
-      closeBatchModal()
-      return
-    }
-
-    // 第二步：轮询进度（每2秒一次）
-    let pendingIds = taskItems.map(t => t.taskId)
-    const MAX_POLL_TIME = 10 * 60 * 1000
-    const POLL_INTERVAL = 2000
-    const startTime = Date.now()
-
-    while (pendingIds.length > 0 && (Date.now() - startTime) < MAX_POLL_TIME) {
-      await new Promise(r => setTimeout(r, POLL_INTERVAL))
-      try {
-        const pollRes = await api('/images/upload/progress-batch', {
-          method: 'POST',
-          body: JSON.stringify(pendingIds)
-        })
-        if (pollRes && pollRes.code === 200 && pollRes.data) {
-          const tasks = pollRes.data
-          const newPending = []
-          for (const t of tasks) {
-            if (t.status === 'SUCCESS') {
-              successCount++
-              const info = taskItems.find(i => i.taskId === t.taskId)
-              if (info) {
-                const row = tableData.value.find(r => r.id === info.sampleId)
-                if (row) {
-                  row.thumbnail = t.thumbnailPath
-                  row.firstImageId = t.imageId
-                }
-              }
-            } else if (t.status === 'FAILED') {
-              failCount++
-              const info = taskItems.find(i => i.taskId === t.taskId)
-              failList.push(`${info?.fileName || t.taskId}: ${t.errorMsg || '失败'}`)
-            } else {
-              newPending.push(t.taskId)
-            }
-          }
-          pendingIds = newPending
-        }
-      } catch (e) {
-        console.warn('[批量上传] 轮询失败:', e.message)
-      }
-      batchUploadProgress.value.done = successCount + failCount
-      batchUploadProgress.value.success = successCount
-      batchUploadProgress.value.fail = failCount
-    }
-
-    if (pendingIds.length > 0) {
-      failCount += pendingIds.length
-      pendingIds.forEach(id => {
-        const info = taskItems.find(i => i.taskId === id)
-        failList.push(`${info?.fileName || id}: 超时未完成`)
-      })
-    }
-
-    batchResult.successCount = successCount
-    batchResult.failCount = failCount
-    batchResult.unmatchedCount = unmatchedList.length
-    batchResult.failList = failList
-    batchResult.unmatchedList = unmatchedList
-    showBatchResultModal.value = true
-    closeBatchModal()
-  } finally {
-    batchUploading.value = false
-  }
-}
-
-const setBatchActionAll = (action) => {
-  batchMatched.value.forEach(r => { if (r.matched) r.action = action })
-}
-
-const closeBatchModal = () => {
-  showBatchImageModal.value = false
-  batchFiles.value = []
-  batchMatched.value = []
-  batchCurrentIndex.value = 0
-  batchUploading.value = false
-}
-
-const openBatchVideoModal = () => {
-  batchVideoMatched.value = []
-  batchVideoFiles.value = []
-  videoCurrentIndex.value = 0
-  videoUploading.value = false
-  showBatchVideoModal.value = true
-}
-
-const closeBatchVideoModal = () => {
-  showBatchVideoModal.value = false
-  batchVideoFiles.value = []
-  batchVideoMatched.value = []
-  videoCurrentIndex.value = 0
-  videoUploading.value = false
-  customManufacturerCode.value = ''
-  customCodesText.value = ''
-}
-
-const onVideoDragOver = (e) => { e.dataTransfer.dropEffect = 'copy' }
-
-const extractVideoCode = (filename) => {
-  return filename.replace(/\.[^.]+$/, '').replace(/\(\d+\)$/, '').trim()
-}
-
-const matchVideosToSamples = async (files) => {
-  if (!files || files.length === 0) return
-  videoMatchLoading.value = true
-  try {
-    let type, codes
-
-    if (batchVideoType.value === 'custom') {
-      codes = customCodesText.value
-        .replace(/，/g, ',')
-        .split(/[\n,]/)
-        .map(s => s.trim())
-        .filter(Boolean)
-
-      if (codes.length > 50) {
-        showAlertDialog(`最多支持50个编号，当前输入了 ${codes.length} 个`, 'warning')
-        videoMatchLoading.value = false
-        return
-      }
-      type = customMatchSubType.value
-    } else {
-      codes = files.map(f => extractVideoCode(f.name))
-      type = batchVideoType.value
-    }
-
-    const res = await api('/samples/match-by-codes', {
-      method: 'POST',
-      body: JSON.stringify({ type, codes })
-    })
-    const matchedSamples = (res.data || res || [])
-
-    const lookup = {}
-    matchedSamples.forEach(s => {
-      const key = type === 'company-code' ? s.sampleCode : s.factoryCode
-      if (key) lookup[key] = s
-    })
-
-    const buildResults = (codeToFileFn) => {
-      const results = []
-      codes.forEach((code, idx) => {
-        const f = codeToFileFn(idx)
-        const matched = lookup[code]
-        results.push({
-          file: f, code, matched: !!matched,
-          action: !!matched ? 'append' : 'skip',
-          previewUrl: URL.createObjectURL(f),
-          ...(matched ? { sampleId: matched.id, sampleCode: matched.sampleCode, sampleName: matched.sampleName, factoryCode: matched.factoryCode } : {})
-        })
-      })
-      return results
-    }
-
-    if (batchVideoType.value === 'custom') {
-      if (customMatchSubType.value === 'factory-code') {
-        const mfrCode = customManufacturerCode.value.trim()
-        if (mfrCode) {
-          Object.keys(lookup).forEach(key => {
-            if (lookup[key].manufacturerCode !== mfrCode) delete lookup[key]
-          })
-        }
-      }
-      batchVideoMatched.value = buildResults(idx => files[idx % files.length])
-    } else {
-      batchVideoMatched.value = buildResults(idx => files[idx]).sort((a, b) => b.matched - a.matched)
-    }
-  } catch (e) {
-    console.error('匹配视频失败:', e)
-    batchVideoMatched.value = files.map(f => ({ file: f, code: extractVideoCode(f.name), matched: false, action: 'skip', previewUrl: URL.createObjectURL(f) }))
-  } finally {
-    videoMatchLoading.value = false
-  }
-}
-
-const MAX_VIDEO_FILES = 10
-const MAX_VIDEO_FILE_SIZE = 50 * 1024 * 1024 // 50MB
-
-const onVideoDrop = (e) => {
-  const files = Array.from(e.dataTransfer.files).filter(f =>
-    /\.(mp4|mov)$/i.test(f.name)
-  )
-  if (files.length === 0) return
-  if (files.length > MAX_VIDEO_FILES) {
-    showAlertDialog(`最多只能导入 ${MAX_VIDEO_FILES} 个视频，当前选择了 ${files.length} 个`, 'warning')
-    return
-  }
-  const oversized = files.filter(f => f.size > MAX_VIDEO_FILE_SIZE)
-  if (oversized.length > 0) {
-    showAlertDialog(`以下视频超过50MB限制，已跳过：\n${oversized.map(f => f.name).join('\n')}`, 'warning')
-  }
-  const validFiles = files.filter(f => f.size <= MAX_VIDEO_FILE_SIZE)
-  if (validFiles.length === 0) return
-  batchVideoFiles.value = validFiles
-  matchVideosToSamples(validFiles)
-}
-
-const onVideoFileChange = (e) => {
-  const files = Array.from(e.target.files)
-  if (files.length > MAX_VIDEO_FILES) {
-    showAlertDialog(`最多只能导入 ${MAX_VIDEO_FILES} 个视频，当前选择了 ${files.length} 个`, 'warning')
-    e.target.value = ''
-    return
-  }
-  const oversized = files.filter(f => f.size > MAX_VIDEO_FILE_SIZE)
-  if (oversized.length > 0) {
-    showAlertDialog(`以下视频超过50MB限制，已跳过：\n${oversized.map(f => f.name).join('\n')}`, 'warning')
-  }
-  const validFiles = files.filter(f => f.size <= MAX_VIDEO_FILE_SIZE)
-  batchVideoFiles.value = validFiles
-  if (validFiles.length > 0) matchVideosToSamples(validFiles)
-  e.target.value = ''
-}
-
-const goToVideoPrev = () => {
-  if (videoCurrentIndex.value > 0) videoCurrentIndex.value--
-}
-const goToVideoNext = () => {
-  if (videoCurrentIndex.value < batchVideoMatched.value.length - 1) videoCurrentIndex.value++
-}
-
-const removeVideoFile = (idx) => {
-  batchVideoFiles.value.splice(idx, 1)
-  batchVideoMatched.value.splice(idx, 1)
-  if (batchVideoMatched.value.length === 0) return
-  else if (videoCurrentIndex.value >= batchVideoMatched.value.length) videoCurrentIndex.value = batchVideoMatched.value.length - 1
-}
-
-const setVideoActionAll = (action) => {
-  batchVideoMatched.value.forEach(r => { if (r.matched) r.action = action })
-}
-
-const doBatchVideoUpload = async () => {
-  const uploadList = batchVideoMatched.value.filter(m => m.matched && m.action !== 'skip')
-  if (uploadList.length === 0) return
-
-  const UPLOAD_TIMEOUT_MS = 120000
-  let successCount = 0
-  let failCount = 0
-  const failList = []
-
-  videoUploading.value = true
-  videoUploadProgress.value = { done: 0, total: uploadList.length, success: 0, fail: 0, currentFileName: '', currentProgress: 0 }
-
-  const coverSampleIds = [...new Set(uploadList.filter(m => m.action === 'cover').map(m => m.sampleId))]
-  for (const sampleId of coverSampleIds) {
-    try { await api(`/videos/sample/${sampleId}`, { method: 'DELETE' }) } catch (e) {}
-  }
-
-  const fileGroups = {}
-  uploadList.forEach(item => {
-    const key = item.file.name + '_' + item.file.size
-    if (!fileGroups[key]) fileGroups[key] = { file: item.file, items: [], sampleCodes: [] }
-    fileGroups[key].items.push(item)
-    fileGroups[key].sampleCodes.push(item.sampleCode || item.sampleId)
-  })
-
-  const tasks = Object.values(fileGroups).map(g => ({
-    file: g.file,
-    sampleIds: g.items.map(i => i.sampleId),
-    sampleCodes: g.sampleCodes,
-    displayName: g.items.length === 1 ? (g.items[0].sampleCode || g.file.name) : `${g.file.name} → ${g.sampleCodes.join(', ')}`
-  }))
-
-  const uploadTask = async (task) => {
-    let lastError = null
-    for (let attempt = 0; attempt <= 1; attempt++) {
-      if (attempt > 0) await new Promise(r => setTimeout(r, 2000))
-      try {
-        videoUploadProgress.value.currentFileName = task.displayName
-        videoUploadProgress.value.currentProgress = 0
-
-        const xhr = new XMLHttpRequest()
-        const fd = new FormData()
-        fd.append('file', task.file)
-
-        const isBatch = task.sampleIds.length > 1
-        if (isBatch) {
-          fd.append('sampleIds', task.sampleIds.join(','))
-        } else {
-          fd.append('sampleId', task.sampleIds[0])
-        }
-
-        const timeoutId = setTimeout(() => xhr.abort(), UPLOAD_TIMEOUT_MS * (isBatch ? 5 : 1))
-
-        xhr.upload.addEventListener('progress', (e) => {
-          if (e.lengthComputable) {
-            videoUploadProgress.value.currentProgress = Math.round((e.loaded / e.total) * 100)
-          }
-        })
-
-        const response = await new Promise((resolve, reject) => {
-          xhr.onload = () => {
-            clearTimeout(timeoutId)
-            if (xhr.status >= 200 && xhr.status < 300) {
-              try { resolve(JSON.parse(xhr.responseText)) } catch { reject(new Error('响应解析失败')) }
-            } else { reject(new Error(`HTTP ${xhr.status}`)) }
-          }
-          xhr.onerror = () => { clearTimeout(timeoutId); reject(new Error('网络错误')) }
-          xhr.onabort = () => { clearTimeout(timeoutId); reject(new Error('上传超时')) }
-          xhr.open('POST', isBatch ? '/videos/batch-upload' : '/videos/upload')
-          xhr.send(fd)
-        })
-
-        if (response && response.code === 200) {
-          successCount += task.sampleIds.length
-          return true
-        }
-        lastError = new Error(response?.message || '服务端返回非200')
-      } catch (e) {
-        lastError = e
-      }
-    }
-    failCount += task.sampleIds.length
-    failList.push(`${task.displayName}: ${lastError?.message}`)
-    return false
-  }
-
-  try {
-    for (let i = 0; i < tasks.length; i++) {
-      await uploadTask(tasks[i])
-      videoUploadProgress.value.done = i + 1
-      videoUploadProgress.value.success = successCount
-      videoUploadProgress.value.fail = failCount
-    }
-
-    const hasFailures = failCount > 0
-    await showAlertDialog(`视频导入完成：成功 ${successCount} 个，失败 ${failCount} 个${failList.length ? '\n失败文件：\n' + failList.join('\n') : ''}`, hasFailures ? 'warning' : 'success')
-    closeBatchVideoModal()
-  } finally {
-    videoUploading.value = false
-  }
-}
-
-const doAdvancedSearch = async () => {
-  const f = advForm
-  const conditions = []
-  const push = (field, op, val) => { if (val !== '' && val != null && val !== false) conditions.push({ field, operator: op, value: String(val) }) }
-  const pushLike = (field, val) => push(field, 'like', val)
-  const pushEq = (field, val) => push(field, 'eq', val)
-
-  // 文本模糊匹配
-  pushLike('manufacturerCode', f.manufacturerCode)
-  pushLike('supplier', f.supplier)
-  pushLike('contactPerson', f.contactPerson)
-  pushLike('contactPhone', f.contactPhone)
-  pushLike('mobile', f.mobile)
-  pushLike('sampleName', f.sampleName)
-  pushLike('sampleCode', f.sampleCode)
-  pushLike('factoryCode', f.factoryCode)
-  pushLike('boothNo', f.boothNo)
-  pushLike('category', f.category)
-  if (f.categoryCode) pushEq('categoryCode', f.categoryCode)
-  pushLike('packageCode', f.packageCode)
-  pushLike('packagingCn', f.packagingCn)
-  pushLike('certification', f.certification)
-  if (f.infringement !== '') pushEq('infringement', f.infringement)
-  pushLike('batteryInfo', f.batteryInfo)
-  pushLike('keyword', f.keyword)
-
-  // 范围字段
-  if (f.factoryPriceMin != null) push('factoryPrice', 'ge', f.factoryPriceMin)
-  if (f.factoryPriceMax != null) push('factoryPrice', 'le', f.factoryPriceMax)
-  if (f.cartonCapacityMin != null) push('cartonCapacity', 'ge', f.cartonCapacityMin)
-  if (f.cartonCapacityMax != null) push('cartonCapacity', 'le', f.cartonCapacityMax)
-  if (f.innerBoxCountMin != null) push('innerBoxCount', 'ge', f.innerBoxCountMin)
-  if (f.innerBoxCountMax != null) push('innerBoxCount', 'le', f.innerBoxCountMax)
-
-  // 日期范围
-  if (f.createTimeMin) push('createTime', 'ge', f.createTimeMin + ' 00:00:00')
-  if (f.createTimeMax) push('createTime', 'le', f.createTimeMax + ' 23:59:59')
-  if (f.updateTimeMin) push('updateTime', 'ge', f.updateTimeMin + ' 00:00:00')
-  if (f.updateTimeMax) push('updateTime', 'le', f.updateTimeMax + ' 23:59:59')
-
-  // 尺寸范围
-  if (f.sampleLengthMin != null) push('sampleLength', 'ge', f.sampleLengthMin)
-  if (f.sampleLengthMax != null) push('sampleLength', 'le', f.sampleLengthMax)
-  if (f.sampleWidthMin != null) push('sampleWidth', 'ge', f.sampleWidthMin)
-  if (f.sampleWidthMax != null) push('sampleWidth', 'le', f.sampleWidthMax)
-  if (f.sampleHeightMin != null) push('sampleHeight', 'ge', f.sampleHeightMin)
-  if (f.sampleHeightMax != null) push('sampleHeight', 'le', f.sampleHeightMax)
-  if (f.packageLengthMin != null) push('packageLength', 'ge', f.packageLengthMin)
-  if (f.packageLengthMax != null) push('packageLength', 'le', f.packageLengthMax)
-  if (f.packageWidthMin != null) push('packageWidth', 'ge', f.packageWidthMin)
-  if (f.packageWidthMax != null) push('packageWidth', 'le', f.packageWidthMax)
-  if (f.packageHeightMin != null) push('packageHeight', 'ge', f.packageHeightMin)
-  if (f.packageHeightMax != null) push('packageHeight', 'le', f.packageHeightMax)
-  if (f.cartonLengthMin != null) push('cartonLength', 'ge', f.cartonLengthMin)
-  if (f.cartonLengthMax != null) push('cartonLength', 'le', f.cartonLengthMax)
-  if (f.cartonWidthMin != null) push('cartonWidth', 'ge', f.cartonWidthMin)
-  if (f.cartonWidthMax != null) push('cartonWidth', 'le', f.cartonWidthMax)
-  if (f.cartonHeightMin != null) push('cartonHeight', 'ge', f.cartonHeightMin)
-  if (f.cartonHeightMax != null) push('cartonHeight', 'le', f.cartonHeightMax)
-
-  // 图片筛选
-  if (f.hasImage) {
-    conditions.push({ field: 'image', operator: 'eq', value: '1' })
-  }
-
-  // 保存查询条件到本地
-  saveAdvForm()
-  // 保存活跃查询条件（用于排序时不丢失搜索）
-  activeSearchConditions.value = conditions
-
-  try {
-    const res = await api(`/samples/search?current=${currentPage.value}&size=${pageSize.value}&sortField=${currentSortField.value}&sortOrder=${currentSortOrder.value}`, {
-      method: 'POST',
-      body: JSON.stringify({ conditions })
-    })
-    const data = res.data || res || {}
-    tableData.value = data.records || data.list || data || []
-    totalRecords.value = data.total || tableData.value.length
-    currentPage.value = 1
-    showAdvancedSearch.value = false
-  } catch (e) {
-    console.error(e)
-  }
 }
 
 const formatFileSize = (bytes) => {
@@ -7062,18 +4395,40 @@ watch(pageSize, () => {
   loadTableData()
 })
 
-let customMatchDebounce = null
-watch([customCodesText, customManufacturerCode], () => {
-  if (batchVideoType.value !== 'custom') return
-  if (batchVideoFiles.value.length === 0) return
-  if (videoMatchLoading.value) return
-  clearTimeout(customMatchDebounce)
-  customMatchDebounce = setTimeout(() => {
-    if (!customCodesText.value.trim()) return
-    if (customMatchSubType.value === 'factory-code' && !customManufacturerCode.value.trim()) return
-    matchVideosToSamples(batchVideoFiles.value)
-  }, 600)
-})
+// 修改外箱规格时自动计算材积和体积（编辑弹窗）
+function recalcEditCartonVol() {
+  const cl = Number(editData.cartonLength) || 0
+  const cw = Number(editData.cartonWidth) || 0
+  const ch = Number(editData.cartonHeight) || 0
+  if (cl > 0 && cw > 0 && ch > 0) {
+    editData.cartonVolume = Number((cl * cw * ch / 1000000).toFixed(2))
+    editData.cartonMaterialVolume = Number((cl * cw * ch / 28339.2).toFixed(2))
+  } else if (cl === 0 && cw === 0 && ch === 0) {
+    editData.cartonVolume = 0
+    editData.cartonMaterialVolume = 0
+  }
+}
+function onEditCartonInput() {
+  nextTick(recalcEditCartonVol)
+}
+
+// 修改外箱规格时自动计算材积和体积（顶部表单卡片）
+const autoCalcKeys = ['cartonLength', 'cartonWidth', 'cartonHeight']
+function recalcCartonVol() {
+  const cl = Number(formData.cartonLength) || 0
+  const cw = Number(formData.cartonWidth) || 0
+  const ch = Number(formData.cartonHeight) || 0
+  if (cl > 0 && cw > 0 && ch > 0) {
+    formData.cartonVolume = Number((cl * cw * ch / 1000000).toFixed(2))
+    formData.cartonMaterialVolume = Number((cl * cw * ch / 28339.2).toFixed(2))
+  } else if (cl === 0 && cw === 0 && ch === 0) {
+    formData.cartonVolume = 0
+    formData.cartonMaterialVolume = 0
+  }
+}
+function onGroupInput(key) {
+  if (autoCalcKeys.includes(key)) nextTick(recalcCartonVol)
+}
 
 // 导入预览打开/关闭时注册/销毁区域选取
 let importAreaSetupDone = false
@@ -7178,186 +4533,6 @@ onActivated(() => {
   })
 })
 
-// ===== 对照资料管理 =====
-const showRefDataModal = ref(false)
-const refActiveTab = ref('category')
-
-const openReferenceDataModal = () => {
-  showMoreDropdown.value = false
-  showRefDataModal.value = true
-  refLoadCategories()
-  refLoadPackagings()
-}
-
-// -- 种类管理（树形） --
-const refCategories = ref([]) // 原始扁平数据
-const refCatTreeData = ref([]) // 树形数据
-const refCatKeyword = ref('')
-const refSelectedCatIds = ref([])
-const refCatGridRef = ref(null)
-
-const showRefCatForm = ref(false)
-const refEditingCat = ref(null)
-const refCatForm = reactive({ code: '', name: '', keywords: '', level: 1, parentCode: '' })
-const refLevel1Cats = ref([])
-
-function refLoadLevel1Cats() {
-  api('/product-categories?current=1&size=500&level=1').then(res => {
-    refLevel1Cats.value = Array.isArray(res?.data?.records) ? res.data.records : []
-  })
-}
-
-function buildTreeData(list) {
-  // 统计每个一级类目的子项数
-  const childCountMap = {}
-  list.filter(r => r.level === 2).forEach(r => {
-    const pc = r.parentCode || ''
-    childCountMap[pc] = (childCountMap[pc] || 0) + 1
-  })
-  return list.map(r => ({
-    ...r,
-    _parentId: r.level === 2 ? null : undefined, // 一级类目 _parentId=undefined 作为根节点
-    _ck: false,
-    _childCount: r.level === 1 ? (childCountMap[r.code] || 0) : undefined,
-    // 二级类目需要找到父级 id 作为 _parentId
-    ...(r.level === 2 ? { _parentId: list.find(p => p.code === r.parentCode && p.level === 1)?.id } : {})
-  }))
-}
-
-async function refLoadCategories() {
-  try {
-    let url = '/product-categories?current=1&size=500'
-    if (refCatKeyword.value) url += `&keyword=${encodeURIComponent(refCatKeyword.value)}`
-    const res = await api(url)
-    const rawList = Array.isArray(res?.data?.records) ? res.data.records : []
-    refCategories.value = rawList
-    refCatTreeData.value = buildTreeData(rawList)
-    refSelectedCatIds.value = []
-  } catch (e) { console.error('加载种类失败', e) }
-}
-
-// 实时搜索过滤
-let _catFilterTimer = null
-function refFilterCategories() {
-  clearTimeout(_catFilterTimer)
-  _catFilterTimer = setTimeout(() => refLoadCategories(), 300)
-}
-
-function refExpandAllCat() {
-  if (!refCatGridRef.value) return
-  const table = refCatGridRef.value
-  const expanded = table.getTreeExpandRecords()
-  if (expanded && expanded.length > 0) {
-    table.clearTreeExpand()
-  } else {
-    table.setAllTreeExpand(true)
-  }
-}
-
-function openRefCategoryAdd() {
-  refEditingCat.value = null
-  refCatForm.code = ''; refCatForm.name = ''; refCatForm.keywords = ''; refCatForm.level = 1; refCatForm.parentCode = ''
-  showRefCatForm.value = true
-  refLoadLevel1Cats()
-}
-
-function refEditCategory(row) {
-  refEditingCat.value = row
-  refCatForm.code = row.code; refCatForm.name = row.name; refCatForm.keywords = row.keywords || ''; refCatForm.level = row.level; refCatForm.parentCode = row.parentCode || ''
-  showRefCatForm.value = true
-  refLoadLevel1Cats()
-}
-
-async function refSaveCategory() {
-  if (!refCatForm.code.trim() || !refCatForm.name.trim()) { showToast('编号和名称不能为空', 'warn'); return }
-  try {
-    const body = { code: refCatForm.code.trim(), name: refCatForm.name.trim(), keywords: refCatForm.keywords.trim() || null, level: refCatForm.level, parentCode: refCatForm.level === 2 ? refCatForm.parentCode || null : null }
-    if (refEditingCat.value) {
-      await api(`/product-categories/${refEditingCat.value.id}`, { method: 'PUT', body: JSON.stringify(body) })
-    } else {
-      await api('/product-categories', { method: 'POST', body: JSON.stringify(body) })
-    }
-    showRefCatForm.value = false
-    refLoadCategories()
-    showToast(refEditingCat.value ? '种类已更新' : '种类已新增', 'success')
-  } catch (e) { showToast('保存失败: ' + (e.message || '未知错误'), 'error') }
-}
-
-async function refDeleteCategory(row) {
-  if (!confirm(`确定删除种类「${row.code} ${row.name}」？`)) return
-  try { await api(`/product-categories/${row.id}`, { method: 'DELETE' }); refLoadCategories(); showToast('已删除', 'success') } catch (e) { showToast('删除失败', 'error') }
-}
-
-async function refDeleteSelectedCats() {
-  if (refSelectedCatIds.value.length === 0) return
-  if (!confirm(`确定删除选中的 ${refSelectedCatIds.value.length} 条种类？`)) return
-  try { await api('/product-categories/batch-delete', { method: 'POST', body: JSON.stringify(refSelectedCatIds.value) }); refSelectedCatIds.value = []; refLoadCategories(); showToast('已删除', 'success') } catch (e) { showToast('删除失败', 'error') }
-}
-
-async function saveRefCatKeywords(row, val) {
-  if (row.keywords === val) return
-  try {
-    await api(`/product-categories/${row.id}`, { method: 'PUT', body: JSON.stringify({ code: row.code, name: row.name, keywords: val || null, level: row.level, parentCode: row.parentCode || null }) })
-    row.keywords = val
-  } catch (e) { showToast('保存失败: ' + (e.message || '未知错误'), 'error') }
-}
-
-// -- 包装管理 --
-const refPackagings = ref([])
-const refPkgKeyword = ref('')
-const refSelectedPkgIds = ref([])
-const refPkgGridRef = ref(null)
-
-const showRefPkgForm = ref(false)
-const refEditingPkg = ref(null)
-const refPkgForm = reactive({ code: '', name: '', nameEn: '' })
-
-function refLoadPackagings() {
-  let url = '/packaging-methods?current=1&size=500'
-  if (refPkgKeyword.value) url += `&keyword=${encodeURIComponent(refPkgKeyword.value)}`
-  api(url).then(res => {
-    refPackagings.value = (Array.isArray(res?.data?.records) ? res.data.records : []).map(r => ({ ...r, _ck: false }))
-    refSelectedPkgIds.value = []
-  })
-}
-
-function openRefPackagingAdd() {
-  refEditingPkg.value = null
-  refPkgForm.code = ''; refPkgForm.name = ''; refPkgForm.nameEn = ''
-  showRefPkgForm.value = true
-}
-
-function refEditPackaging(row) {
-  refEditingPkg.value = row
-  refPkgForm.code = row.code; refPkgForm.name = row.name; refPkgForm.nameEn = row.nameEn || ''
-  showRefPkgForm.value = true
-}
-
-async function refSavePackaging() {
-  if (!refPkgForm.code.trim() || !refPkgForm.name.trim()) { showToast('编号和名称不能为空', 'warn'); return }
-  try {
-    const body = { code: refPkgForm.code.trim(), name: refPkgForm.name.trim(), nameEn: refPkgForm.nameEn.trim() || null }
-    if (refEditingPkg.value) {
-      await api(`/packaging-methods/${refEditingPkg.value.id}`, { method: 'PUT', body: JSON.stringify(body) })
-    } else {
-      await api('/packaging-methods', { method: 'POST', body: JSON.stringify(body) })
-    }
-    showRefPkgForm.value = false
-    refLoadPackagings()
-    showToast(refEditingPkg.value ? '包装方式已更新' : '包装方式已新增', 'success')
-  } catch (e) { showToast('保存失败: ' + (e.message || '未知错误'), 'error') }
-}
-
-async function refDeletePackaging(row) {
-  if (!confirm(`确定删除包装方式「${row.code} ${row.name}」？`)) return
-  try { await api(`/packaging-methods/${row.id}`, { method: 'DELETE' }); refLoadPackagings(); showToast('已删除', 'success') } catch (e) { showToast('删除失败', 'error') }
-}
-
-async function refDeleteSelectedPkgs() {
-  if (refSelectedPkgIds.value.length === 0) return
-  if (!confirm(`确定删除选中的 ${refSelectedPkgIds.value.length} 条包装方式？`)) return
-  try { await api('/packaging-methods/batch-delete', { method: 'POST', body: JSON.stringify(refSelectedPkgIds.value) }); refSelectedPkgIds.value = []; refLoadPackagings(); showToast('已删除', 'success') } catch (e) { showToast('删除失败', 'error') }
-}
 </script>
 
 <style scoped>
@@ -7658,7 +4833,7 @@ async function refDeleteSelectedPkgs() {
 
 /* Toast */
 .sr-toast {
-  position: fixed; top: 60px; left: 50%; transform: translateX(-50%); z-index: 100000;
+  position: fixed; top: 60px; left: 50%; transform: translateX(-50%); z-index: 100010;
   padding: 10px 24px; border-radius: 6px; font-size: 13px; color: #fff; white-space: nowrap;
   box-shadow: 0 4px 16px rgba(0,0,0,.15);
   pointer-events: none;
@@ -7694,7 +4869,7 @@ async function refDeleteSelectedPkgs() {
   flex: 1; overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 14px 20px;
+  gap: 12px 8px;
   padding: 24px 28px 16px;
 }
 
@@ -7728,10 +4903,13 @@ async function refDeleteSelectedPkgs() {
 
 /* 范围输入（无单位） */
 .adv-field-range {
-  display: flex; flex-direction: column; gap: 5px;
+  display: flex; flex-direction: column; gap: 2px;
 }
 .range-inputs {
   display: flex; align-items: center; gap: 6px;
+}
+.range-inputs :deep(.vxe-date-picker) {
+  flex: 1;
 }
 .range-inputs > input {
   flex: 1;
@@ -7842,6 +5020,8 @@ async function refDeleteSelectedPkgs() {
 .import-preview-table-wrap :deep(.import-row-cat-error:hover) { background-color: #ffcdd2 !important; }
 .import-preview-table-wrap :deep(.import-row-pkg-warning) { background-color: #fff8e1 !important; }
 .import-preview-table-wrap :deep(.import-row-pkg-warning:hover) { background-color: #ffecb3 !important; }
+.import-preview-table-wrap :deep(.import-row-dup-warning) { background-color: #e8f5e9 !important; }
+.import-preview-table-wrap :deep(.import-row-dup-warning:hover) { background-color: #c8e6c9 !important; }
 
 /* 横向滚动优化 */
 :deep(.vxe-table--body-wrapper) {
@@ -7895,4 +5075,101 @@ async function refDeleteSelectedPkgs() {
 
 /* 列区域选中单元格高亮 */
 .area-selected-cell { background: #dceefb !important; outline: 1px solid #007aff; outline-offset: -1px; }
+
+/* 批量导入图片 - 厂商关联信息 */
+.batch-manufacturer-info {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 16px;
+  background: #eef6ff;
+  border: 1px solid #b3d8ff;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.bm-info-label {
+  font-weight: 600;
+  color: #007aff;
+  margin-right: 2px;
+}
+.bm-info-value {
+  color: #333;
+}
+.bm-info-value strong {
+  color: #1d1d1f;
+}
+.bm-info-hint {
+  width: 100%;
+  color: #999;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+/* 货号重复冲突解决模态框 */
+.batch-conflict-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex;
+  align-items: center; justify-content: center; z-index: 100001;
+}
+.batch-conflict-modal {
+  background: #fff; border-radius: 12px; width: 1200px; max-height: 92vh;
+  display: flex; flex-direction: column; box-shadow: 0 8px 40px rgba(0,0,0,0.15);
+}
+.batch-conflict-modal-header {
+  display: flex; align-items: center; padding: 16px 20px; border-bottom: 1px solid #e8e8e8;
+  flex-shrink: 0;
+}
+.batch-conflict-modal-header strong {
+  font-size: 15px; color: #1d1d1f;
+}
+.batch-conflict-modal-body {
+  flex: 1; overflow-y: auto; padding: 16px 20px;
+}
+.batch-conflict-group {
+  margin-bottom: 16px;
+}
+.batch-conflict-group-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 0 6px;
+}
+.batch-conflict-upload-img {
+  width: 64px; height: 64px; object-fit: cover; border-radius: 6px;
+  border: 2px solid #d4380d; flex-shrink: 0; cursor: pointer;
+}
+.batch-conflict-code-label {
+  font-size: 14px; color: #333;
+}
+.batch-conflict-code-label strong {
+  color: #d4380d;
+}
+.batch-conflict-count {
+  font-size: 13px; color: #999;
+}
+.batch-conflict-remove-btn {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border: 1px solid #ffccc7; border-radius: 4px;
+  background: #fff2f0; color: #cf1322; font-size: 12px; cursor: pointer;
+  flex-shrink: 0;
+}
+.batch-conflict-remove-btn:hover {
+  background: #ffd8d2; border-color: #ffa39e;
+}
+.batch-conflict-table {
+  margin-top: 6px;
+}
+.conflict-img-preview-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100002;
+}
+.conflict-img-preview-close {
+  position: absolute; top: 16px; right: 16px;
+  background: none; border: none; color: #fff; cursor: pointer;
+  opacity: 0.8; transition: opacity 0.15s;
+}
+.conflict-img-preview-close:hover { opacity: 1; }
+.conflict-validation-msg {
+  color: #d4380d; font-size: 13px; font-weight: 600;
+  margin-right: auto;
+}
 </style>

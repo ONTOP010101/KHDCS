@@ -25,11 +25,12 @@ public class JwtUtil {
         return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
-    public String generateToken(Long userId, String username, Long roleId) {
+    public String generateToken(Long userId, String username, Long roleId, String realName) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("username", username);
         claims.put("roleId", roleId);
+        claims.put("realName", realName);
 
         Date now = new Date();
         Date expireDate = new Date(now.getTime() + expiration);
