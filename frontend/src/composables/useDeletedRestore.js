@@ -14,7 +14,7 @@ export function useDeletedRestore(showRestoreDeletedModal, showMoreDropdown, sho
   const deletedFilterKeyword = ref('')
   const deletedFullscreen = ref(false)
   const deletedFullscreenSearch = ref('')
-  const deletedGridMaxHeight = computed(() => deletedFullscreen.value ? window.innerHeight - 120 : 480)
+  const deletedGridMaxHeight = computed(() => deletedFullscreen.value ? window.innerHeight - 120 : 900)
   const showDeletedBatchQuery = ref(false)
   const deletedBatchField = ref('sampleCode')
   const deletedBatchInput = ref('')
@@ -32,16 +32,16 @@ export function useDeletedRestore(showRestoreDeletedModal, showMoreDropdown, sho
   }
 
   const deletedGridColumns = [
-    { type: 'checkbox', width: 44, fixed: 'left' },
-    { field: 'id', title: 'ID', width: 70, sortable: true, sortType: 'number' },
-    { field: 'sampleCode', title: '公司编号', width: 130, showOverflow: true, sortable: true },
-    { field: 'manufacturerCode', title: '厂商编号', width: 100, sortable: true },
-    { field: 'sampleName', title: '样品名称', minWidth: 180, showOverflow: true, sortable: true },
-    { field: 'category', title: '种类', width: 110, sortable: true },
-    { field: 'categoryCode', title: '种类编号', width: 90, sortable: true },
-    { field: 'factoryCode', title: '出厂货号', width: 110, sortable: true },
-    { field: 'registrant', title: '登记人', width: 90, sortable: true },
-    { field: 'updateTime', title: '删除时间', width: 160, sortable: true, formatter: ({ cellValue }) => cellValue ? new Date(cellValue).toLocaleString('zh-CN', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-' }
+    { type: 'checkbox', width: 80, fixed: 'left' },
+    { field: 'id', title: 'ID', width: 100, sortable: true, sortType: 'number' },
+    { field: 'sampleCode', title: '公司编号', width: 200, showOverflow: 'tooltip', sortable: true },
+    { field: 'manufacturerCode', title: '厂商编号', width: 250, sortable: true },
+    { field: 'sampleName', title: '样品名称', minWidth: 600, showOverflow: 'tooltip', sortable: true },
+    { field: 'category', title: '种类', width: 200, sortable: true },
+    { field: 'categoryCode', title: '种类编号', width: 250, sortable: true },
+    { field: 'factoryCode', title: '出厂货号', width: 300, sortable: true },
+    { field: 'registrant', title: '登记人', width: 200, sortable: true },
+    { field: 'updateTime', title: '删除时间', width: 400, sortable: true, formatter: ({ cellValue }) => cellValue ? new Date(cellValue).toLocaleString('zh-CN', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-' }
   ]
 
   const applyDeletedFilter = () => {

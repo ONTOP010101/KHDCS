@@ -90,8 +90,8 @@ function stopBackend() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1440,
-    height: 900,
+    width: 1920,
+    height: 1080,
     minWidth: 1024,
     minHeight: 680,
     show: false,

@@ -163,7 +163,7 @@ export function useBatchImage(showMoreDropdown, showBatchImageModal, batchImageT
           file: f, code, matched: true,
           sampleId: sample.id, sampleCode: sample.sampleCode,
           factoryCode: sample.factoryCode, sampleName: sample.sampleName,
-          manufacturerCode: sample.manufacturerCode, supplier: sample.supplier,
+          manufacturerCode: sample.manufacturerCode, name: sample.name,
           boothNo: sample.boothNo,
           action: 'cover', hasExisting: false, existingThumb: null,
           previewUrl: URL.createObjectURL(f)

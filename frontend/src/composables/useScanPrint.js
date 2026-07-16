@@ -13,7 +13,8 @@ export function useScanPrint(
   pageSize,
   loadTableData,
   showToast,
-  showConfirmDialog
+  showConfirmDialog,
+  showAlertDialog
 ) {
   // ========== 扫码打印 ==========
   const scanPrintCode = ref('')
@@ -51,7 +52,10 @@ export function useScanPrint(
     try {
       const res = await api('/samples/search?current=1&size=1', {
         method: 'POST',
-        body: JSON.stringify({ sampleCode: code })
+        body: JSON.stringify({
+          conditions: [{ field: 'sampleCode', operator: 'eq', value: code }],
+          logic: 'and'
+        })
       })
       const data = res.data || res || {}
       const list = data.records || data.list || []
@@ -61,7 +65,9 @@ export function useScanPrint(
       }
       const r = list[0]
       scanPrintResult.value = r
-      if (r.thumbnail || r.thumbnailName) {
+      if (r.firstImageHash) {
+        scanPrintImageSrc.value = '/images/view/hash/' + r.firstImageHash
+      } else if (r.thumbnail || r.thumbnailName) {
         const imgName = r.thumbnail || r.thumbnailName
         scanPrintImageSrc.value = '/thumbnails/' + imgName
       }
@@ -310,7 +316,7 @@ export function useScanPrint(
     showPrintDropdown.value = false
     const records = gridRef.value ? gridRef.value.getCheckboxRecords() : []
     if (!records || records.length === 0) {
-      showToast('请先勾选要打印的样品数据', 'warn')
+      showAlertDialog('请先勾选要打印的样品数据', 'warn')
       return
     }
     generateBarcodeLabels(records)
@@ -320,7 +326,7 @@ export function useScanPrint(
     showPrintDropdown.value = false
     const records = gridRef.value ? gridRef.value.getCheckboxRecords() : []
     if (!records || records.length === 0) {
-      showToast('请先勾选要打印的样品数据', 'warn')
+      showAlertDialog('请先勾选要打印的样品数据', 'warn')
       return
     }
     generateQuarterLabels(records)
@@ -370,7 +376,7 @@ export function useScanPrint(
         '<td>' + (imgSrc ? '<img src="' + imgSrc + '" />' : '') + '</td>' +
         '<td>' + (r.sampleCode || '') + '</td>' +
         '<td>' + (r.sampleName || '') + '</td>' +
-        '<td>' + (r.supplier || '') + '</td>' +
+        '<td>' + (r.name || '') + '</td>' +
         '<td>' + (r.category || '') + '</td>' +
         '<td>' + (r.factoryPrice || '') + '</td>' +
         '</tr>'
@@ -397,7 +403,7 @@ export function useScanPrint(
     showPrintDropdown.value = false
     const records = gridRef.value ? gridRef.value.getCheckboxRecords() : []
     if (!records || records.length === 0) {
-      showToast('请先勾选要打印的样品数据', 'warn')
+      showAlertDialog('请先勾选要打印的样品数据', 'warn')
       return
     }
     multiPrintBatchCopies.value = 1

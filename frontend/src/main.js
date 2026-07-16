@@ -8,6 +8,7 @@ import { VxeLoading, VxeTooltip, VxeDateRangePicker, VxeDatePicker } from 'vxe-p
 import './styles/base-layout.css'
 import './styles/common.css'
 import './styles/login.css'
+import './styles/warehouse.css'
 
 const app = createApp(App)
 app.use(router)

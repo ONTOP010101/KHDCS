@@ -7,7 +7,7 @@
             <img src="/logo.png" alt="LOGO">
           </div>
           <div class="brand-info">
-            <h1>拍照管理系统</h1>
+            <h1>资料管理系统</h1>
             <p>ON TOP</p>
           </div>
         </div>
@@ -135,14 +135,43 @@
               <span>择样图库</span>
               <span class="item-badge">3.6k</span>
             </div>
+          </div>
+        </div>
+
+        <div class="nav-section">
+          <div class="section-title">Inventory</div>
+          <button class="sidebar-item" @click="inventoryOpen = !inventoryOpen">
+            <Package class="w-5 h-5" />
+            <span class="flex-1 text-left">库存管理</span>
+            <ChevronDown class="chevron" :style="{ transform: inventoryOpen ? 'rotate(180deg)' : 'rotate(0deg)' }" />
+          </button>
+
+          <div class="sub-menu sidebar-sub" :class="{ open: inventoryOpen }">
+            <div
+              class="sidebar-item"
+              :class="{ active: currentRoute === 'Inventory' }"
+              @click="navigateTo('Inventory')"
+            >
+              <Package class="w-[18px] h-[18px]" />
+              <span>总库存</span>
+            </div>
 
             <div
               class="sidebar-item"
               :class="{ active: currentRoute === 'ManufacturerExport' }"
               @click="navigateTo('ManufacturerExport')"
             >
-              <FileText class="w-[18px] h-[18px]" />
-              <span>厂商带出记录</span>
+              <Package class="w-[18px] h-[18px]" />
+              <span>入库管理</span>
+            </div>
+
+            <div
+              class="sidebar-item"
+              :class="{ active: currentRoute === 'ManufacturerOutbound' }"
+              @click="navigateTo('ManufacturerOutbound')"
+            >
+              <Package class="w-[18px] h-[18px]" />
+              <span>出库管理</span>
             </div>
           </div>
         </div>
@@ -237,7 +266,7 @@ import { useRouter, useRoute } from 'vue-router'
 import {
   Home, Folder, ChevronDown, ChevronLeft, ChevronRight, Database, Image as ImageIcon, Store,
   Users, UsersRound, Settings, ShieldCheck, FileClock, LogOut,
-  Briefcase, ClipboardCheck, ChartBar, Contact, ArchiveX, FileText, ListChecks
+  Briefcase, ClipboardCheck, ChartBar, Contact, ArchiveX, FileText, ListChecks, Package
 } from 'lucide-vue-next'
 import { useAuth } from '@/stores/auth'
 import { useSidebar } from '@/composables/useSidebar'
@@ -251,6 +280,7 @@ const { collapsed } = useSidebar()
 const dataOpen = ref(true)
 const businessOpen = ref(false)
 const systemOpen = ref(false)
+const inventoryOpen = ref(true)
 
 const currentRoute = computed(() => route.name)
 
@@ -269,10 +299,12 @@ function handleLogout() {
 
 watch(currentRoute, (name) => {
   const dataRoutes = ['Sample', 'Manufacturer', 'StallInfo', 'StallOverview', 'CustomerInfo', 'RemovedManufacturer', 'RemovedSample', 'ReferenceData']
-  const businessRoutes = ['ClientSample', 'Gallery', 'ManufacturerExport']
+  const businessRoutes = ['ClientSample', 'Gallery']
+  const inventoryRoutes = ['Inventory', 'ManufacturerExport', 'InventoryDetail', 'ManufacturerOutbound', 'OutboundDetail']
   const systemRoutes = ['Users', 'Roles', 'Logs']
   if (dataRoutes.includes(name)) dataOpen.value = true
   if (businessRoutes.includes(name)) businessOpen.value = true
+  if (inventoryRoutes.includes(name)) inventoryOpen.value = true
   if (systemRoutes.includes(name)) systemOpen.value = true
 }, { immediate: true })
 </script>

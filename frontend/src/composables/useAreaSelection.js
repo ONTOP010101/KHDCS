@@ -37,6 +37,7 @@ export function useAreaSelection({
   const extDragging = ref(false)
   let areaHandleEl = null
   let handleScrollTimer = null
+  let _areaRaf = null
 
   const areaSelectedCount = computed(() => {
     if (!areaSelectedColumn.value) return 0
@@ -45,6 +46,37 @@ export function useAreaSelection({
     const eIdx = data.findIndex(r => String(r[keyField]) === String(areaSelectedEndRowId.value))
     if (sIdx === -1 || eIdx === -1) return 0
     return Math.abs(eIdx - sIdx) + 1
+  })
+
+  // ── 拖拽选区预计算 Set（O(1) 查找代替 O(n) findIndex）──
+  const areaDragRowIdSet = computed(() => {
+    if (!areaDragging.value || !areaDragField.value) return null
+    const data = tableData.value
+    const sIdx = data.findIndex(r => String(r[keyField]) === String(areaDragStartRowId.value))
+    const eIdx = data.findIndex(r => String(r[keyField]) === String(areaDragEndRowId.value))
+    if (sIdx === -1 || eIdx === -1) return null
+    const min = Math.min(sIdx, eIdx)
+    const max = Math.max(sIdx, eIdx)
+    const set = new Set()
+    for (let i = min; i <= max; i++) {
+      set.add(data[i][keyField])
+    }
+    return set
+  })
+
+  const areaSelectedRowIdSet = computed(() => {
+    if (!areaSelectedColumn.value) return null
+    const data = tableData.value
+    const sIdx = data.findIndex(r => String(r[keyField]) === String(areaSelectedStartRowId.value))
+    const eIdx = data.findIndex(r => String(r[keyField]) === String(areaSelectedEndRowId.value))
+    if (sIdx === -1 || eIdx === -1) return null
+    const min = Math.min(sIdx, eIdx)
+    const max = Math.max(sIdx, eIdx)
+    const set = new Set()
+    for (let i = min; i <= max; i++) {
+      set.add(data[i][keyField])
+    }
+    return set
   })
 
   // ===== 辅助函数 =====
@@ -114,13 +146,19 @@ export function useAreaSelection({
     const info = getRowIdAndField(target)
     if (!info || info.field !== areaDragColId.value) return
     areaDragEndRowId.value = info.rowId
-    areaRenderTick.value++
+    if (!_areaRaf) {
+      _areaRaf = requestAnimationFrame(() => {
+        _areaRaf = null
+        areaRenderTick.value++
+      })
+    }
   }
 
   const onDocMouseUp = () => {
     document.removeEventListener('mousemove', onDocMouseMove)
     document.removeEventListener('mouseup', onDocMouseUp)
     document.body.classList.remove(selectingClass)
+    if (_areaRaf) { cancelAnimationFrame(_areaRaf); _areaRaf = null }
     if (!areaDragging.value) {
       // 单击单个单元格
       if (areaDragField.value) {
@@ -143,38 +181,30 @@ export function useAreaSelection({
   }
 
   // ===== cell-style 回调 =====
+  // 预定义样式常量（避免每次调用创建新对象）
+  const _styleDrag = { textAlign: 'center', background: '#e3f2fd', outline: '2px solid #4285f4', outlineOffset: '-2px' }
+  const _styleSelected = { textAlign: 'center', background: '#dceefb', outline: '2px solid #4285f4', outlineOffset: '-2px' }
+  const _styleDefault = { textAlign: 'center' }
+
   const cellAreaStyle = ({ row, column }) => {
+    if (!areaDragging.value && !areaSelectedColumn.value) return _styleDefault
     void areaRenderTick.value
     const field = (column && (column.field || column.type)) || ''
-    // 拖拽中的高亮
+    // 拖拽中的高亮 — O(1) Set 查找
     if (areaDragging.value && field === areaDragField.value) {
-      const data = tableData.value
-      const sIdx = data.findIndex(r => String(r[keyField]) === String(areaDragStartRowId.value))
-      const eIdx = data.findIndex(r => String(r[keyField]) === String(areaDragEndRowId.value))
-      if (sIdx !== -1 && eIdx !== -1) {
-        const min = Math.min(sIdx, eIdx)
-        const max = Math.max(sIdx, eIdx)
-        const rIdx = data.findIndex(r => r[keyField] === row[keyField])
-        if (rIdx >= min && rIdx <= max) {
-          return { textAlign: 'center', background: '#e3f2fd', outline: '2px solid #4285f4', outlineOffset: '-2px' }
-        }
+      const set = areaDragRowIdSet.value
+      if (set && row && set.has(row[keyField])) {
+        return _styleDrag
       }
     }
-    // 已确认选区高亮
+    // 已确认选区高亮 — O(1) Set 查找
     if (areaSelectedColumn.value && field === areaSelectedColumn.value) {
-      const data = tableData.value
-      const sIdx = data.findIndex(r => String(r[keyField]) === String(areaSelectedStartRowId.value))
-      const eIdx = data.findIndex(r => String(r[keyField]) === String(areaSelectedEndRowId.value))
-      if (sIdx !== -1 && eIdx !== -1) {
-        const min = Math.min(sIdx, eIdx)
-        const max = Math.max(sIdx, eIdx)
-        const rIdx = data.findIndex(r => r[keyField] === row[keyField])
-        if (rIdx >= min && rIdx <= max) {
-          return { textAlign: 'center', background: '#dceefb', outline: '2px solid #4285f4', outlineOffset: '-2px' }
-        }
+      const set = areaSelectedRowIdSet.value
+      if (set && row && set.has(row[keyField])) {
+        return _styleSelected
       }
     }
-    return { textAlign: 'center' }
+    return _styleDefault
   }
 
   // ===== 选区把手 =====
@@ -238,7 +268,12 @@ export function useAreaSelection({
     const info = getRowIdAndField(target)
     if (!info) return
     areaSelectedEndRowId.value = info.rowId
-    areaRenderTick.value++
+    if (!_areaRaf) {
+      _areaRaf = requestAnimationFrame(() => {
+        _areaRaf = null
+        areaRenderTick.value++
+      })
+    }
   }
 
   const onExtMouseUp = () => {
@@ -246,6 +281,7 @@ export function useAreaSelection({
     document.body.classList.remove(selectingClass)
     document.removeEventListener('mousemove', onExtMouseMove)
     document.removeEventListener('mouseup', onExtMouseUp)
+    if (_areaRaf) { cancelAnimationFrame(_areaRaf); _areaRaf = null }
     attachAreaHandle()
   }
 
@@ -257,6 +293,7 @@ export function useAreaSelection({
     areaSelectedStartRowId.value = null
     areaSelectedEndRowId.value = null
     areaDragging.value = false
+    if (_areaRaf) { cancelAnimationFrame(_areaRaf); _areaRaf = null }
     areaRenderTick.value++
   }
 

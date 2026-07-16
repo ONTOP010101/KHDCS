@@ -27,10 +27,10 @@ const EXPORT_FIELD_CONFIG = [
   { key: 'cartonVolume', label: '体积' },
   { key: 'cartonMaterialVolume', label: '材积' },
   { key: 'boothNo', label: '摊位号' },
-  { key: 'supplier', label: '厂商名称' },
-  { key: 'contactPerson', label: '联系人' },
-  { key: 'contactPhone', label: '联系电话' },
-  { key: 'mobile', label: '手机' },
+  { key: 'name', label: '厂商名称' },
+  { key: 'contact1', label: '联系人' },
+  { key: 'phone1', label: '联系电话' },
+  { key: 'mobile1', label: '手机' },
   { key: 'fax', label: '传真' },
   { key: 'qq', label: 'QQ' },
   { key: 'material', label: '材料' },
@@ -215,7 +215,7 @@ export function useExport(
   })
 
   const vcFields = ref([])
-  const defaultVcKeys = ['sampleCode', 'factoryCode', 'sampleName', 'factoryPrice', 'packagingCn', 'cartonCapacity', 'supplier', 'boothNo', 'remark']
+  const defaultVcKeys = ['sampleCode', 'factoryCode', 'sampleName', 'factoryPrice', 'packagingCn', 'cartonCapacity', 'name', 'boothNo', 'remark']
 
   const initVcFields = () => {
     vcFields.value = EXPORT_FIELD_CONFIG.map(f => ({

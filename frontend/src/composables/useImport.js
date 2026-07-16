@@ -23,7 +23,7 @@ const HEADER_TO_FIELD = {
   '英文颜色': 'colorEn', '备注': 'remark', '英文备注': 'remarkEn',
   '登记人': 'registrant', '修改人': 'modifier', '侵权': 'infringement',
   '登记日期': 'createTime', '录入日期': 'createTime',
-  '电池信息': 'batteryInfo', '电话/信息': 'contactPhone',
+  '电池信息': 'batteryInfo', '电话/信息': 'phone1',
   '不在小竹熊显示': 'hideFromXzx', '是否不在小竹熊显示': 'hideFromXzx',
   '品名': 'sampleName', '产品名称': 'sampleName',
   '包装': 'originalPackagingCn',
@@ -198,18 +198,19 @@ const IMPORT_PREVIEW_ALL_COLUMNS = [
   { field: 'color', title: '颜色', width: 200, visible: false },
   { field: 'colorEn', title: '英文颜色', width: 200, visible: false },
   { field: 'packingUnit', title: '装箱单位', width: 200, visible: false },
-  { field: 'supplier', title: '厂商名称', width: 200, showOverflow: true, editRender: EDIT_RENDER, sortable: true, visible: false },
+  { field: 'name', title: '厂商名称', width: 200, showOverflow: true, editRender: EDIT_RENDER, sortable: true, visible: false },
   { field: 'boothNo', title: '摊位号', width: 200, visible: false },
-  { field: 'contactPerson', title: '联系人', width: 200, showOverflow: true, editRender: EDIT_RENDER, visible: false },
-  { field: 'contactPhone', title: '电话', width: 200, showOverflow: true, editRender: EDIT_RENDER, visible: false },
-  { field: 'mobile', title: '手机', width: 200, visible: false },
+  { field: 'contact1', title: '联系人', width: 200, showOverflow: true, editRender: EDIT_RENDER, visible: false },
+  { field: 'phone1', title: '电话', width: 200, showOverflow: true, editRender: EDIT_RENDER, visible: false },
+  { field: 'mobile1', title: '手机', width: 200, visible: false },
+  { field: 'visitorMobile', title: '见客手机', width: 200, visible: false },
   { field: 'fax', title: '传真', width: 200, visible: false },
   { field: 'qq', title: 'QQ', width: 200, visible: false },
   { field: 'certificationCount', title: '认证数', width: 200, visible: false },
   { field: 'remarkEn', title: '英文备注', width: 200, visible: false },
   { field: 'registrant', title: '登记人', width: 200, visible: false },
   { title: '校验警告', minWidth: 140, fixed: 'right', slots: { default: 'import_warnings' } },
-  { title: '操作', width: 150, fixed: 'right', slots: { default: 'import_action' } }
+  { field: '__action', title: '操作', width: 150, fixed: 'right', slots: { default: 'import_action' } }
 ]
 
 const INFRINGEMENT_MAP = { '1': '侵权', '2': '不侵权' }
@@ -483,11 +484,12 @@ export function useImport(loadTableData, showBatchResultModal, batchResult, show
                         notFound++
                         return
                       }
-                      row.supplier = mfr.name || ''
+                      row.name = mfr.name || ''
                       row.boothNo = mfr.boothNo || ''
-                      row.contactPerson = mfr.contact1 || ''
-                      row.contactPhone = mfr.phone1 || ''
-                      row.mobile = mfr.mobile1 || ''
+                      row.contact1 = mfr.contact1 || ''
+                      row.phone1 = mfr.phone1 || ''
+                      row.mobile1 = mfr.mobile1 || ''
+                      row.visitorMobile = mfr.visitorMobile || ''
                       row.qq = mfr.qq || ''
                       enriched++
                     })
@@ -1265,7 +1267,7 @@ export function useImport(loadTableData, showBatchResultModal, batchResult, show
         }
       })
       // 厂商信息字段（来自厂商库匹配，不从 Excel 提取）
-      ;['supplier','boothNo','contactPerson','contactPhone','mobile','qq'].forEach(f => {
+      ;['name','boothNo','contact1','phone1','mobile1','visitorMobile','qq'].forEach(f => {
         if (row[f]) sample[f] = row[f]
       })
       // 内盒个数默认为 0

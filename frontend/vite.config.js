@@ -40,10 +40,17 @@ export default defineConfig(async () => {
         '/chat': { target: 'http://localhost:8080', timeout: 120000 },
         '/galleries': { target: 'http://localhost:8080', timeout: 120000 },
         '/manufacturers': { target: 'http://localhost:8080', timeout: 120000 },
+        '/customers': { target: 'http://localhost:8080', timeout: 120000 },
+        '/client-samples': { target: 'http://localhost:8080', timeout: 120000 },
+        '/bluetooth-label-templates': { target: 'http://localhost:8080', timeout: 120000 },
         '/upload': { target: 'http://localhost:8080', timeout: 120000 },
         '/report-templates': { target: 'http://localhost:8080', timeout: 120000 },
         '/product-categories': { target: 'http://localhost:8080', timeout: 120000 },
         '/packaging-methods': { target: 'http://localhost:8080', timeout: 120000 },
+        '/inventory': { target: 'http://localhost:8080', timeout: 120000 },
+        '/inventory-codes': { target: 'http://localhost:8080', timeout: 120000 },
+        '/outbound-codes': { target: 'http://localhost:8080', timeout: 120000 },
+        '/outbound': { target: 'http://localhost:8080', timeout: 120000 },
         '/api': { target: 'http://localhost:8080', timeout: 120000 }
       }
     },

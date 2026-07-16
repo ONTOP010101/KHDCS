@@ -4,8 +4,8 @@ import { api } from '@/api'
 const ADV_SEARCH_KEY = 'sample_adv_search_form'
 
 const defaultAdvForm = () => ({
-  manufacturerCode: '', supplier: '', contactPerson: '',
-  contactPhone: '', mobile: '', sampleName: '',
+  manufacturerCode: '', name: '', contact1: '',
+  phone1: '', mobile1: '', sampleName: '',
   sampleCode: '', factoryCode: '', boothNo: '',
   factoryPriceMin: null, factoryPriceMax: null, category: '', categoryCode: '',
   cartonCapacityMin: null, cartonCapacityMax: null, packageCode: '', packagingCn: '',
@@ -34,6 +34,7 @@ const defaultAdvForm = () => ({
 export function useAdvancedSearch(tableData, totalRecords, currentPage, pageSize, currentSortField, currentSortOrder, activeSearchConditions, manufacturerCode) {
   const showAdvancedSearch = ref(false)
   const advForm = reactive(defaultAdvForm())
+  const searchElapsed = ref(null)
 
   const saveAdvForm = () => {
     try {
@@ -73,10 +74,10 @@ export function useAdvancedSearch(tableData, totalRecords, currentPage, pageSize
 
     // 文本模糊匹配
     pushLike('manufacturerCode', f.manufacturerCode)
-    pushLike('supplier', f.supplier)
-    pushLike('contactPerson', f.contactPerson)
-    pushLike('contactPhone', f.contactPhone)
-    pushLike('mobile', f.mobile)
+    pushLike('name', f.name)
+    pushLike('contact1', f.contact1)
+    pushLike('phone1', f.phone1)
+    pushLike('mobile1', f.mobile1)
     pushLike('sampleName', f.sampleName)
     pushLike('sampleCode', f.sampleCode)
     pushLike('factoryCode', f.factoryCode)
@@ -141,6 +142,8 @@ export function useAdvancedSearch(tableData, totalRecords, currentPage, pageSize
 
     saveAdvForm()
     activeSearchConditions.value = conditions
+    // 综合查询始终从第 1 页开始
+    currentPage.value = 1
 
     try {
       const res = await api(`/samples/search?current=${currentPage.value}&size=${pageSize.value}&sortField=${currentSortField.value}&sortOrder=${currentSortOrder.value}`, {
@@ -150,7 +153,7 @@ export function useAdvancedSearch(tableData, totalRecords, currentPage, pageSize
       const data = res.data || res || {}
       tableData.value = data.records || data.list || data || []
       totalRecords.value = data.total || tableData.value.length
-      currentPage.value = 1
+      searchElapsed.value = data.elapsed != null ? data.elapsed : null
       showAdvancedSearch.value = false
       return true
     } catch (e) {
@@ -162,6 +165,7 @@ export function useAdvancedSearch(tableData, totalRecords, currentPage, pageSize
   return {
     showAdvancedSearch,
     advForm,
+    searchElapsed,
     saveAdvForm,
     restoreAdvForm,
     clearAdvForm,

@@ -10,7 +10,6 @@
 
     <main class="main">
       <div class="main-shell">
-        <TopBar />
         <TabBar />
         <section class="content-area">
           <router-view v-slot="{ Component }">
@@ -26,7 +25,6 @@
 
 <script setup>
 import Sidebar from '@/components/Sidebar.vue'
-import TopBar from '@/components/TopBar.vue'
 import TabBar from '@/components/TabBar.vue'
 </script>
 

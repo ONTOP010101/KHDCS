@@ -129,11 +129,11 @@ export function appPrompt(message, defaultValue = '', title = '请输入', type 
 }
 
 /* ===== Toast (轻提示，自动消失) ===== */
-export function appToast(message, duration = 1800) {
+export function appToast(message, duration = 1800, className = '') {
   const root = ensureContainer()
   const wrap = document.createElement('div')
   wrap.className = 'app-toast-wrap'
-  wrap.innerHTML = `<div class="app-toast">${message}</div>`
+  wrap.innerHTML = `<div class="app-toast ${className}">${message}</div>`
   root.appendChild(wrap)
   setTimeout(() => {
     wrap.style.transition = 'opacity 0.35s ease, transform 0.35s ease'

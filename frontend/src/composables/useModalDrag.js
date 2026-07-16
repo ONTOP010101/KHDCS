@@ -1,15 +1,18 @@
 import { ref, reactive } from 'vue'
 
+const MODAL_W = 2300
+const MODAL_H = 1200
+
 export function useModalDrag() {
   const photoModalPos = reactive({ x: 0, y: 0 })
-  const photoModalW = ref(1000)
-  const photoModalH = ref(680)
+  const photoModalW = ref(MODAL_W)
+  const photoModalH = ref(MODAL_H)
 
   const photoModalInit = () => {
-    photoModalW.value = Math.min(1000, window.innerWidth - 40)
-    photoModalH.value = Math.min(680, window.innerHeight - 40)
-    photoModalPos.x = Math.round((window.innerWidth - photoModalW.value) / 2)
-    photoModalPos.y = Math.round((window.innerHeight - photoModalH.value) / 2)
+    photoModalW.value = MODAL_W
+    photoModalH.value = MODAL_H
+    photoModalPos.x = Math.max(0, Math.round((window.innerWidth - MODAL_W) / 2))
+    photoModalPos.y = Math.max(0, Math.round((window.innerHeight - MODAL_H) / 2))
   }
 
   let dragStart = null

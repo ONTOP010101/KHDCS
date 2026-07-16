@@ -64,7 +64,31 @@ const routes = [
         path: 'manufacturer-export',
         name: 'ManufacturerExport',
         component: () => import('@/views/export/ManufacturerExportView.vue'),
-        meta: { title: '厂商带出记录', subtitle: '查看厂商带出记录与历史', icon: 'file-text', keepAlive: true }
+        meta: { title: '库存管理', subtitle: '管理库存信息', icon: 'package', keepAlive: true }
+      },
+      {
+        path: 'manufacturer-export/:codeName',
+        name: 'InventoryDetail',
+        component: () => import('@/views/export/InventoryDetailView.vue'),
+        meta: { title: '入库详情', subtitle: '查看入库记录详情', icon: 'package', keepAlive: true }
+      },
+      {
+        path: 'inventory',
+        name: 'Inventory',
+        component: () => import('@/views/export/InventoryView.vue'),
+        meta: { title: '总库存', subtitle: '管理库存信息、查看库存明细', icon: 'package', keepAlive: true }
+      },
+      {
+        path: 'manufacturer-outbound',
+        name: 'ManufacturerOutbound',
+        component: () => import('@/views/export/ManufacturerOutboundView.vue'),
+        meta: { title: '出库管理', subtitle: '管理出库信息', icon: 'package', keepAlive: true }
+      },
+      {
+        path: 'manufacturer-outbound/:codeName',
+        name: 'OutboundDetail',
+        component: () => import('@/views/export/OutboundDetailView.vue'),
+        meta: { title: '出库详情', subtitle: '查看出库记录详情', icon: 'package', keepAlive: true }
       },
       {
         path: 'gallery',
@@ -77,6 +101,24 @@ const routes = [
         name: 'ClientSample',
         component: () => import('@/views/clientSample/ClientSampleView.vue'),
         meta: { title: '客户择样', subtitle: '管理客户择样信息与业务记录', icon: 'clipboard-check', keepAlive: true }
+      },
+      {
+        path: 'client-sample/:codeName',
+        name: 'ClientSampleCode',
+        component: () => import('@/views/clientSample/ClientSampleDetailView.vue'),
+        meta: { title: '客户择样', subtitle: '查看客户择样详情', icon: 'clipboard-check', keepAlive: true, dynamicTitle: true }
+      },
+      {
+        path: 'client-sample/batch-add/:codeName',
+        name: 'ClientSampleBatchAdd',
+        component: () => import('@/views/clientSample/BatchAddView.vue'),
+        meta: { title: '批量添加', subtitle: '批量添加客户择样资料', icon: 'clipboard-check', keepAlive: true, dynamicTitle: true }
+      },
+      {
+        path: 'client-sample/sms/:codeName',
+        name: 'ClientSampleSms',
+        component: () => import('@/views/clientSample/ClientSampleSmsView.vue'),
+        meta: { title: '群发短信', subtitle: '短信群发', icon: 'send', keepAlive: false, dynamicTitle: true }
       },
       {
         path: 'manufacturer',
@@ -121,6 +163,34 @@ const routes = [
     name: 'ReportDesigner',
     component: () => import('@/views/report/ReportDesigner.vue'),
     meta: { title: '报表设计器', keepAlive: false, requiresAuth: false }
+  },
+  {
+    path: '/warehouse',
+    component: () => import('@/views/warehouse/WarehouseLayout.vue'),
+    meta: { requiresAuth: false },
+    redirect: '/warehouse/login',
+    children: [
+      {
+        path: 'login',
+        name: 'WarehouseLogin',
+        component: () => import('@/views/warehouse/WarehouseLoginPage.vue')
+      },
+      {
+        path: 'menu',
+        name: 'WarehouseMenu',
+        component: () => import('@/views/warehouse/WarehouseMenuPage.vue')
+      },
+      {
+        path: 'code',
+        name: 'WarehouseCode',
+        component: () => import('@/views/warehouse/WarehouseCodePage.vue')
+      },
+      {
+        path: 'sample',
+        name: 'WarehouseSample',
+        component: () => import('@/views/warehouse/WarehouseSamplePage.vue')
+      }
+    ]
   }
 ]
 

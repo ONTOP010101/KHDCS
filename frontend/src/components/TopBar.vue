@@ -53,7 +53,9 @@ const pageMeta = {
   Friends: { title: '好友列表', subtitle: '好友会话、群聊、消息与文件沟通' },
   Users: { title: '用户管理', subtitle: '管理系统用户、账号状态与角色分配' },
   Roles: { title: '角色管理', subtitle: '管理系统角色、数据范围与功能权限' },
-  Logs: { title: '系统日志', subtitle: '查看系统登录日志、操作日志与异常记录' }
+  Logs: { title: '系统日志', subtitle: '查看系统登录日志、操作日志与异常记录' },
+  ClientSample: { title: '客户择样', subtitle: '管理客户择样信息与业务记录' },
+  CustomerInfo: { title: '客户资料', subtitle: '管理客户信息与业务记录' }
 }
 
 const pageTitle = computed(() => pageMeta[route.name]?.title || route.meta.title || '页面')
