@@ -43,21 +43,53 @@
       <div class="manufacturer-form-body">
         <div class="manufacturer-form-scroll">
           <div class="manufacturer-form-grid">
-            <div
+            <template
               v-for="f in visibleFormFields"
               :key="f.key"
-              class="manufacturer-form-field"
-              :style="{ flex: '0 0 auto' }"
             >
-              <label class="manufacturer-form-label" :style="{ flex: '0 0 84px', textAlign: 'justify', textAlignLast: 'justify' }">{{ f.label }}</label>
-              <input
-                class="manufacturer-form-input"
-                v-model="formData[f.key]"
-                :readonly="formMode === 'readonly'"
-                :placeholder="formMode !== 'readonly' ? '请输入' + f.label : ''"
-                :style="{ flex: '0 0 ' + (f.key === 'smsNumber' || f.key === 'certificate' ? '470px' : '180px') }"
-              />
-            </div>
+              <div
+                class="manufacturer-form-field"
+                :style="{ flex: f.inputWidth === 'auto' ? '1 1 0' : '0 0 auto' }"
+              >
+                <label class="manufacturer-form-label" :style="{ flex: '0 0 ' + (f.labelWidth || 84) + 'px', textAlign: 'justify', textAlignLast: 'justify' }">{{ f.label }}</label>
+                <label v-if="f.key === 'canInvoice'" class="manufacturer-form-checkbox">
+                  <input
+                    type="checkbox"
+                    v-model="formData[f.key]"
+                    :disabled="formMode === 'readonly'"
+                  />
+                  <span class="checkmark"></span>
+                </label>
+                <label v-else-if="f.key === 'contract' || f.key === 'television'" class="manufacturer-form-checkbox">
+                  <input
+                    type="checkbox"
+                    v-model="formData[f.key]"
+                    :disabled="formMode === 'readonly'"
+                  />
+                  <span class="checkmark"></span>
+                  <input
+                    type="date"
+                    class="manufacturer-form-input"
+                    v-model="formData[f.key + 'Date']"
+                    :disabled="formMode === 'readonly'"
+                    style="flex: 0 0 350px; margin-left: 12px;"
+                  />
+                </label>
+                <input
+                  v-else
+                  class="manufacturer-form-input"
+                  v-model="formData[f.key]"
+                  :readonly="formMode === 'readonly'"
+                  :placeholder="formMode !== 'readonly' ? '请输入' + f.label : ''"
+                  :style="{ flex: f.inputWidth === 'auto' ? '1 1 0' : '0 0 ' + (typeof f.inputWidth === 'number' ? f.inputWidth + 'px' : (f.key === 'certificate' ? '470px' : '180px')) }"
+                />
+              </div>
+              <div v-if="f.key === 'smsNumber'" style="flex-basis: 100%; height: 0; width: 0;"></div>
+              <div v-if="f.key === 'certificate'" style="flex-basis: 100%; height: 0; width: 0;"></div>
+              <div v-if="f.key === 'remark'" style="flex-basis: 100%; height: 0; width: 0;"></div>
+              <div v-if="f.key === 'boothType'" style="flex-basis: 100%; height: 0; width: 0;"></div>
+              <div v-if="f.key === 'boothArea'" style="flex-basis: 100%; height: 0; width: 0;"></div>
+            </template>
           </div>
         </div>
 
@@ -97,6 +129,15 @@
           <X :size="14" /> 清除
         </button>
         <span class="toolbar-sep"></span>
+        <label class="toolbar-checkbox" :class="{ active: filterWithSamples }">
+          <input type="checkbox" v-model="filterWithSamples" @change="applySampleFilter" />
+          有资料
+        </label>
+        <label class="toolbar-checkbox" :class="{ active: filterWithoutSamples }">
+          <input type="checkbox" v-model="filterWithoutSamples" @change="applySampleFilter" />
+          无资料
+        </label>
+        <span class="toolbar-sep"></span>
         <button class="manufacturer-btn manufacturer-btn-primary" @click="startAdd">
           <Plus :size="14" /> 添加厂商
         </button>
@@ -120,40 +161,55 @@
         <button class="manufacturer-btn manufacturer-btn-ghost" @click="showSearchDialog = true">
           <Search :size="14" /> 综合查询
         </button>
+        <button class="manufacturer-btn manufacturer-btn-blue" @click="openBindingOverview">
+          <Link :size="14" /> 企微绑定查询
+        </button>
       </div>
     </div>
 
     <div class="manufacturer-card manufacturer-table-card">
       <div ref="tableWrapRef" class="manufacturer-table-wrap">
         <vxe-grid
+          v-if="prefReady"
+          :id="gridStorageKey"
           ref="gridRef"
           :columns="allColumns"
           :data="filteredTableData"
           :loading="tableLoading"
           :height="tableWrapHeight"
           :toolbar-config="{ custom: true, zoom: true }"
+          :custom-config="{ storage: true }"
           :column-config="{ resizable: true, drag: true }"
           :row-config="{ isHover: true, isCurrent: true, keyField: 'id' }"
           :checkbox-config="{ highlight: true, checkField: 'checkbox' }"
-          :cell-config="{ height: 44 }"
+          :cell-config="{ height: 80 }"
           :sort-config="{ trigger: 'header', remote: true }"
-          :scroll-y="{ enabled: true, gt: 0, oSize: 0, rSize: 60, rHeight: 44 }"
+          :scroll-y="{ enabled: true, gt: 0, oSize: 0, rSize: 60, rHeight: 80 }"
           :virtual-y-config="{ enabled: true, gt: 0 }"
-          :optimization="{ animat: false, delayHover: 300, scrollX: { gt: 0, oSize: 0, rSize: 24 }, scrollY: { gt: 0, oSize: 0, rSize: 60, rHeight: 44 } }"
+          :optimization="{ animat: false, delayHover: 300, scrollX: { gt: 0, oSize: 0, rSize: 24 }, scrollY: { gt: 0, oSize: 0, rSize: 60, rHeight: 80 } }"
           :border="true"
-          :header-cell-style="{ background: '#ffffff', borderColor: '#a0bddb', color: '#1d1d1f', fontWeight: 600, textAlign: 'center' }"
-          :cell-style="{ textAlign: 'center' }"
+          :header-cell-style="{ background: '#ffffff', borderColor: '#a0bddb', color: '#1d1d1f', fontWeight: 600, fontSize: '30px', textAlign: 'center' }"
+          :cell-style="{ textAlign: 'center', fontSize: '26px' }"
           @cell-click="onCellClick"
           @sort-change="onSortChange"
+          @resizable-change="saveGridPrefs"
+          @custom="onCustomChange"
+          @column-dragend="onColumnDragEnd"
         >
           <template #col_manufacturerCode="{ row }">
             <a class="cell-link" href="javascript:void(0)" @click.stop="openSamplePage(row.manufacturerCode)">{{ row.manufacturerCode }}</a>
+          </template>
+          <template #col_wework="{ row }">
+            <a href="javascript:void(0)" @click.stop="openBindingManager(row)" style="color: #3b82f6; text-decoration: none;">
+              <span v-if="row.weworkExternalUserid" style="color: #22c55e; font-weight: 500;">已关联</span>
+              <span v-else style="color: #94a3b8;">未关联</span>
+            </a>
           </template>
         </vxe-grid>
       </div>
       <div class="manufacturer-statusbar">
         <div class="manufacturer-status-info">
-          共 <strong>{{ totalRecords }}</strong> 条
+          共 <strong>{{ displayCount }}</strong> 条
         </div>
         <div class="manufacturer-pagination">
           <span class="manufacturer-page-size-label">每页</span>
@@ -482,6 +538,111 @@
   </div>
   </Teleport>
 
+  <!-- 微信绑定管理弹窗 -->
+  <Teleport to="body">
+  <div v-if="showBindingModal" class="binding-modal-overlay" @click.self="closeBindingManager">
+    <div class="binding-modal">
+      <div class="binding-modal-header">
+        <span style="font-size: 32px; font-weight: 700; color: #1d1d1f;">企微关联管理 - {{ bindingManufacturerName }}</span>
+        <button class="binding-modal-close" @click="closeBindingManager">&times;</button>
+      </div>
+      <div v-if="bindingWarning" class="binding-warning">{{ bindingWarning }}</div>
+      <div class="binding-modal-body">
+        <table v-if="bindingList.length > 0" class="binding-table">
+          <thead>
+            <tr><th>企微ID</th><th>绑定手机号</th><th>绑定时间</th><th>操作</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="b in bindingList" :key="b.bindingId">
+              <td style="font-family: monospace; font-size: 26px;">{{ b.weworkExternalUserid }}</td>
+              <td>{{ b.phone || '-' }}</td>
+              <td style="white-space: nowrap;">{{ b.createTime ? b.createTime.replace('T', ' ').substring(0, 19) : '-' }}</td>
+              <td>
+                <button class="binding-btn-unbind" @click="doUnbind(b.bindingId)">解绑</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-else style="text-align: center; color: #94a3b8; padding: 20px;">暂无绑定记录</div>
+      </div>
+    </div>
+  </div>
+  </Teleport>
+
+  <!-- 企微绑定查询（概览）弹窗 -->
+  <Teleport to="body">
+  <div v-if="showOverviewModal" class="binding-modal-overlay" style="background: transparent; backdrop-filter: none; animation: none; overflow: hidden;">
+    <div class="binding-overview-modal" style="width: 95%; max-width: 1600px; min-width: 900px; height: 75vh; overflow: hidden;">
+      <div class="binding-modal-header">
+        <strong style="font-size: 24px;">企微绑定查询</strong>
+        <button class="binding-modal-close" @click="closeBindingOverview" style="font-size: 32px;">&times;</button>
+      </div>
+      <div class="binding-modal-body" style="overflow: hidden; display: flex; flex-direction: column;">
+        <div style="display: flex; gap: 16px; margin-bottom: 16px; flex-shrink: 0;">
+          <input
+            v-model="overviewSearchPhone"
+            placeholder="输入手机号筛选..."
+            style="flex: 1; height: 56px; padding: 0 22px; border: 1px solid rgba(0,122,255,0.15); border-radius: 10px; font-size: 22px; outline: none;"
+            @keydown.enter="searchBindingOverview"
+          />
+          <button class="manufacturer-btn manufacturer-btn-primary" style="height: 56px !important; min-height: 56px !important; font-size: 22px; padding: 0 40px; border-radius: 10px;" @click="searchBindingOverview">
+            <Search :size="22" /> 搜索
+          </button>
+        </div>
+        <div style="flex: 1; min-height: 0;">
+        <vxe-grid
+          ref="overviewGridRef"
+          id="overview-bindings-grid"
+          :columns="overviewColumns"
+          :data="overviewData"
+          :loading="overviewLoading"
+          :border="true"
+          :height="'100%'"
+          :row-config="{ isHover: true, keyField: 'id' }"
+          :header-row-config="{ height: 56 }"
+          :cell-config="{ height: 52 }"
+          :column-config="{ resizable: true, drag: true }"
+          :toolbar-config="{ custom: true, refresh: true }"
+          :custom-config="{ storage: true }"
+          :pager-config="{ enabled: true, pageSize: overviewPageSize, total: overviewTotal, layouts: ['Total', 'PrevPage', 'Number', 'NextPage', 'Sizes', 'FullJump'], pageSizes: [10, 20, 50, 100] }"
+          :header-cell-style="{ background: '#f8fafd', borderColor: '#eef0f4', color: '#1d1d1f', fontWeight: 600, textAlign: 'center', fontSize: '18px' }"
+          :cell-style="{ textAlign: 'center', fontSize: '19px' }"
+          :scroll-y="{ enabled: true, gt: 0 }"
+          :scroll-x="{ enabled: true, gt: 0 }"
+          :virtual-y-config="{ enabled: true, gt: 100 }"
+          :empty-text="'暂无数据'"
+          @page-change="onOverviewPageChange"
+          @toolbar-button-click="onOverviewToolbarClick"
+        >
+          <template #empty>
+            <div style="text-align: center; color: #94a3b8; padding: 60px; font-size: 17px;">暂无数据</div>
+          </template>
+          <template #mobile1_default="{ row }">
+            <span :style="{ color: row._m1Bound ? '#e53e3e' : '#1d1d1f', fontWeight: row._m1Bound ? 600 : 400 }">{{ row.mobile1.value || '-' }}</span>
+          </template>
+          <template #mobile2_default="{ row }">
+            <span :style="{ color: row._m2Bound ? '#e53e3e' : '#1d1d1f', fontWeight: row._m2Bound ? 600 : 400 }">{{ row.mobile2.value || '-' }}</span>
+          </template>
+          <template #mobile3_default="{ row }">
+            <span :style="{ color: row._m3Bound ? '#e53e3e' : '#1d1d1f', fontWeight: row._m3Bound ? 600 : 400 }">{{ row.mobile3.value || '-' }}</span>
+          </template>
+          <template #visitor_default="{ row }">
+            <span :style="{ color: row._vBound ? '#e53e3e' : '#1d1d1f', fontWeight: row._vBound ? 600 : 400 }">{{ row.visitorMobile.value || '-' }}</span>
+          </template>
+          <template #sms_default="{ row }">
+            <span :style="{ color: row._sBound ? '#e53e3e' : '#1d1d1f', fontWeight: row._sBound ? 600 : 400 }">{{ row.smsNumber.value || '-' }}</span>
+          </template>
+          <template #status_default="{ row }">
+            <span v-if="row.boundCount > 0" style="color: #16a34a; font-weight: 600;">已关联{{ row.boundCount }}个</span>
+            <span v-else style="color: #94a3b8;">未关联</span>
+          </template>
+        </vxe-grid>
+        </div>
+      </div>
+    </div>
+  </div>
+  </Teleport>
+
 </template>
 
 <script setup>
@@ -489,58 +650,62 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount, onActivated, nextT
 import { useRouter } from 'vue-router'
 import { api } from '@/api'
 import { useSidebar } from '@/composables/useSidebar'
+import { useGridPrefSync } from '@/composables/useGridPrefSync'
 import {
   Store, Search, Plus, Pencil, Trash2, Save, X, Settings,
   ChevronsUp, ChevronsDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
   RotateCcw, Upload, Download, FileDown, FileSpreadsheet,
-  AlertTriangle, Info
+  AlertTriangle, Info, Link
 } from 'lucide-vue-next'
 import * as XLSX from 'xlsx'
+import { getWeworkBindings, unbindWework, getWeworkBindingOverview } from '@/api'
 import '@/styles/manufacturer.css'
 
 const router = useRouter()
 const { collapsed } = useSidebar()
 
-const allFormFields = [
+const allFormFields = ref([
   { key: 'manufacturerCode', label: '厂商编号' },
-  { key: 'name', label: '厂商名称' },
-  { key: 'boothNo', label: '摊位号' },
-  { key: 'boothType', label: '摊位类型' },
-  { key: 'boothMeters', label: '摊位米数' },
-  { key: 'mobile1', label: '手机1' },
-  { key: 'phone1', label: '电话1' },
-  { key: 'contact1', label: '联系人1' },
-  { key: 'visitorMobile', label: '见客手机' },
-  { key: 'qq', label: 'QQ' },
-  { key: 'mobile2', label: '手机2' },
-  { key: 'phone2', label: '电话2' },
-  { key: 'contact2', label: '联系人2' },
-  { key: 'smsNumber', label: '短信号码' },
-  { key: 'mobile3', label: '手机3' },
-  { key: 'phone3', label: '电话3' },
-  { key: 'contact3', label: '联系人3' },
-  { key: 'certificate', label: '厂家证书' },
-  { key: 'registrant', label: '登记人' },
-  { key: 'modifier', label: '修改人' },
-  { key: 'remark', label: '备注' },
-  { key: 'lastExpiry', label: '上次到期' },
-  { key: 'expiryDate', label: '到期日期' },
+  { key: 'name', label: '厂商名称', inputWidth: 380 },
+  { key: 'boothNo', label: '摊位号', labelWidth: 94, inputWidth: 380 },
+  { key: 'qq', label: 'QQ', labelWidth: 94, inputWidth: 280 },
+  { key: 'mobile1', label: '手机1', inputWidth: 280 },
+  { key: 'smsNumber', label: '短信号码', inputWidth: 'auto' },
+  { key: 'contact1', label: '联系人1', labelWidth: 94 },
+  { key: 'phone1', label: '电话1', labelWidth: 94, inputWidth: 380 },
+  { key: 'phone2', label: '电话2', labelWidth: 94, inputWidth: 380 },
+  { key: 'visitorMobile', label: '见客手机', inputWidth: 280 },
+  { key: 'mobile2', label: '手机2', inputWidth: 280 },
+  { key: 'certificate', label: '厂家证书', inputWidth: 'auto' },
+  { key: 'contact2', label: '联系人2', labelWidth: 94 },
+  { key: 'lastExpiry', label: '上次到期', inputWidth: 380 },
+  { key: 'expiryDate', label: '到期日期', inputWidth: 380 },
+  { key: 'phone3', label: '电话3', labelWidth: 94, inputWidth: 280 },
+  { key: 'mobile3', label: '手机3', inputWidth: 280 },
+  { key: 'remark', label: '备注', labelWidth: 94, inputWidth: 'auto' },
+  { key: 'contact3', label: '联系人3', labelWidth: 94 },
+  { key: 'createTime', label: '登记日期', inputWidth: 380 },
+  { key: 'updateTime', label: '修改日期', inputWidth: 380 },
+  { key: 'mainCard', label: '主卡ID', labelWidth: 94, inputWidth: 280 },
+  { key: 'subCard', label: '副卡ID', inputWidth: 280 },
   { key: 'floorArea', label: '楼层区位' },
-  { key: 'mainCard', label: '主卡ID' },
-  { key: 'subCard', label: '副卡ID' },
-  { key: 'createTime', label: '登记日期' },
-  { key: 'updateTime', label: '修改日期' },
-  { key: 'boothArea', label: '摊位区域' },
+  { key: 'boothType', label: '摊位类型', inputWidth: 'auto' },
+  { key: 'registrant', label: '登记人', labelWidth: 94 },
+  { key: 'contract', label: '合同' },
   { key: 'television', label: '电视' },
+  { key: 'modifier', label: '修改人', labelWidth: 94, inputWidth: 280 },
+  { key: 'boothMeters', label: '摊位米数', inputWidth: 280 },
   { key: 'canInvoice', label: '能否发票' },
-  { key: 'address', label: '地址' }
-]
+  { key: 'boothArea', label: '摊位区域', inputWidth: 'auto' },
+  { key: 'address', label: '地址', inputWidth: 'auto' },
+  { key: 'weworkExternalUserid', label: '企微关联ID', inputWidth: 'auto' }
+])
 
 const fieldVisible = reactive({})
-allFormFields.forEach(f => { fieldVisible[f.key] = true })
+allFormFields.value.forEach(f => { fieldVisible[f.key] = true })
 
 const fieldOrder = reactive({})
-allFormFields.forEach((f, i) => { fieldOrder[f.key] = i + 1 })
+allFormFields.value.forEach((f, i) => { fieldOrder[f.key] = i + 1 })
 
 const HEADER_TO_FIELD = {
   '厂商编号': 'manufacturerCode', '厂商名称': 'name', '摊位号': 'boothNo',
@@ -555,8 +720,9 @@ const HEADER_TO_FIELD = {
   '楼层区位': 'floorArea', '摊位区域': 'boothArea', '备注': 'remark',
   '上次到期': 'lastExpiry', '到期日期': 'expiryDate', '登记人': 'registrant',
   '主卡ID': 'mainCard', '副卡ID': 'subCard',
+  '企微关联': 'weworkExternalUserid',
   '登记日期': 'createTime', '修改日期': 'updateTime', '修改人': 'modifier',
-  '电视': 'television', '能否发票': 'canInvoice'
+  '电视': 'television', '能否发票': 'canInvoice', '合同': 'contract'
 }
 
 const EDIT_RENDER = { name: 'input' }
@@ -596,40 +762,27 @@ const IMPORT_PREVIEW_ALL_COLUMNS = [
   { field: 'modifier', title: '修改人', width: 90, showOverflow: true, editRender: EDIT_RENDER, visible: false },
   { field: 'television', title: '电视', width: 80, showOverflow: true, editRender: EDIT_RENDER, visible: false },
   { field: 'canInvoice', title: '能否发票', width: 100, showOverflow: true, editRender: EDIT_RENDER, visible: false },
-  { title: '操作', width: 120, fixed: 'right', slots: { default: 'import_action' } }
+  { field: 'weworkExternalUserid', title: '企微关联', width: 140, showOverflow: true, editRender: EDIT_RENDER, visible: false, slots: { default: 'col_wework' } },
+  { field: '__action', title: '操作', width: 120, fixed: 'right', slots: { default: 'import_action' } }
 ]
 
 const visibleFormFields = computed(() => {
-  const sorted = allFormFields
+  const sorted = allFormFields.value
     .filter(f => fieldVisible[f.key])
-    .sort((a, b) => (fieldOrder[a.key] || 999) - (fieldOrder[b.key] || 999))
+    .sort((a, b) => {
+      const aIdx = allFormFields.value.findIndex(f => f.key === a.key)
+      const bIdx = allFormFields.value.findIndex(f => f.key === b.key)
+      return aIdx - bIdx
+    })
 
-  // 侧栏未折叠：保持原顺序
-  if (!collapsed.value) return sorted
-
-  // 侧栏折叠后：把摊位区域→QQ右侧、电视→短信号码右侧、能否发票→厂家证书右侧
-  const result = sorted.filter(f => !['boothArea', 'television', 'canInvoice'].includes(f.key))
-
-  const certIdx = result.findIndex(f => f.key === 'certificate')
-  const smsIdx = result.findIndex(f => f.key === 'smsNumber')
-  const qqIdx = result.findIndex(f => f.key === 'qq')
-
-  const canInvoice = sorted.find(f => f.key === 'canInvoice')
-  const television = sorted.find(f => f.key === 'television')
-  const boothArea = sorted.find(f => f.key === 'boothArea')
-
-  // 从后往前插入，避免索引偏移
-  if (canInvoice && certIdx >= 0) result.splice(certIdx + 1, 0, canInvoice)
-  if (television && smsIdx >= 0) result.splice(smsIdx + 1, 0, television)
-  if (boothArea && qqIdx >= 0) result.splice(qqIdx + 1, 0, boothArea)
-
-  return result
+  // 保持原顺序
+  return sorted
 })
 
 const showFieldSettings = ref(false)
 const toggleFieldSettings = () => { showFieldSettings.value = !showFieldSettings.value }
 
-const formExpanded = ref(true)
+const formExpanded = ref(false)
 const formMode = ref('readonly')
 const formData = reactive({})
 const currentManufacturer = ref(null)
@@ -648,6 +801,10 @@ const pageSizeOptions = [500, 1000, 2000, 4000, 8000]
 const totalRecords = ref(0)
 const tableLoading = ref(false)
 
+const filterWithSamples = ref(false)
+const filterWithoutSamples = ref(false)
+const codesWithSamples = ref(new Set())
+
 const sortField = ref('')
 const sortOrder = ref('')
 
@@ -655,44 +812,68 @@ const list = ref([])
 
 const totalPages = computed(() => Math.max(1, Math.ceil(totalRecords.value / pageSize.value)))
 
-const filteredTableData = computed(() => list.value)
+const filteredTableData = computed(() => {
+  let data = list.value
+  if (filterWithSamples.value || filterWithoutSamples.value) {
+    const hasSet = codesWithSamples.value
+    data = data.filter(row => {
+      const code = row.manufacturerCode
+      const hasSample = hasSet.has(code)
+      if (filterWithSamples.value && filterWithoutSamples.value) return true
+      if (filterWithSamples.value) return hasSample
+      if (filterWithoutSamples.value) return !hasSample
+      return true
+    })
+  }
+  return data
+})
+
+const displayCount = computed(() => {
+  if (filterWithSamples.value || filterWithoutSamples.value) {
+    return filteredTableData.value.length
+  }
+  return totalRecords.value
+})
 
 const allColumns = [
-  { type: 'checkbox', title: '#', width: 50, fixed: 'left', sortable: true },
-  { type: 'seq', title: '序号', width: 60, fixed: 'left' },
-  { field: 'manufacturerCode', title: '厂商编号', width: 150, showOverflow: true, sortable: true, slots: { default: 'col_manufacturerCode' } },
+  { type: 'checkbox', title: '#', width: 200, fixed: 'left', sortable: true },
+  { type: 'seq', title: '序号', width: 200, fixed: 'left' },
+  { field: 'manufacturerCode', title: '厂商编号', width: 200, showOverflow: true, sortable: true, slots: { default: 'col_manufacturerCode' } },
   { field: 'name', title: '厂商名称', width: 200, showOverflow: true },
-  { field: 'boothNo', title: '摊位号', width: 180, showOverflow: true, sortable: true },
-  { field: 'boothType', title: '摊位类型', minWidth: 100, sortable: true, visible: false },
-  { field: 'boothMeters', title: '摊位米数', width: 150, sortable: true },
+  { field: 'boothNo', title: '摊位号', width: 200, showOverflow: true, sortable: true },
+  { field: 'boothType', title: '摊位类型', width: 200, sortable: true, visible: false },
+  { field: 'boothMeters', title: '摊位米数', width: 200, sortable: true },
   { field: 'mobile1', title: '手机1', width: 200, showOverflow: true, sortable: true },
-  { field: 'phone1', title: '电话1', width: 150, showOverflow: true, sortable: true },
-  { field: 'contact1', title: '联系人1', width: 120, showOverflow: true },
-  { field: 'visitorMobile', title: '见客手机', minWidth: 120, showOverflow: true, visible: false },
+  { field: 'phone1', title: '电话1', width: 200, showOverflow: true, sortable: true },
+  { field: 'contact1', title: '联系人1', width: 200, showOverflow: true },
+  { field: 'visitorMobile', title: '见客手机', width: 200, showOverflow: true, visible: false },
   { field: 'qq', title: 'QQ', width: 200, showOverflow: true, sortable: true },
-  { field: 'mobile2', title: '手机2', minWidth: 120, showOverflow: true, visible: false },
-  { field: 'phone2', title: '电话2', minWidth: 130, showOverflow: true, visible: false },
-  { field: 'contact2', title: '联系人2', minWidth: 100, showOverflow: true, visible: false },
-  { field: 'smsNumber', title: '短信号码', width: 300, showOverflow: true, sortable: true },
-  { field: 'mobile3', title: '手机3', minWidth: 120, showOverflow: true, visible: false },
-  { field: 'phone3', title: '电话3', minWidth: 130, showOverflow: true, visible: false },
-  { field: 'contact3', title: '联系人3', minWidth: 100, showOverflow: true, visible: false },
-  { field: 'address', title: '地址', width: 300, showOverflow: true, visible: false },
-  { field: 'certificate', title: '厂家证书', minWidth: 100, showOverflow: true, visible: false },
-  { field: 'floorArea', title: '楼层区位', minWidth: 100, visible: false },
-  { field: 'boothArea', title: '摊位区域', minWidth: 100, visible: false },
-  { field: 'remark', title: '备注', width: 300, showOverflow: true },
-  { field: 'lastExpiry', title: '上次到期', minWidth: 110, visible: false, formatter: ({ cellValue }) => cellValue ? String(cellValue).replace('T', ' ') : '' },
-  { field: 'expiryDate', title: '到期日期', width: 300, sortable: true, formatter: ({ cellValue }) => cellValue ? String(cellValue).replace('T', ' ') : '' },
-  { field: 'registrant', title: '登记人', width: 130, sortable: true },
-  { field: 'mainCard', title: '主卡ID', minWidth: 80, visible: false },
-  { field: 'subCard', title: '副卡ID', minWidth: 80, visible: false },
-  { field: 'createTime', title: '登记日期', width: 300, sortable: true, formatter: ({ cellValue }) => cellValue ? String(cellValue).replace('T', ' ') : '' },
-  { field: 'updateTime', title: '修改日期', width: 300, sortable: true, formatter: ({ cellValue }) => cellValue ? String(cellValue).replace('T', ' ') : '' },
-  { field: 'modifier', title: '修改人', minWidth: 100, visible: false },
-  { field: 'television', title: '电视', minWidth: 80, visible: false },
-  { field: 'canInvoice', title: '能否发票', minWidth: 100, visible: false }
+  { field: 'mobile2', title: '手机2', width: 200, showOverflow: true, visible: false },
+  { field: 'phone2', title: '电话2', width: 200, showOverflow: true, visible: false },
+  { field: 'contact2', title: '联系人2', width: 200, showOverflow: true, visible: false },
+  { field: 'smsNumber', title: '短信号码', width: 200, showOverflow: true, sortable: true },
+  { field: 'mobile3', title: '手机3', width: 200, showOverflow: true, visible: false },
+  { field: 'phone3', title: '电话3', width: 200, showOverflow: true, visible: false },
+  { field: 'contact3', title: '联系人3', width: 200, showOverflow: true, visible: false },
+  { field: 'address', title: '地址', width: 200, showOverflow: true, visible: false },
+  { field: 'certificate', title: '厂家证书', width: 200, showOverflow: true, visible: false },
+  { field: 'floorArea', title: '楼层区位', width: 200, visible: false },
+  { field: 'boothArea', title: '摊位区域', width: 200, visible: false },
+  { field: 'remark', title: '备注', width: 200, showOverflow: true },
+  { field: 'lastExpiry', title: '上次到期', width: 200, visible: false, formatter: ({ cellValue }) => cellValue ? String(cellValue).replace('T', ' ') : '' },
+  { field: 'expiryDate', title: '到期日期', width: 200, sortable: true, formatter: ({ cellValue }) => cellValue ? String(cellValue).replace('T', ' ') : '' },
+  { field: 'registrant', title: '登记人', width: 200, sortable: true },
+  { field: 'mainCard', title: '主卡ID', width: 200, visible: false },
+  { field: 'subCard', title: '副卡ID', width: 200, visible: false },
+  { field: 'createTime', title: '登记日期', width: 200, sortable: true, formatter: ({ cellValue }) => cellValue ? String(cellValue).replace('T', ' ') : '' },
+  { field: 'updateTime', title: '修改日期', width: 200, sortable: true, formatter: ({ cellValue }) => cellValue ? String(cellValue).replace('T', ' ') : '' },
+  { field: 'modifier', title: '修改人', width: 200, visible: false },
+  { field: 'television', title: '电视', width: 200, visible: false },
+  { field: 'canInvoice', title: '能否发票', width: 200, visible: false },
+  { field: 'weworkExternalUserid', title: '企微关联', width: 160, showOverflow: true, slots: { default: 'col_wework' } },
 ]
+
+const { fullKey: gridStorageKey, saveToBackend: saveGridPrefs, ready: prefReady } = useGridPrefSync(gridRef, 'manufacturer', allColumns, { prefVersion: 2 })
 
 const onSearch = () => {
   activeSearchConditions.value = []
@@ -725,6 +906,16 @@ const onSortChange = ({ field, order }) => {
   sortOrder.value = order || ''
   currentPage.value = 1
   loadManufacturers()
+}
+
+const onCustomChange = ({ type }) => {
+  if (type === 'confirm' || type === 'reset') {
+    setTimeout(() => saveGridPrefs(), 50)
+  }
+}
+
+const onColumnDragEnd = () => {
+  setTimeout(() => saveGridPrefs(), 100)
 }
 
 const openSamplePage = (manufacturerCode) => {
@@ -917,6 +1108,21 @@ const loadManufacturers = async () => {
   } finally {
     tableLoading.value = false
   }
+}
+
+const loadCodesWithSamples = async () => {
+  try {
+    const res = await api('/manufacturers/codes-with-samples')
+    if (res && res.data) {
+      codesWithSamples.value = new Set(res.data)
+    }
+  } catch (e) {
+    console.error('加载样品厂商编号失败:', e)
+  }
+}
+
+const applySampleFilter = () => {
+  // filtering is handled by filteredTableData computed
 }
 
 const importData = () => {
@@ -1385,8 +1591,136 @@ onMounted(() => {
     resizeObserver.observe(tableWrapRef.value)
   }
   loadSearchForm()
+  loadCodesWithSamples()
   loadManufacturers()
 })
+
+// ==================== 微信绑定管理 ====================
+
+const showBindingModal = ref(false)
+const bindingManufacturerId = ref(null)
+const bindingManufacturerName = ref('')
+const bindingList = ref([])
+const bindingWarning = ref('')
+
+const openBindingManager = async (row) => {
+  bindingManufacturerId.value = row.id
+  bindingManufacturerName.value = row.name
+  showBindingModal.value = true
+  await loadBindings()
+}
+
+const closeBindingManager = () => {
+  showBindingModal.value = false
+  bindingList.value = []
+  bindingWarning.value = ''
+}
+
+const loadBindings = async () => {
+  try {
+    const res = await getWeworkBindings(bindingManufacturerId.value)
+    if (res.code === 0 && res.data) {
+      bindingList.value = res.data.list || []
+      bindingWarning.value = res.data.warning || ''
+    }
+  } catch (e) {
+    console.error('加载绑定列表失败', e)
+  }
+}
+
+const doUnbind = async (bindingId) => {
+  const ok = await showConfirmDialog('确定要解绑该微信吗？')
+  if (!ok) return
+  try {
+    const res = await unbindWework(bindingManufacturerId.value, bindingId)
+    if (res.code === 0) {
+      await loadBindings()
+      // 刷新列表以更新表格中的关联状态
+      loadData()
+    } else {
+      alert(res.message)
+    }
+  } catch (e) {
+    alert('解绑失败: ' + e.message)
+  }
+}
+
+// ==================== 企微绑定查询（概览） ====================
+
+const showOverviewModal = ref(false)
+const overviewSearchPhone = ref('')
+const overviewData = ref([])
+const overviewLoading = ref(false)
+const overviewTotal = ref(0)
+const overviewPageSize = ref(20)
+const overviewCurrentPage = ref(1)
+
+const overviewColumns = [
+  { field: 'name', title: '厂商名称', width: 280, fixed: 'left', align: 'left', headerAlign: 'center', showOverflow: true },
+  { field: 'mobile1', title: '手机1', width: 200, slots: { default: 'mobile1_default' } },
+  { field: 'mobile2', title: '手机2', width: 200, slots: { default: 'mobile2_default' } },
+  { field: 'mobile3', title: '手机3', width: 200, slots: { default: 'mobile3_default' } },
+  { field: 'visitorMobile', title: '见客手机', width: 200, slots: { default: 'visitor_default' } },
+  { field: 'smsNumber', title: '短信号码', width: 480, slots: { default: 'sms_default' } },
+  { field: 'boundCount', title: '关联状态', width: 180, slots: { default: 'status_default' } }
+]
+
+const openBindingOverview = async () => {
+  showOverviewModal.value = true
+  overviewSearchPhone.value = ''
+  overviewCurrentPage.value = 1
+  document.body.style.overflow = 'hidden'
+  await loadBindingOverview()
+}
+
+const closeBindingOverview = () => {
+  showOverviewModal.value = false
+  overviewData.value = []
+  document.body.style.overflow = ''
+}
+
+const searchBindingOverview = async () => {
+  overviewCurrentPage.value = 1
+  await loadBindingOverview()
+}
+
+const onOverviewPageChange = async ({ currentPage, pageSize }) => {
+  overviewCurrentPage.value = currentPage
+  overviewPageSize.value = pageSize
+  await loadBindingOverview()
+}
+
+const onOverviewToolbarClick = async ({ code }) => {
+  if (code === 'refresh') {
+    await loadBindingOverview()
+  }
+}
+
+const loadBindingOverview = async () => {
+  overviewLoading.value = true
+  try {
+    const res = await getWeworkBindingOverview(
+      overviewSearchPhone.value.trim(),
+      overviewCurrentPage.value,
+      overviewPageSize.value
+    )
+    if (res.code === 0 && res.data) {
+      overviewData.value = (res.data.list || []).map(row => ({
+        ...row,
+        _m1Bound: row.mobile1?.bound ?? false,
+        _m2Bound: row.mobile2?.bound ?? false,
+        _m3Bound: row.mobile3?.bound ?? false,
+        _vBound: row.visitorMobile?.bound ?? false,
+        _sBound: row.smsNumber?.bound ?? false
+      }))
+      overviewTotal.value = res.data.total || 0
+    }
+  } catch (e) {
+    console.error('加载绑定概览失败', e)
+  } finally {
+    overviewLoading.value = false
+  }
+}
 
 onBeforeUnmount(() => {
   if (resizeObserver) {

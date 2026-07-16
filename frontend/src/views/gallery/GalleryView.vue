@@ -1,50 +1,68 @@
 <template>
   <div v-if="currentView === 'list'" class="gallery-page">
-    <div class="gallery-card gallery-form-card">
+    <div class="gallery-card gallery-form-card" :class="{ expanded: formExpanded }" v-show="formVisible">
       <div class="gallery-form-top">
-        <div class="gallery-section-title">
-          <div class="gallery-section-icon">
-            <FileText :size="16" />
-          </div>
-          <strong>择样图库</strong>
-          <span>数据录入</span>
+        <div class="gallery-form-title">
         </div>
-        <div class="gallery-form-actions">
-          <span class="gallery-mode-pill">新增模式</span>
-          <button class="gallery-btn gallery-btn-ghost" @click="resetForm">
-            <RotateCcw :size="14" /> 重置
+        <div class="gallery-form-actions" style="margin-right:180px">
+          <button class="gallery-btn gallery-btn-ghost" title="重置" @click="resetForm">
+            <RotateCcw :size="14" />
           </button>
-          <button class="gallery-btn gallery-btn-primary" @click="saveForm">
-            <Save :size="14" /> 保存
+          <button class="gallery-btn gallery-btn-ghost" title="字段设置" @click="toggleFieldSettings">
+            <Settings :size="14" />
+          </button>
+          <button class="gallery-btn gallery-btn-ghost" :title="formExpanded ? '收起' : '展开'" @click="formExpanded = !formExpanded">
+            <component :is="formExpanded ? ChevronsUp : ChevronsDown" :size="14" />
+          </button>
+          <button class="gallery-btn gallery-btn-ghost" :title="formVisible ? '隐藏展示区' : '显示展示区'" @click="formVisible = !formVisible">
+            <EyeOff v-if="formVisible" :size="14" />
+            <Eye v-else :size="14" />
           </button>
         </div>
       </div>
-      <div class="gallery-form-grid">
-        <div class="gallery-form-field">
-          <label class="gallery-form-label">择样日期</label>
-          <input type="datetime-local" class="gallery-form-input" v-model="formData.sampleDate" />
+
+      <div v-if="showFieldSettings" class="gallery-field-settings">
+        <div class="field-settings-header">
+          <span class="field-settings-title">字段显示设置</span>
+          <button class="field-settings-close" @click="showFieldSettings = false">
+            <X :size="14" />
+          </button>
         </div>
-        <div class="gallery-form-field">
-          <label class="gallery-form-label">本次代号</label>
-          <input type="text" class="gallery-form-input" v-model="formData.code" placeholder="请输入代号" />
+        <div class="field-settings-grid">
+          <label v-for="f in galleryFormFields" :key="f.key" class="field-settings-chip">
+            <input type="checkbox" v-model="fieldVisible[f.key]" />
+            {{ f.label }}
+          </label>
         </div>
-        <div class="gallery-form-field">
-          <label class="gallery-form-label">客户名称</label>
-          <input type="text" class="gallery-form-input" v-model="formData.customer" placeholder="请输入客户名称" />
-        </div>
-        <div class="gallery-form-field">
-          <label class="gallery-form-label">拍摄人员</label>
-          <input type="text" class="gallery-form-input" v-model="formData.photographer" placeholder="请输入拍摄人员" />
-        </div>
-        <div class="gallery-form-field full">
-          <label class="gallery-form-label">备注</label>
-          <textarea class="gallery-form-textarea" v-model="formData.remark" placeholder="请输入备注"></textarea>
+      </div>
+
+      <div class="gallery-form-body">
+        <div class="gallery-form-scroll">
+          <div class="gallery-form-grid">
+            <template v-for="f in visibleFormFields" :key="f.key">
+              <div class="gallery-form-field" :style="f.width ? { flex: '0 0 auto' } : {}">
+                <label class="gallery-form-label" :style="{ ...(f.labelWidth ? { flex: '0 0 ' + f.labelWidth + 'px' } : {}), ...(f.labelJustify ? { textAlign: 'justify', textAlignLast: 'justify' } : {}), ...(f.color ? { color: f.color } : {}) }">{{ f.label }}</label>
+                <input
+                  class="gallery-form-input"
+                  :readonly="formMode === 'readonly'"
+                  :placeholder="formMode === 'readonly' ? '' : f.label"
+                  :title="formData[f.key] || ''"
+                  :style="{ ...(f.width ? { flex: '0 0 ' + f.width + 'px' } : {}), ...(f.color ? { color: f.color } : {}) }"
+                  v-model="formData[f.key]"
+                />
+              </div>
+            </template>
+          </div>
         </div>
       </div>
     </div>
 
     <div class="gallery-card gallery-toolbar-card">
-      <div class="gallery-toolbar-row search-row">
+      <div class="gallery-toolbar-row">
+        <!-- 展示区隐藏时，在搜索框左侧显示恢复按钮 -->
+        <button v-if="!formVisible" class="gallery-btn gallery-btn-primary" style="font-size:11px;height:30px;flex-shrink:0;margin-right:6px" @click="formVisible = true" title="显示展示区">
+          <Eye :size="13" />
+        </button>
         <div class="gallery-search">
           <Search :size="14" />
           <input v-model="searchKeyword" placeholder="搜索代号、客户名称..." @keyup.enter="onQuery" />
@@ -55,11 +73,15 @@
         <button class="gallery-btn gallery-btn-primary" @click="onQuery">
           <Search :size="14" /> 查询
         </button>
-        <div></div>
-      </div>
-      <div class="gallery-toolbar-row action-row">
+        <div class="toolbar-sep"></div>
         <button class="gallery-btn gallery-btn-primary" @click="addCode">
           <Plus :size="14" /> 添加代号
+        </button>
+        <button v-if="formMode === 'edit' || formMode === 'add'" class="gallery-btn gallery-btn-primary" @click="saveForm">
+          <Save :size="14" /> 保存
+        </button>
+        <button v-if="formMode === 'edit' || formMode === 'add'" class="gallery-btn gallery-btn-ghost" @click="cancelEdit">
+          <X :size="14" /> 取消
         </button>
         <button class="gallery-btn gallery-btn-danger" :disabled="selectedIds.length === 0" @click="deleteCode">
           <Trash2 :size="14" /> 删除代号
@@ -71,88 +93,79 @@
     </div>
 
     <div class="gallery-card gallery-table-card">
-      <div class="gallery-table-wrap">
-        <table class="gallery-data-table">
-          <thead>
-            <tr>
-              <th style="width:44px">
-                <input type="checkbox" :checked="isAllSelected" @change="toggleAll" />
-              </th>
-              <th>ID</th>
-              <th>择样日期</th>
-              <th>代号</th>
-              <th>客户名称</th>
-              <th>拍摄人员</th>
-              <th>状态</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in pagedData" :key="row.id" :class="{ selected: selectedIds.includes(row.id) }">
-              <td>
-                <input type="checkbox" :checked="selectedIds.includes(row.id)" @change="toggleRow(row.id)" />
-              </td>
-              <td>{{ row.id }}</td>
-              <td>{{ row.sampleDate }}</td>
-              <td>
-                <a class="gallery-code-link" @click.prevent="openDetail(row)">{{ row.code }}</a>
-              </td>
-              <td>{{ row.customer }}</td>
-              <td>{{ row.photographer }}</td>
-              <td>
-                <span class="gallery-encrypt-badge" :class="row.encrypted ? 'locked' : 'open'">
-                  {{ row.encrypted ? '加密' : '未加密' }}
-                </span>
-              </td>
-              <td>
-                <div class="gallery-row-actions">
-                  <button class="gallery-row-btn" @click="openDetail(row)">
-                    <Eye :size="14" /> 详情
-                  </button>
-                  <button class="gallery-row-btn" @click="editRow(row)">
-                    <Pencil :size="14" /> 编辑
-                  </button>
-                  <button class="gallery-row-btn danger" @click="deleteRow(row)">
-                    <Trash2 :size="14" /> 删除
-                  </button>
-                  <button v-if="!row.encrypted" class="gallery-row-btn lock" @click="encryptRow(row)">
-                    <Lock :size="14" /> 加密
-                  </button>
-                  <button v-else class="gallery-row-btn unlock" @click="decryptRow(row)">
-                    <Unlock :size="14" /> 解密
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div ref="tableWrapRef" class="gallery-table-wrap">
+        <vxe-grid
+          ref="gridRef"
+          :columns="listColumns"
+          :data="pagedData"
+          :loading="tableLoading"
+          :height="tableWrapHeight"
+          :toolbar-config="{ custom: true, zoom: true }"
+          :column-config="{ resizable: true, drag: true }"
+          :row-config="{ isHover: true, isCurrent: true, keyField: 'id' }"
+          :checkbox-config="{ highlight: true, checkField: 'checkbox' }"
+          :cell-config="{ height: 44 }"
+          :sort-config="{ trigger: 'header', remote: true }"
+          :scroll-y="{ enabled: true, gt: 0, oSize: 0, rSize: 60, rHeight: 44 }"
+          :virtual-y-config="{ enabled: true, gt: 0 }"
+          :optimization="{ animat: false, delayHover: 300, scrollX: { gt: 0, oSize: 0, rSize: 24 }, scrollY: { gt: 0, oSize: 0, rSize: 60, rHeight: 44 } }"
+          :border="true"
+          :header-cell-style="{ background: '#ffffff', borderColor: '#a0bddb', color: '#1d1d1f', fontWeight: 600, textAlign: 'center' }"
+          :cell-style="{ textAlign: 'center' }"
+          @cell-click="onCellClick"
+          @sort-change="onSortChange"
+        >
+          <template #col_code="{ row }">
+            <span style="color:#0066cc;cursor:pointer;text-decoration:underline;" @click.stop="openDetail(row)">{{ row.code }}</span>
+          </template>
+          <template #col_status="{ row }">
+            <span class="gallery-encrypt-badge" :class="row.encrypted ? 'locked' : 'open'">
+              {{ row.encrypted ? '加密' : '未加密' }}
+            </span>
+          </template>
+          <template #col_action="{ row }">
+            <div class="gallery-row-actions">
+              <button class="gallery-row-btn" @click.stop="openDetail(row)">
+                <Eye :size="14" /> 详情
+              </button>
+              <button class="gallery-row-btn" @click.stop="editRow(row)">
+                <Pencil :size="14" /> 编辑
+              </button>
+              <button class="gallery-row-btn danger" @click.stop="deleteRow(row)">
+                <Trash2 :size="14" /> 删除
+              </button>
+              <button v-if="!row.encrypted" class="gallery-row-btn lock" @click.stop="encryptRow(row)">
+                <Lock :size="14" /> 加密
+              </button>
+              <button v-else class="gallery-row-btn unlock" @click.stop="decryptRow(row)">
+                <Unlock :size="14" /> 解密
+              </button>
+            </div>
+          </template>
+        </vxe-grid>
       </div>
       <div class="gallery-statusbar">
-        <button class="gallery-btn gallery-btn-ghost" @click="selectAll">
-          <CheckSquare :size="14" /> 全选
-        </button>
-        <button class="gallery-btn gallery-btn-ghost" @click="invertSelection">
-          <Shuffle :size="14" /> 反选
-        </button>
-        <button class="gallery-btn gallery-btn-ghost" @click="clearSelection">
-          <Square :size="14" /> 清空
-        </button>
         <div class="gallery-status-info">
-          已选 <strong>{{ selectedIds.length }}</strong> 条，共 <strong>{{ tableData.length }}</strong> 条
+          共 <strong>{{ tableData.length }}</strong> 条
         </div>
-        <select class="gallery-page-size" v-model.number="pageSize">
-          <option :value="10">10 条/页</option>
-          <option :value="20">20 条/页</option>
-          <option :value="50">50 条/页</option>
-          <option :value="100">100 条/页</option>
-        </select>
-        <div style="display:flex;align-items:center;gap:4px">
-          <button class="gallery-btn gallery-btn-ghost" :disabled="currentPage <= 1" @click="currentPage--">
-            ‹
+        <div class="gallery-pagination">
+          <span class="gallery-page-size-label">每页</span>
+          <select class="gallery-page-size-select" v-model.number="pageSize">
+            <option v-for="opt in pageSizeOptions" :key="opt" :value="opt">{{ opt }}</option>
+          </select>
+          <span class="gallery-page-size-label">条</span>
+          <button class="gallery-btn gallery-btn-ghost" :disabled="currentPage <= 1" @click="goPage(1)">
+            <ChevronsLeft :size="14" />
           </button>
-          <span style="font-size:12px;font-weight:700;color:rgba(29,29,31,0.56)">{{ currentPage }} / {{ totalPages }}</span>
-          <button class="gallery-btn gallery-btn-ghost" :disabled="currentPage >= totalPages" @click="currentPage++">
-            ›
+          <button class="gallery-btn gallery-btn-ghost" :disabled="currentPage <= 1" @click="goPage(currentPage - 1)">
+            <ChevronLeft :size="14" />
+          </button>
+          <span class="gallery-page-text">{{ currentPage }} / {{ totalPages }}</span>
+          <button class="gallery-btn gallery-btn-ghost" :disabled="currentPage >= totalPages" @click="goPage(currentPage + 1)">
+            <ChevronRight :size="14" />
+          </button>
+          <button class="gallery-btn gallery-btn-ghost" :disabled="currentPage >= totalPages" @click="goPage(totalPages)">
+            <ChevronsRight :size="14" />
           </button>
         </div>
       </div>
@@ -335,16 +348,48 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import '@/styles/gallery.css'
 import {
   FileText, RotateCcw, Save, Search, Plus, Trash2, Download,
   CheckSquare, Shuffle, Square, ArrowLeft, Hash, Building2, Camera,
   LayoutGrid, Maximize2, Archive, FileSpreadsheet, FileUp, Upload,
-  Eye, Pencil, Lock, Unlock, Calendar, Clock, RefreshCw, CircleAlert
+  Eye, Pencil, Lock, Unlock, Calendar, Clock, RefreshCw, CircleAlert,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
+  ChevronsUp, ChevronsDown, EyeOff, Settings, X
 } from 'lucide-vue-next'
 
 const currentView = ref('list')
+
+// 表单状态
+const formExpanded = ref(false)
+const formVisible = ref(true)
+const formMode = ref('add') // 'add' | 'edit' | 'readonly'
+const showFieldSettings = ref(false)
+
+const galleryFormFields = [
+  { key: 'sampleDate', label: '择样日期' },
+  { key: 'code', label: '本次代号' },
+  { key: 'customer', label: '客户名称' },
+  { key: 'photographer', label: '拍摄人员' },
+  { key: 'remark', label: '备注' }
+]
+
+const fieldVisible = reactive({
+  sampleDate: true,
+  code: true,
+  customer: true,
+  photographer: true,
+  remark: true
+})
+
+const visibleFormFields = computed(() =>
+  galleryFormFields.filter(f => fieldVisible[f.key])
+)
+
+const toggleFieldSettings = () => {
+  showFieldSettings.value = !showFieldSettings.value
+}
 
 const formData = reactive({
   sampleDate: '',
@@ -381,7 +426,9 @@ const tableData = ref([
 
 const selectedIds = ref([])
 const currentPage = ref(1)
-const pageSize = ref(10)
+const pageSize = ref(50)
+const pageSizeOptions = [10, 20, 50, 100, 200]
+const tableLoading = ref(false)
 
 const totalPages = computed(() => Math.max(1, Math.ceil(tableData.value.length / pageSize.value)))
 const pagedData = computed(() => {
@@ -389,35 +436,39 @@ const pagedData = computed(() => {
   return tableData.value.slice(start, start + pageSize.value)
 })
 
-const isAllSelected = computed(() => pagedData.value.length > 0 && pagedData.value.every(r => selectedIds.value.includes(r.id)))
+const listColumns = [
+  { type: 'checkbox', title: '#', minWidth: 60, fixed: 'left' },
+  { type: 'seq', title: '序号', minWidth: 80, fixed: 'left' },
+  { field: 'sampleDate', title: '择样日期', minWidth: 180, sortable: true },
+  { field: 'code', title: '代号', minWidth: 160, showOverflow: true, sortable: true, slots: { default: 'col_code' } },
+  { field: 'customer', title: '客户名称', minWidth: 260, showOverflow: true, sortable: true },
+  { field: 'photographer', title: '拍摄人员', minWidth: 180, showOverflow: true },
+  { field: 'status', title: '状态', minWidth: 140, slots: { default: 'col_status' } },
+  { field: 'action', title: '操作', minWidth: 420, slots: { default: 'col_action' } }
+]
 
-const toggleAll = () => {
-  if (isAllSelected.value) {
-    selectedIds.value = selectedIds.value.filter(id => !pagedData.value.some(r => r.id === id))
-  } else {
-    const ids = new Set(selectedIds.value)
-    pagedData.value.forEach(r => ids.add(r.id))
-    selectedIds.value = [...ids]
-  }
+const gridRef = ref(null)
+const tableWrapRef = ref(null)
+const tableWrapHeight = ref(600)
+let resizeObserver = null
+let resizeRafId = null
+let lastObservedHeight = 0
+
+const goPage = (page) => {
+  currentPage.value = page
 }
 
-const toggleRow = (id) => {
-  const idx = selectedIds.value.indexOf(id)
-  if (idx >= 0) selectedIds.value.splice(idx, 1)
-  else selectedIds.value.push(id)
+const onCellClick = ({ row, column }) => {
+  // 可以根据需要添加单元格点击逻辑
 }
 
-const selectAll = () => {
-  selectedIds.value = tableData.value.map(r => r.id)
+const onSortChange = ({ field, order }) => {
+  // 可以根据需要添加排序逻辑
 }
 
-const invertSelection = () => {
-  selectedIds.value = tableData.value.filter(r => !selectedIds.value.includes(r.id)).map(r => r.id)
-}
-
-const clearSelection = () => {
-  selectedIds.value = []
-}
+watch(pageSize, () => {
+  currentPage.value = 1
+})
 
 const addCode = () => {}
 const deleteCode = () => {}
@@ -438,7 +489,6 @@ const editRow = (row) => {
 
 const deleteRow = (row) => {
   tableData.value = tableData.value.filter(r => r.id !== row.id)
-  selectedIds.value = selectedIds.value.filter(id => id !== row.id)
 }
 
 const encryptRow = (row) => { row.encrypted = true }
@@ -518,4 +568,28 @@ const exportImages = () => {}
 const exportExcel = () => {}
 const importImages = () => {}
 const refreshImages = () => {}
+
+onMounted(() => {
+  if (tableWrapRef.value) {
+    resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (entry) {
+        const h = entry.contentRect.height
+        if (h > 0 && Math.abs(h - lastObservedHeight) > 1) {
+          lastObservedHeight = h
+          if (resizeRafId) cancelAnimationFrame(resizeRafId)
+          resizeRafId = requestAnimationFrame(() => { tableWrapHeight.value = h })
+        }
+      }
+    })
+    resizeObserver.observe(tableWrapRef.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
+})
 </script>

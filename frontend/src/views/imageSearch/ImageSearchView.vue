@@ -96,21 +96,29 @@
                    @mousedown.prevent="onCropMouseDown"
                    @mousemove="onCropMouseMove"
                    @mouseup="onCropMouseUp"
-                   @mouseleave="onCropMouseUp">
-                <img :src="imageSearchSelectedImg.url" ref="cropImgRef" @load="onCropImgLoad" />
+                   @mouseleave="onCropMouseUp"
+                   @wheel.prevent="onCropWheel">
+                <img :src="imageSearchSelectedImg.url" ref="cropImgRef" @load="onCropImgLoad"
+                     :style="{ transform: 'translate(' + panX + 'px, ' + panY + 'px) scale(' + cropZoom + ')', transformOrigin: '50% 50%' }" />
                 <div class="crop-overlay" :style="cropOverlayStyle"></div>
                 <div class="crop-select-box" v-show="cropSelecting || cropDone" :style="cropBoxStyle">
                   <div class="crop-handle tl" data-handle="tl" @mousedown.stop.prevent="onHandleDown($event,'tl')"></div>
+                  <div class="crop-handle tm" data-handle="tm" @mousedown.stop.prevent="onHandleDown($event,'tm')"></div>
                   <div class="crop-handle tr" data-handle="tr" @mousedown.stop.prevent="onHandleDown($event,'tr')"></div>
-                  <div class="crop-handle bl" data-handle="bl" @mousedown.stop.prevent="onHandleDown($event,'bl')"></div>
+                  <div class="crop-handle rm" data-handle="rm" @mousedown.stop.prevent="onHandleDown($event,'rm')"></div>
                   <div class="crop-handle br" data-handle="br" @mousedown.stop.prevent="onHandleDown($event,'br')"></div>
+                  <div class="crop-handle bm" data-handle="bm" @mousedown.stop.prevent="onHandleDown($event,'bm')"></div>
+                  <div class="crop-handle bl" data-handle="bl" @mousedown.stop.prevent="onHandleDown($event,'bl')"></div>
+                  <div class="crop-handle lm" data-handle="lm" @mousedown.stop.prevent="onHandleDown($event,'lm')"></div>
                 </div>
               </div>
               <div class="crop-hint-bar">
-                <span v-if="!cropDone">按住鼠标拖拽框选产品搜索区域</span>
-                <span v-else class="ready">已选区域 {{ cropW }}×{{ cropH }}px · 点击下方按钮完成</span>
-                <button v-if="cropDone" class="crop-confirm-btn" @click="showCropModal = false">确认裁剪</button>
-                <button v-if="cropDone" class="crop-reset-btn" @click="resetCrop">重选</button>
+                <span>框内拖拽移动选框 · 框外拖拽平移 · 滚轮缩放{{ Math.round(cropZoom * 100) }}% · 拖拽四角调整大小</span>
+                <div class="crop-hint-actions">
+                  <span class="ready">已选区域 {{ cropW }}×{{ cropH }}px</span>
+                  <button class="crop-confirm-btn" @click="showCropModal = false">确认裁剪</button>
+                  <button class="crop-reset-btn" @click="resetCrop">重选</button>
+                </div>
               </div>
             </div>
           </div>
@@ -140,7 +148,7 @@ const imageSearchDone = ref(false)
 const imageSearching = ref(false)
 const showCropModal = ref(false)
 
-const displayThreshold = computed(() => 0.55)
+const displayThreshold = computed(() => 0.35)
 
 const filteredResults = computed(() => {
   return imageSearchResults.value.filter(item => {
@@ -236,6 +244,16 @@ const cropDraggingHandle = ref('')
 const cropImgNaturalW = ref(0)
 const cropImgNaturalH = ref(0)
 const cropDisplayScale = ref(1)
+const imgOffsetX = ref(0)
+const imgOffsetY = ref(0)
+const cropZoom = ref(1)
+const panX = ref(0)
+const panY = ref(0)
+const isPanning = ref(false)
+const panStartMouse = ref({ x: 0, y: 0 })
+const panStartTranslate = ref({ x: 0, y: 0 })
+const isMovingFixedBox = ref(false)
+const fixedBoxMoveStart = ref({ x: 0, y: 0, boxX: 0, boxY: 0 })
 const cropSelecting = computed(() => cropState.active && !cropState.done)
 const cropDone = computed(() => cropState.done)
 const cropX = computed(() => Math.round(cropState.x))
@@ -243,18 +261,33 @@ const cropY = computed(() => Math.round(cropState.y))
 const cropW = computed(() => Math.round(Math.abs(cropState.w)))
 const cropH = computed(() => Math.round(Math.abs(cropState.h)))
 const cropOverlayStyle = computed(() => ({
-  display: (cropSelecting.value || cropDone.value) ? 'block' : 'none'
+  display: cropDone.value ? 'block' : 'none'
 }))
 const cropBoxStyle = computed(() => {
   const x = cropState.w < 0 ? cropState.x + cropState.w : cropState.x
   const y = cropState.h < 0 ? cropState.y + cropState.h : cropState.y
   return {
-    left: x + 'px',
-    top: y + 'px',
+    left: (x + imgOffsetX.value) + 'px',
+    top: (y + imgOffsetY.value) + 'px',
     width: Math.abs(cropState.w) + 'px',
     height: Math.abs(cropState.h) + 'px'
   }
 })
+
+const initFixedBox = () => {
+  if (cropState.done) return
+  const img = cropImgRef.value
+  const displayW = img?.offsetWidth || 800
+  const displayH = img?.offsetHeight || 800
+  const boxW = Math.round(displayW * 0.8)
+  const boxH = Math.round(displayH * 0.8)
+  cropState.x = Math.round((displayW - boxW) / 2)
+  cropState.y = Math.round((displayH - boxH) / 2)
+  cropState.w = boxW
+  cropState.h = boxH
+  cropState.done = true
+  cropState.active = false
+}
 
 const autoBackfillDhash = async () => {
   try {
@@ -354,9 +387,15 @@ function resetCropState() {
   cropImgNaturalW.value = 0
   cropImgNaturalH.value = 0
   cropDisplayScale.value = 1
+  cropZoom.value = 1
+  panX.value = 0
+  panY.value = 0
 }
 
-const resetCrop = () => { resetCropState() }
+const resetCrop = () => {
+  resetCropState()
+  initFixedBox()
+}
 
 const onCropImgLoad = () => {
   const img = cropImgRef.value
@@ -366,38 +405,78 @@ const onCropImgLoad = () => {
   if (img.offsetWidth > 0) {
     cropDisplayScale.value = img.naturalWidth / img.offsetWidth
   }
+  // 计算图片在编辑器内的布局偏移
+  const editorRect = cropEditorRef.value?.getBoundingClientRect()
+  const imgRect = img.getBoundingClientRect()
+  if (editorRect && imgRect) {
+    imgOffsetX.value = imgRect.left - editorRect.left
+    imgOffsetY.value = imgRect.top - editorRect.top
+  }
+  initFixedBox()
+}
+
+const onCropWheel = (e) => {
+  const delta = e.deltaY > 0 ? -0.1 : 0.1
+  cropZoom.value = Math.max(0.3, Math.min(3, +(cropZoom.value + delta).toFixed(1)))
 }
 
 const getCropEditorPos = (e) => {
-  const rect = cropEditorRef.value.getBoundingClientRect()
-  return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+  const rect = cropImgRef.value.getBoundingClientRect()
+  const z = cropZoom.value
+  return { x: (e.clientX - rect.left) / z, y: (e.clientY - rect.top) / z }
 }
 
 const onCropMouseDown = (e) => {
   if (cropDraggingHandle.value) return
   const pos = getCropEditorPos(e)
-  cropState.startX = pos.x
-  cropState.startY = pos.y
-  cropState.x = pos.x
-  cropState.y = pos.y
-  cropState.w = 0
-  cropState.h = 0
-  cropState.active = true
-  cropState.done = false
+  const bx = cropState.w < 0 ? cropState.x + cropState.w : cropState.x
+  const by = cropState.h < 0 ? cropState.y + cropState.h : cropState.y
+  const bw = Math.abs(cropState.w)
+  const bh = Math.abs(cropState.h)
+  if (cropState.done && pos.x >= bx && pos.x <= bx + bw && pos.y >= by && pos.y <= by + bh) {
+    isMovingFixedBox.value = true
+    fixedBoxMoveStart.value = { x: e.clientX, y: e.clientY, boxX: bx, boxY: by }
+    return
+  }
+  isPanning.value = true
+  panStartMouse.value = { x: e.clientX, y: e.clientY }
+  panStartTranslate.value = { x: panX.value, y: panY.value }
 }
 
 const onCropMouseMove = (e) => {
+  if (isMovingFixedBox.value) {
+    const z = cropZoom.value || 1
+    const dx = (e.clientX - fixedBoxMoveStart.value.x) / z
+    const dy = (e.clientY - fixedBoxMoveStart.value.y) / z
+    const bw = Math.abs(cropState.w)
+    const bh = Math.abs(cropState.h)
+    cropState.x = fixedBoxMoveStart.value.boxX + dx
+    cropState.y = fixedBoxMoveStart.value.boxY + dy
+    cropState.w = bw
+    cropState.h = bh
+    return
+  }
+  if (isPanning.value) {
+    panX.value = panStartTranslate.value.x + (e.clientX - panStartMouse.value.x)
+    panY.value = panStartTranslate.value.y + (e.clientY - panStartMouse.value.y)
+    return
+  }
   if (!cropState.active) return
   const pos = getCropEditorPos(e)
   if (cropDraggingHandle.value) {
     handleResize(pos)
-  } else {
-    cropState.w = pos.x - cropState.startX
-    cropState.h = pos.y - cropState.startY
   }
 }
 
 const onCropMouseUp = () => {
+  if (isPanning.value) {
+    isPanning.value = false
+    return
+  }
+  if (isMovingFixedBox.value) {
+    isMovingFixedBox.value = false
+    return
+  }
   if (!cropState.active) return
   if (Math.abs(cropState.w) > 10 && Math.abs(cropState.h) > 10) {
     cropState.done = true
@@ -443,10 +522,15 @@ const getCroppedFile = () => {
     }
     const imageEl = new Image()
     imageEl.onload = () => {
-      const sx = Math.max(0, Math.round(cropX.value * cropDisplayScale.value))
-      const sy = Math.max(0, Math.round(cropY.value * cropDisplayScale.value))
-      const sw = Math.min(Math.round(cropW.value * cropDisplayScale.value), imageEl.naturalWidth - sx)
-      const sh = Math.min(Math.round(cropH.value * cropDisplayScale.value), imageEl.naturalHeight - sy)
+      const displayW = cropImgRef.value?.offsetWidth || 800
+      const displayH = cropImgRef.value?.offsetHeight || 800
+      const z = cropZoom.value || 1
+      const displayCx = displayW / 2
+      const displayCy = displayH / 2
+      const sx = Math.max(0, Math.round((displayCx + (cropX.value - imgOffsetX.value - displayCx - panX.value) / z) * (imageEl.naturalWidth / displayW)))
+      const sy = Math.max(0, Math.round((displayCy + (cropY.value - imgOffsetY.value - displayCy - panY.value) / z) * (imageEl.naturalHeight / displayH)))
+      const sw = Math.min(Math.round(cropW.value / z * (imageEl.naturalWidth / displayW)), imageEl.naturalWidth - sx)
+      const sh = Math.min(Math.round(cropH.value / z * (imageEl.naturalHeight / displayH)), imageEl.naturalHeight - sy)
       if (sw <= 0 || sh <= 0) { resolve(img.file); return }
       const canvas = document.createElement('canvas')
       canvas.width = sw
@@ -513,7 +597,6 @@ const doImageSearch = async () => {
 
 const findSimilar = async (item) => {
   if (!item.filePath) return
-  imageSearching.value = true
   try {
     const response = await fetch('/images/' + item.filePath)
     if (!response.ok) throw new Error('Failed to fetch image')
@@ -528,7 +611,6 @@ const findSimilar = async (item) => {
     resetCropState()
     doImageSearch()
   } catch (e) {
-    imageSearching.value = false
     imageSearchError.value = '获取图片失败'
     console.error('Find similar failed:', e)
   }
@@ -978,8 +1060,9 @@ const viewImageSearchResult = (item) => {
 
 .crop-editor-wrap {
   position: relative;
-  width: 100%;
-  max-height: 420px;
+  width: 800px;
+  height: 800px;
+  margin: 0 auto;
   overflow: hidden;
   border-radius: 10px;
   border: 1px solid #dde0e6;
@@ -992,8 +1075,8 @@ const viewImageSearchResult = (item) => {
 }
 
 .crop-editor-wrap img {
-  max-width: 100%;
-  max-height: 420px;
+  width: 100%;
+  height: 100%;
   display: block;
   object-fit: contain;
 }
@@ -1024,15 +1107,21 @@ const viewImageSearchResult = (item) => {
   pointer-events: auto;
 }
 
-.crop-handle.tl { top: -6px; left: -6px; cursor: nw-resize; }
-.crop-handle.tr { top: -6px; right: -6px; cursor: ne-resize; }
-.crop-handle.bl { bottom: -6px; left: -6px; cursor: sw-resize; }
-.crop-handle.br { bottom: -6px; right: -6px; cursor: se-resize; }
+.crop-handle.tl { top: -5px; left: -5px; cursor: nw-resize; }
+.crop-handle.tm { top: -5px; left: 50%; margin-left: -5px; cursor: n-resize; }
+.crop-handle.tr { top: -5px; right: -5px; cursor: ne-resize; }
+.crop-handle.rm { top: 50%; right: -5px; margin-top: -5px; cursor: e-resize; }
+.crop-handle.br { bottom: -5px; right: -5px; cursor: se-resize; }
+.crop-handle.bm { bottom: -5px; left: 50%; margin-left: -5px; cursor: s-resize; }
+.crop-handle.bl { bottom: -5px; left: -5px; cursor: sw-resize; }
+.crop-handle.lm { top: 50%; left: -5px; margin-top: -5px; cursor: w-resize; }
 
 .crop-hint-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 10px;
   font-size: 12px;
   color: rgba(29,29,31,0.38);
@@ -1041,6 +1130,18 @@ const viewImageSearchResult = (item) => {
 .crop-hint-bar .ready {
   color: #30d158;
   font-weight: 600;
+}
+
+.crop-hint-text {
+  font-size: 12px;
+  color: rgba(29,29,31,0.38);
+}
+
+.crop-hint-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .crop-confirm-btn {

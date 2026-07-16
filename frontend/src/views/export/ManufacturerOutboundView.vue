@@ -8,8 +8,8 @@
               <div class="inventory-form-row inventory-form-row-6">
                 <div class="inventory-form-field-pair">
                   <div class="inventory-form-field">
-                    <label class="inventory-form-label">库存编号</label>
-                    <input class="inventory-form-input" style="width:380px" :value="currentRecord?.inventoryCode || ''" readonly />
+                    <label class="inventory-form-label">出库编号</label>
+                    <input class="inventory-form-input" style="width:380px" :value="currentRecord?.outboundCode || ''" readonly />
                   </div>
                   <div class="inventory-form-field">
                     <label class="inventory-form-label">本次代号</label>
@@ -43,7 +43,7 @@
       <div class="inventory-toolbar-row">
         <div class="inventory-search">
           <Search :size="16" />
-          <input v-model="searchKeyword" placeholder="搜索库存编号/本次代号" @keydown.enter="onSearch" />
+          <input v-model="searchKeyword" placeholder="搜索出库编号/本次代号" @keydown.enter="onSearch" />
         </div>
         <button class="inventory-btn inventory-btn-primary" @click="onSearch">
           <Search :size="14" /> 查询
@@ -53,7 +53,7 @@
         </button>
         <span class="inventory-toolbar-sep"></span>
         <button class="inventory-btn inventory-btn-primary" @click="startAdd">
-          <Plus :size="14" /> 新增库存
+          <Plus :size="14" /> 新增出库
         </button>
         <button class="inventory-btn inventory-btn-ghost" :disabled="!currentRecord" @click="startEdit">
           <Pencil :size="14" /> 修改
@@ -97,7 +97,7 @@
           @column-dragend="onColumnDragEnd"
         >
           <template #col_codeName="{ row }">
-            <a class="cell-link" @click.stop="openInventoryDetail(row)">{{ row.codeName }}</a>
+            <a class="cell-link" @click.stop="openOutboundDetail(row)">{{ row.codeName }}</a>
           </template>
           <template #col_submitStatus="{ row }">
             <span :style="{ color: (row.submittedCount || 0) === (row.totalCount || 0) && (row.totalCount || 0) > 0 ? '#16a34a' : '#d97706' }">
@@ -140,7 +140,7 @@
           <div class="form-modal-header">
             <div class="form-modal-title-wrap">
               <span class="form-modal-icon">{{ formMode === 'add' ? '+' : '✎' }}</span>
-              <h3 class="form-modal-title">{{ formMode === 'add' ? '新增库存' : '编辑库存' }}</h3>
+              <h3 class="form-modal-title">{{ formMode === 'add' ? '新增出库' : '编辑出库' }}</h3>
             </div>
             <button class="form-modal-close" @click="cancelEdit"><X :size="18" /></button>
           </div>
@@ -148,8 +148,8 @@
           <div class="form-modal-body">
             <div class="fm-row fm-row-2">
               <div class="fm-field">
-                <label class="fm-label">库存编号</label>
-                <input class="fm-input fm-input-auto" :value="formData.inventoryCode" readonly placeholder="保存时自动生成" />
+                <label class="fm-label">出库编号</label>
+                <input class="fm-input fm-input-auto" :value="formData.outboundCode" readonly placeholder="保存时自动生成" />
               </div>
               <div class="fm-field">
                 <label class="fm-label"><span class="fm-required">*</span>本次代号</label>
@@ -193,7 +193,7 @@
 
           <div class="form-modal-footer">
             <button class="inventory-btn inventory-btn-ghost" @click="cancelEdit">取消</button>
-            <button class="inventory-btn inventory-btn-primary" @click="saveInventory">
+            <button class="inventory-btn inventory-btn-primary" @click="saveOutbound">
               <Save :size="14" /> 确定
             </button>
           </div>
@@ -275,7 +275,7 @@ const isEditing = computed(() => formMode.value === 'add' || formMode.value === 
 const allColumns = [
   { type: 'checkbox', title: '', width: 50, fixed: 'left' },
   { type: 'seq', title: '序号', width: 60, fixed: 'left' },
-  { field: 'inventoryCode', title: '库存编号', minWidth: 160, showOverflow: true, sortable: true },
+  { field: 'outboundCode', title: '出库编号', minWidth: 160, showOverflow: true, sortable: true },
   { field: 'codeName', title: '本次代号', minWidth: 120, showOverflow: true, sortable: true, slots: { default: 'col_codeName' } },
   { field: 'createDate', title: '创建日期', minWidth: 160, sortable: true },
   { field: 'creator', title: '登记人', minWidth: 100 },
@@ -285,7 +285,7 @@ const allColumns = [
 ]
 
 // 表格列设置跨设备同步
-const { fullKey: gridStorageKey, saveToBackend: saveGridPrefs, ready: prefReady } = useGridPrefSync(gridRef, 'manufacturer-export', allColumns)
+const { fullKey: gridStorageKey, saveToBackend: saveGridPrefs, ready: prefReady } = useGridPrefSync(gridRef, 'manufacturer-outbound', allColumns)
 
 // ========== CRUD 操作 ==========
 const onSearch = () => {
@@ -311,9 +311,9 @@ const goPage = (page) => {
 
 const router = useRouter()
 
-const openInventoryDetail = (row) => {
+const openOutboundDetail = (row) => {
   if (!row || !row.codeName) return
-  router.push({ name: 'InventoryDetail', params: { codeName: row.codeName } })
+  router.push({ name: 'OutboundDetail', params: { codeName: row.codeName } })
 }
 
 const onCellClick = ({ row }) => {
@@ -373,10 +373,10 @@ const startAdd = () => {
   const pad = (n) => String(n).padStart(2, '0')
   formData.createDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
   showFormModal.value = true
-  generateInventoryCodes()
+  generateOutboundCodes()
 }
 
-const generateInventoryCodes = () => {
+const generateOutboundCodes = () => {
   let maxCode = 100000
   if (list.value && list.value.length > 0) {
     list.value.forEach(row => {
@@ -389,8 +389,8 @@ const generateInventoryCodes = () => {
   }
   const nextCode = String(maxCode).padStart(6, '0')
   const today = new Date().toISOString().slice(0, 10)
-  formData.inventoryCode = `${today}-${nextCode}R`
-  formData.codeName = `${nextCode}R`
+  formData.outboundCode = `${today}-${nextCode}C`
+  formData.codeName = `${nextCode}C`
 }
 
 const startEdit = () => {
@@ -417,7 +417,7 @@ const cancelEdit = () => {
   }
 }
 
-const saveInventory = async () => {
+const saveOutbound = async () => {
   if (!formData.codeName) {
     showAlertDialog('本次代号为必填项')
     return
@@ -432,7 +432,7 @@ const saveInventory = async () => {
 
   try {
     if (formMode.value === 'add') {
-      const res = await api('/inventory-codes', { method: 'POST', body: JSON.stringify(payload) })
+      const res = await api('/outbound-codes', { method: 'POST', body: JSON.stringify(payload) })
       if (res && res.code === 200) {
         showAlertDialog('添加成功')
         showFormModal.value = false
@@ -445,7 +445,7 @@ const saveInventory = async () => {
     } else {
       const id = currentRecord.value?.id
       if (!id) { showAlertDialog('未选择记录'); return }
-      const res = await api(`/inventory-codes/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+      const res = await api(`/outbound-codes/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
       if (res && res.code === 200) {
         showAlertDialog('修改成功')
         showFormModal.value = false
@@ -466,9 +466,9 @@ const deleteCurrent = async () => {
     showAlertDialog('请先在表格中选择一条记录')
     return
   }
-  if (!confirm(`确定要删除该库存记录吗？\n库存编号: ${currentRecord.value.inventoryCode}\n此操作不可恢复。`)) return
+  if (!confirm(`确定要删除该出库记录吗？\n出库编号: ${currentRecord.value.outboundCode}\n此操作不可恢复。`)) return
   try {
-    const res = await api(`/inventory-codes/${currentRecord.value.id}`, { method: 'DELETE' })
+    const res = await api(`/outbound-codes/${currentRecord.value.id}`, { method: 'DELETE' })
     if (res && res.code === 200) {
       showAlertDialog('删除成功')
       currentRecord.value = null
@@ -498,7 +498,7 @@ const loadData = async () => {
     const params = [`current=${currentPage.value}`, `size=${pageSize.value}`]
     if (sortField.value) { params.push(`sortField=${sortField.value}`); params.push(`sortOrder=${sortOrder.value}`) }
     if (searchKeyword.value) params.push(`keyword=${encodeURIComponent(searchKeyword.value)}`)
-    const res = await api(`/inventory-codes?${params.join('&')}`)
+    const res = await api(`/outbound-codes?${params.join('&')}`)
     const result = res.data || res || {}
     const records = result.records || result.list
     const rawList = Array.isArray(records) ? records : (Array.isArray(result) ? result : [])

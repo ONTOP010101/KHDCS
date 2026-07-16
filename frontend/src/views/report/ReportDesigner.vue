@@ -36,9 +36,11 @@
           <div class="ds-import-wrap">
             <button class="ds-import-btn" @click="showImportMenu = !showImportMenu">+ 导入 </button>
             <div class="ds-import-menu" v-if="showImportMenu">
-              <div class="import-item" @click="quickImport('samples')">样品资料（全部字段）</div>
-              <div class="import-item" @click="quickImport('vendor')">厂商确认</div>
-              <div class="import-item" @click="showImportModal = true; showImportMenu = false">自定义（CSV/SQL/API</div>
+              <div class="import-item" @click="quickImport('manufacturer')">厂商资料</div>
+              <div class="import-item" @click="quickImport('samples')">样品资料</div>
+              <div class="import-item" @click="quickImport('client-items')">择样明细</div>
+              <div class="import-item" @click="quickImport('customer-info')">客户资料</div>
+              <div class="import-item" @click="showImportModal = true; showImportMenu = false">自定义（CSV/SQL/API）</div>
             </div>
           </div>
         </div>
@@ -49,7 +51,7 @@
           </div>
           <div class="ds-group" v-for="ds in filteredDatasets" :key="ds.name">
             <div class="ds-group-head" @click="dsExpanded[ds.name] = !dsExpanded[ds.name]">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" :class="{ expanded: ds.expanded }" style="transition: .15s; flex-shrink: 0;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" :class="{ expanded: ds.expanded }" style="transition: .15s; flex-shrink: 0;">
                 <polyline points="9 18 15 12 9 6"/>
               </svg>
               <span class="ds-name-text">{{ ds.name }}</span>
@@ -78,18 +80,18 @@
           <div class="preview-banner" v-if="previewMode">
             <span class="preview-badge">预览模式</span>
             <span class="preview-info">{{ previewTotal }} &middot; 第{{ previewPage }}/{{ previewTotalPages }}&middot; {{ previewRowCount }} </span>
-            <button class="fmt-btn fmt-btn-preview" @click="goPreviewPage(previewPage-1)" :disabled="previewPage <= 1" style="background:#6b7280;border-color:#6b7280;padding:2px 6px;font-size:12px;">◀</button>
-            <button class="fmt-btn fmt-btn-preview" @click="goPreviewPage(previewPage+1)" :disabled="previewPage >= previewTotalPages" style="background:#6b7280;border-color:#6b7280;padding:2px 6px;font-size:12px;"></button>
-            <button class="fmt-btn fmt-btn-preview" @click="doPrint" style="background:#9333ea;border-color:#9333ea;margin-left:8px;">打印</button>
-            <button class="fmt-btn fmt-btn-preview" @click="doExportFull" style="background:#16a34a;border-color:#16a34a;margin-left:4px;">导出完整报表</button>
+            <button class="fmt-btn fmt-btn-preview" @click="goPreviewPage(previewPage-1)" :disabled="previewPage <= 1" style="background:#6b7280;border-color:#6b7280;padding:4px 12px;font-size:24px;">◀</button>
+            <button class="fmt-btn fmt-btn-preview" @click="goPreviewPage(previewPage+1)" :disabled="previewPage >= previewTotalPages" style="background:#6b7280;border-color:#6b7280;padding:4px 12px;font-size:24px;"></button>
+            <button class="fmt-btn fmt-btn-preview" @click="doPrint" style="background:#9333ea;border-color:#9333ea;margin-left:16px;">打印</button>
+            <button class="fmt-btn fmt-btn-preview" @click="doExportFull" style="background:#16a34a;border-color:#16a34a;margin-left:8px;">导出完整报表</button>
             <button class="fmt-btn fmt-btn-preview" @click="exitPreview" style="background:#dc2626;border-color:#dc2626;margin-left:auto;">返回设计</button>
           </div>
           <div class="fmt-group" v-show="!previewMode">
             <button class="fmt-btn" title="撤销" @click="undo" :disabled="undoStack.length === 0">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h10a5 5 0 0 1 0 10H9"/><polyline points="7 6 3 10 7 14"/></svg>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h10a5 5 0 0 1 0 10H9"/><polyline points="7 6 3 10 7 14"/></svg>
             </button>
             <button class="fmt-btn" title="重做" @click="redo" :disabled="redoStack.length === 0">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10H11a5 5 0 0 0 0 10h4"/><polyline points="17 6 21 10 17 14"/></svg>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10H11a5 5 0 0 0 0 10h4"/><polyline points="17 6 21 10 17 14"/></svg>
             </button>
             <span class="fmt-sep"></span>
             <select v-model.number="fmt.fontSize" class="fmt-sel" @change="applyFmt">
@@ -104,37 +106,40 @@
             </select>
           </div>
           <span class="fmt-sep" v-show="!previewMode"></span>
+          <input ref="logoInput" type="file" accept="image/*" style="display:none" @change="onLogoUpload" />
+          <button class="fmt-btn fmt-btn-merge" title="上传Logo" @click="logoInput.click()" v-show="!previewMode">{{ config.logoImage ? '更换Logo' : '上传Logo' }}</button>
+          <span class="fmt-sep" v-show="!previewMode"></span>
           <button class="fmt-btn" :class="{ on: fmt.bold }" title="加粗" @click="fmt.bold = !fmt.bold; applyFmt()" v-show="!previewMode"><b>B</b></button>
           <button class="fmt-btn" :class="{ on: fmt.italic }" title="斜体" @click="fmt.italic = !fmt.italic; applyFmt()" v-show="!previewMode"><i>I</i></button>
           <button class="fmt-btn" :class="{ on: fmt.underline }" title="下划线" @click="fmt.underline = !fmt.underline; applyFmt()" v-show="!previewMode"><u>U</u></button>
           <span class="fmt-sep" v-show="!previewMode"></span>
           <button class="fmt-btn" :class="{ on: selAlign === 'left' }" title="左对齐" @click="selAlign = 'left'; applyFmt()" v-show="!previewMode">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/></svg>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/></svg>
           </button>
           <button class="fmt-btn" :class="{ on: selAlign === 'center' }" title="居中" @click="selAlign = 'center'; applyFmt()" v-show="!previewMode">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="10" x2="6" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="18" y1="18" x2="6" y2="18"/></svg>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="10" x2="6" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="18" y1="18" x2="6" y2="18"/></svg>
           </button>
           <button class="fmt-btn" :class="{ on: selAlign === 'right' }" title="右对齐" @click="selAlign = 'right'; applyFmt()" v-show="!previewMode">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="21" y1="10" x2="7" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="7" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/></svg>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="21" y1="10" x2="7" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="7" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/></svg>
           </button>
           <span class="fmt-sep" v-show="!previewMode"></span>
           <button class="fmt-btn" :class="{ on: selVAlign === 'top' }" title="顶端对齐" @click="selVAlign = 'top'; applyFmt()" v-show="!previewMode">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="4" x2="21" y2="4"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="14" x2="21" y2="14"/><line x1="3" y1="19" x2="21" y2="19"/></svg>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="4" x2="21" y2="4"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="14" x2="21" y2="14"/><line x1="3" y1="19" x2="21" y2="19"/></svg>
           </button>
           <button class="fmt-btn" :class="{ on: selVAlign === 'middle' }" title="垂直居中" @click="selVAlign = 'middle'; applyFmt()" v-show="!previewMode">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="7" x2="21" y2="7"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="17" x2="21" y2="17"/><line x1="3" y1="22" x2="21" y2="22"/></svg>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="7" x2="21" y2="7"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="17" x2="21" y2="17"/><line x1="3" y1="22" x2="21" y2="22"/></svg>
           </button>
           <button class="fmt-btn" :class="{ on: selVAlign === 'bottom' }" title="底端对齐" @click="selVAlign = 'bottom'; applyFmt()" v-show="!previewMode">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="10" x2="21" y2="10"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="3" y1="19" x2="21" y2="19"/><line x1="3" y1="22" x2="21" y2="22"/></svg>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="10" x2="21" y2="10"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="3" y1="19" x2="21" y2="19"/><line x1="3" y1="22" x2="21" y2="22"/></svg>
           </button>
           <span class="fmt-sep" v-show="!previewMode"></span>
           <button class="fmt-btn" :class="{ on: fmt.wordWrap }" title="自动换行" @click="fmt.wordWrap = !fmt.wordWrap; applyFmt()" v-show="!previewMode">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10a4 4 0 0 1 0 8H4"/><polyline points="8 4 4 6 8 8"/><path d="M20 18H10a4 4 0 0 1 0-8h4"/><polyline points="16 16 20 18 16 20"/></svg>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10a4 4 0 0 1 0 8H4"/><polyline points="8 4 4 6 8 8"/><path d="M20 18H10a4 4 0 0 1 0-8h4"/><polyline points="16 16 20 18 16 20"/></svg>
           </button>
           <span class="fmt-sep" v-show="!previewMode"></span>
           <div class="fmt-color-pair" v-show="!previewMode">
             <button ref="fontClrRef" class="fmt-clr-btn" title="字体颜色" @click.stop="toggleFontClr">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><text x="12" y="10" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="bold" fill="currentColor" stroke="none">A</text><rect x="3" y="17" width="18" height="3" rx="1" :fill="fmt.color" stroke="none"/></svg>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><text x="12" y="10" text-anchor="middle" dominant-baseline="central" font-size="26" font-weight="bold" fill="currentColor" stroke="none">A</text><rect x="3" y="17" width="18" height="3" rx="1" :fill="fmt.color" stroke="none"/></svg>
             </button>
             <div class="fmt-clr-pop" v-if="fontClrOpen" :style="fontClrPos" @click.stop>
               <span v-for="c in colorPalette" :key="'fc'+c" class="fmt-clr-chip" :style="{ background: c }" :class="{ picked: fmt.color === c }" @click="fmt.color = c; fontClrOpen = false; applyFmt()"></span>
@@ -142,7 +147,7 @@
           </div>
           <div class="fmt-color-pair" v-show="!previewMode">
             <button ref="bgClrRef" class="fmt-clr-btn" title="填充颜色" @click.stop="toggleBgClr">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 22 L2 20 L22 20 L22 22 Z" :fill="fmt.bgColor" stroke="none"/><path d="M2 22 L12 20 L22 22" fill="none"/><path d="M12 3 L16 12 L8 12 Z" :fill="fmt.bgColor" fill-opacity="0.3"/></svg>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 22 L2 20 L22 20 L22 22 Z" :fill="fmt.bgColor" stroke="none"/><path d="M2 22 L12 20 L22 22" fill="none"/><path d="M12 3 L16 12 L8 12 Z" :fill="fmt.bgColor" fill-opacity="0.3"/></svg>
             </button>
             <div class="fmt-clr-pop" v-if="bgClrOpen" :style="bgClrPos" @click.stop>
               <span v-for="c in colorPalette" :key="'bc'+c" class="fmt-clr-chip" :style="{ background: c }" :class="{ picked: fmt.bgColor === c }" @click="fmt.bgColor = c; bgClrOpen = false; applyFmt()"></span>
@@ -155,7 +160,7 @@
           <button class="fmt-btn fmt-btn-preview" @click="doPreview" v-if="!previewMode">加载预览</button>
           <button class="fmt-btn fmt-btn-preview" @click="saveAsTemplate" v-if="!previewMode">{{ currentTemplateId ? '更新模板' : '保存为模' }}</button>
           <button class="fmt-btn fmt-btn-preview" @click="openTemplateList" v-if="!previewMode" style="background:#6d28d9;">模板列表</button>
-          <button class="fmt-btn fmt-btn-preview" @click="doExportExcel" title="导出 Excel" v-if="!previewMode" style="background:#16a34a;">导出Excel</button>
+          <button class="fmt-btn fmt-btn-preview" @click="doExportFull" title="导出 Excel" v-if="!previewMode" style="background:#16a34a;">导出Excel</button>
         </div>
 
         <!-- 预览模式浮动退出按-->
@@ -171,8 +176,8 @@
         </Transition>
 
         <!-- Spreadsheet -->
-        <div class="sr-sheet-wrap" @click.self="deselectAllCells" @dragover.prevent @drop.prevent="onCellDrop">
-          <div class="sr-sheet-scroll" ref="sheetScrollRef" @scroll="onSheetScroll" @wheel="onSheetWheel" :style="{ transform: `scale(${zoomLevel})`, transformOrigin: '0 0' }">
+        <div class="sr-sheet-wrap" @click.self="deselectAllCells" @dragover.prevent="onDragOver" @dragleave="onDragLeave" @drop.prevent="onCellDrop">
+          <div class="sr-sheet-scroll" ref="sheetScrollRef" @scroll="onSheetScroll" @wheel="onSheetWheel" :style="{ zoom: zoomLevel }">
             <!-- 纸张分页虚线 -->
             <div class="page-break-overlay" :style="pageBreakStyle">
               <div v-for="pb in pageBreakLines.h" :key="'h'+pb" class="pb-line pb-h" :style="{ top: pb + 'px' }"></div>
@@ -180,9 +185,10 @@
             </div>
             <!-- 选区覆盖层：VXE 风格，直接操DOM，避per-cell 重渲-->
             <div class="sel-overlay" v-if="selOverlay.style" :style="selOverlay.style"></div>
+            <div class="drop-target-overlay" v-if="dropTargetStyle" :style="dropTargetStyle"></div>
             <table class="sr-sheet" :style="{ minWidth: totalSheetWidth() + 'px' }">
               <colgroup>
-                <col :style="{ width: '46px' }"/>
+                <col :style="{ width: '92px' }"/>
                 <col v-for="c in colCount" :style="{ width: getColWidth(c) + 'px' }" :key="c"/>
               </colgroup>
               <thead>
@@ -226,12 +232,12 @@
                       v-model="editing.val"
                       class="ss-input"
                       @blur="commitEdit"
-                      @keydown.enter.prevent="commitEdit"
+                      @keydown.enter.prevent="onEditEnter"
                       @keydown.escape.prevent="cancelEdit"
                       @keydown.tab.prevent="commitEdit; moveEdit(0, 1)"
                     />
                     <span v-else-if="isImageCell(r,c)" class="ss-img-wrap">
-                      <img :src="getCellValue(r,c)" class="ss-img" />
+                      <img :src="getCellValue(r,c) === '${logo}' ? config.logoImage : getCellValue(r,c)" class="ss-img" />
                     </span>
                     <span v-else class="ss-text">{{ getCellValue(r, c) }}</span>
                   </td>
@@ -257,8 +263,8 @@
             <div class="cfg-ttl">表格设置</div>
             <div class="cfg-row"><label>行数</label><input class="prop-inp prop-inp-s" type="number" v-model.number="rowCount" min="1" max="200" @change="resizeSheet" /></div>
             <div class="cfg-row"><label>列数</label><input class="prop-inp prop-inp-s" type="number" v-model.number="colCount" min="1" max="50" @change="resizeSheet" /></div>
-            <div class="cfg-row"><label>当前列宽</label><input class="prop-inp prop-inp-s" type="number" :value="colWidthBuf" min="30" max="600" @input="onColWidthInput" @blur="applyColWidth" @keydown.enter="applyColWidth" /> px <span class="cfg-hint">{{ colLabel(activeCellC) }} </span></div>
-            <div class="cfg-row"><label>当前行高</label><input class="prop-inp prop-inp-s" type="number" :value="rowHeightBuf" min="16" max="200" @input="onRowHeightInput" @blur="applyRowHeight" @keydown.enter="applyRowHeight" /> px <span class="cfg-hint">{{ activeCellR }} </span></div>
+            <div class="cfg-row"><label>当前列宽</label><input class="prop-inp prop-inp-s" type="number" :value="colWidthBuf" min="1" max="1200" @input="onColWidthInput" @blur="applyColWidth" @keydown.enter="applyColWidth" /> px <span class="cfg-hint">{{ colLabel(activeCellC) }} </span></div>
+            <div class="cfg-row"><label>当前行高</label><input class="prop-inp prop-inp-s" type="number" :value="rowHeightBuf" min="1" max="400" @input="onRowHeightInput" @blur="applyRowHeight" @keydown.enter="applyRowHeight" /> px <span class="cfg-hint">{{ activeCellR }} </span></div>
           </div>
           <div v-if="!selCell" class="sr-empty">选中单元格查看属</div>
           <div v-else class="sr-props">
@@ -366,6 +372,26 @@
               <span>每页{{ colsPerPage }} &times; {{ rowsPerPage }} </span>
             </div>
           </div>
+          <div class="cfg-grp">
+            <div class="cfg-ttl">全局边框</div>
+            <div class="cfg-row">
+              <label><input type="checkbox" v-model="config.showBorder" style="margin-right:6px;" />显示边框</label>
+            </div>
+            <div class="cfg-row" v-if="config.showBorder"><label>粗细</label>
+              <select class="prop-sel" v-model.number="config.borderWidth">
+                <option :value="1">细线</option>
+                <option :value="2">正常</option>
+                <option :value="3">中粗</option>
+                <option :value="4">粗线</option>
+              </select>
+            </div>
+            <div class="cfg-row" v-if="config.showBorder"><label>颜色</label>
+              <input class="prop-color" type="color" v-model="config.borderColor" />
+            </div>
+            <div class="cfg-row">
+              <button class="btn btn-sm" style="color:#e74c3c" @click="clearAllBorders">清除全部边框</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -431,8 +457,8 @@
           <span>草稿箱</span>
           <button class="modal-close" @click="showDraftModal = false">&times;</button>
         </div>
-        <div class="modal-body" style="max-height: 50vh; overflow-y: auto; padding: 8px 0;">
-          <div v-if="!drafts.length" style="text-align:center;padding:48px 0;color:#94a3b8;">暂无草稿</div>
+        <div class="modal-body" style="max-height: 50vh; overflow-y: auto; padding: 16px 0;">
+          <div v-if="!drafts.length" style="text-align:center;padding:96px 0;color:#94a3b8;">暂无草稿</div>
           <div v-for="d in drafts" :key="d.id" class="draft-item" @click="loadDraft(d)">
             <div class="draft-info">
               <div class="draft-title">{{ d.title }}</div>
@@ -449,19 +475,30 @@
 
     <!-- 模板列表弹窗 -->
     <div class="modal-mask" v-if="showTemplateModal" @click.self="showTemplateModal = false">
-      <div class="modal-card" style="max-width: 840px;">
+      <div class="modal-card" style="max-width: 1680px;">
         <div class="modal-head">
           <span>报表模板列表</span>
           <button class="modal-close" @click="showTemplateModal = false">&times;</button>
         </div>
-        <div class="modal-body" style="max-height: 50vh; overflow-y: auto; padding: 8px 0;">
-          <div v-if="templateLoading" style="text-align:center;padding:40px 0;color:#94a3b8;">加载中...</div>
-          <div v-else-if="!templateList.length" class="sr-empty" style="padding: 48px 0;">暂无模板，请先保存模板</div>
+        <div style="padding:16px 56px 0;display:flex;gap:16px;align-items:center;">
+          <label style="font-size:24px;color:#555;white-space:nowrap;">类型筛选：</label>
+          <select v-model="templateTypeFilter" @change="loadTemplatesFromServer" style="height:60px;font-size:24px;border-radius:10px;border:2px solid #dde1e8;padding:0 16px;background:#fff;outline:none;font-family:inherit;">
+            <option value="">全部</option>
+            <option value="samples">样品资料</option>
+            <option value="client-items">客户择样</option>
+          </select>
+        </div>
+        <div class="modal-body" style="max-height: 50vh; overflow-y: auto; padding: 16px 0;">
+          <div v-if="templateLoading" style="text-align:center;padding:80px 0;color:#94a3b8;">加载中...</div>
+          <div v-else-if="!templateList.length" class="sr-empty" style="padding: 96px 0;">暂无模板，请先保存模板</div>
           <div v-for="tpl in templateList" :key="tpl.id" class="draft-item" @click="loadTemplateClick(tpl)">
             <div class="draft-info">
               <div class="draft-title">
-                <span v-if="isTemplateLocked(tpl.id)" title="已锁定" style="color:#f59e0b;margin-right:6px;">&#128274;</span>
+                <span v-if="isTemplateLocked(tpl.id)" title="已锁定" style="color:#f59e0b;margin-right:12px;">&#128274;</span>
                 {{ tpl.title }}
+                <span v-if="tpl.type" style="display:inline-block;margin-left:12px;padding:4px 16px;border-radius:6px;font-size:20px;font-weight:500;" :style="tpl.type === 'samples' ? 'background:#dbeafe;color:#1d4ed8;' : 'background:#fef3c7;color:#b45309;'">
+                  {{ tpl.type === 'samples' ? '样品资料' : '客户择样' }}
+                </span>
               </div>
               <div class="draft-meta">{{ tpl.description || '' }} | {{ (tpl.updateTime || tpl.createTime) || '' }} | 操作人: {{ tpl.updateByName || tpl.updateBy || '-' }}</div>
             </div>
@@ -476,16 +513,16 @@
 
     <!-- 密码验证弹窗（自定义） -->
     <div class="modal-mask" v-if="lockDialog.show" @click.self="lockDialog.show = false">
-      <div class="modal-card" style="max-width: 560px;">
+      <div class="modal-card" style="max-width: 1120px;">
         <div class="modal-head">
           <span>{{ lockDialog.title }}</span>
           <button class="modal-close" @click="lockDialog.show = false">&times;</button>
         </div>
         <div class="modal-body">
-          <p style="margin-bottom:18px;color:#555;font-size:15px;line-height:1.6;">{{ lockDialog.hint }}</p>
+          <p style="margin-bottom:36px;color:#555;font-size:30px;line-height:1.6;">{{ lockDialog.hint }}</p>
           <input class="sr-input" v-model="lockDialog.password" type="password" placeholder="请输入密码"
-            @keyup.enter="lockDialogConfirm" style="width:100%;box-sizing:border-box;height:42px;font-size:15px;border-radius:8px;" />
-          <p v-if="lockDialog.error" style="color:#ef4444;font-size:12px;margin-top:10px;">{{ lockDialog.error }}</p>
+            @keyup.enter="lockDialogConfirm" style="width:100%;box-sizing:border-box;height:84px;font-size:30px;border-radius:16px;" />
+          <p v-if="lockDialog.error" style="color:#ef4444;font-size:24px;margin-top:20px;">{{ lockDialog.error }}</p>
           <div style="margin-top:20px;display:flex;gap:10px;justify-content:flex-end;">
             <button class="fmt-btn" @click="lockDialog.show = false">取消</button>
             <button class="fmt-btn fmt-btn-preview" @click="lockDialogConfirm">确定</button>
@@ -496,16 +533,24 @@
 
     <!-- 模板命名弹窗 -->
     <div class="modal-mask" v-if="nameDialog.show" @click.self="nameDialog.show = false">
-      <div class="modal-card" style="max-width: 560px;">
+      <div class="modal-card" style="max-width: 1120px;">
         <div class="modal-head">
           <span>保存模板</span>
           <button class="modal-close" @click="nameDialog.show = false">&times;</button>
         </div>
         <div class="modal-body">
-          <p style="margin-bottom:18px;color:#555;font-size:15px;line-height:1.6;">请输入模板名称</p>
+          <p style="margin-bottom:36px;color:#555;font-size:30px;line-height:1.6;">请输入模板名称</p>
           <input class="sr-input" v-model="nameDialog.name" type="text" placeholder="模板名称"
-            @keyup.enter="nameDialogConfirm" style="width:100%;box-sizing:border-box;height:42px;font-size:15px;border-radius:8px;" />
-          <p v-if="nameDialog.error" style="color:#ef4444;font-size:12px;margin-top:10px;">{{ nameDialog.error }}</p>
+            @keyup.enter="nameDialogConfirm" style="width:100%;box-sizing:border-box;height:84px;font-size:30px;border-radius:16px;" />
+          <div style="margin-top:24px;">
+            <label style="font-size:24px;color:#555;display:block;margin-bottom:12px;">模板类型</label>
+            <select v-model="nameDialog.type" style="width:100%;height:84px;font-size:30px;border-radius:16px;border:2px solid #dde1e8;padding:0 16px;background:#fff;outline:none;font-family:inherit;">
+              <option value="">不分类</option>
+              <option value="samples">样品资料</option>
+              <option value="client-items">客户择样</option>
+            </select>
+          </div>
+          <p v-if="nameDialog.error" style="color:#ef4444;font-size:24px;margin-top:20px;">{{ nameDialog.error }}</p>
           <div style="margin-top:20px;display:flex;gap:10px;justify-content:flex-end;">
             <button class="fmt-btn" @click="nameDialog.show = false">取消</button>
             <button class="fmt-btn fmt-btn-preview" @click="nameDialogConfirm">保存</button>
@@ -533,13 +578,13 @@
 
     <!-- 通用确认弹窗 -->
     <div class="modal-mask" v-if="confirmDialog.show" @click.self="confirmDialog.show = false">
-      <div class="modal-card" style="max-width: 560px;">
+      <div class="modal-card" style="max-width: 1120px;">
         <div class="modal-head">
           <span>提示</span>
           <button class="modal-close" @click="confirmDialog.show = false">&times;</button>
         </div>
         <div class="modal-body">
-          <p style="margin-bottom:28px;color:#374151;font-size:15px;line-height:1.7;">{{ confirmDialog.message }}</p>
+          <p style="margin-bottom:56px;color:#374151;font-size:30px;line-height:1.7;">{{ confirmDialog.message }}</p>
           <div style="display:flex;gap:10px;justify-content:flex-end;">
             <button class="fmt-btn" @click="confirmDialog.show = false">{{ confirmDialog.cancelText }}</button>
             <button class="fmt-btn fmt-btn-preview" :style="confirmDialog.danger ? { background: '#ef4444', borderColor: '#ef4444' } : {}" @click="confirmDialog.callback?.(); confirmDialog.show = false">{{ confirmDialog.confirmText }}</button>
@@ -576,17 +621,17 @@ function silentSave() {
   if (previewMode.value) return
   forceSaveDraft()
 }
-function showToast(msg, type = 'info') {
+function showToast(msg, type = 'info', duration = 2500) {
   clearTimeout(toastTimer)
   toast.message = msg
   toast.type = type
   toast.show = true
-  toastTimer = setTimeout(() => { toast.show = false }, 2500)
+  if (duration > 0) toastTimer = setTimeout(() => { toast.show = false }, duration)
 }
 
 const config = reactive({
   title: '',
-  fontSize: 12,
+  fontSize: 24,
   fontColor: '#333333',
   bgColor: '#ffffff',
   fontFamily: 'SimSun, serif',
@@ -594,6 +639,9 @@ const config = reactive({
   alignCenter: false,
   wordWrap: false,
   showBorder: true,
+  borderWidth: 1,
+  borderColor: '#333333',
+  logoImage: '',
 })
 
 const printConfig = reactive({
@@ -603,17 +651,14 @@ const printConfig = reactive({
 
 const rightTab = ref('props')
 // 电子表格尺寸 (响应
-const defaultColWidth = ref(90)
-const defaultRowHeight = ref(24)
+const defaultColWidth = ref(180)
+const defaultRowHeight = ref(48)
 const colWidths = ref({})  // { c: px }
 const rowHeights = ref({}) // { r: px }
 function getColWidth(c) { return colWidths.value[c] || defaultColWidth.value }
 function getRowHeight(r) { return rowHeights.value[r] || defaultRowHeight.value }
 function rowStyle(r) {
   const rh = getRowHeight(r) + 'px'
-  if (rowWordWrapCache[r]) {
-    return { height: 'auto', minHeight: rh }
-  }
   return { height: rh }
 }
 let rowWordWrapCache = {}
@@ -637,21 +682,21 @@ function rebuildRowWordWrapCache() {
     refreshRowWordWrap(r)
   }
 }
-function setColWidth(c, w) { colWidths.value[c] = Math.max(30, Math.min(600, w)) }
+function setColWidth(c, w) { colWidths.value[c] = Math.max(1, Math.min(1200, w)) }
 
 function colOffset(n) {
-  return colPositions.value[n - 1] + 46
+  return colPositions.value[n - 1] + 92
 }
 function totalSheetWidth() {
-  return 46 + (colPositions.value.length > 0 ? colPositions.value[colPositions.value.length - 1] : 0)
+  return 92 + (colPositions.value.length > 0 ? colPositions.value[colPositions.value.length - 1] : 0)
 }
 function totalSheetHeight() {
-  return 24 + (rowPositions.value.length > 0 ? rowPositions.value[rowPositions.value.length - 1] : 0)
+  return 48 + (rowPositions.value.length > 0 ? rowPositions.value[rowPositions.value.length - 1] : 0)
 }
 
 // ===== 虚拟行滚动 =====
 const VIRTUAL_ROW_BUFFER = 8 // 视口上下各缓冲行数
-const theadHeight = ref(30) // 列头高度，首次渲染后自动测量
+const theadHeight = ref(60) // 列头高度，首次渲染后自动测量
 
 // 累计位置缓存（computed 自动响应 rowHeights/colWidths 变化）
 const colPositions = computed(() => {
@@ -667,13 +712,21 @@ const rowPositions = computed(() => {
 
 // 虚拟滚动状态
 const virtualState = reactive({ scrollTop: 0, viewH: 0 })
+let _overlayScrollRaf = null
 function onSheetScroll() {
   // 拖拽操作中跳过，避免重渲染干扰选区/拖拽
   if (colResizeDrag.active || rowResizeDrag.active || cellDrag.active || headerDrag.active) return
   const el = sheetScrollRef?.value
   if (!el) return
-  virtualState.scrollTop = el.scrollTop
-  virtualState.viewH = el.clientHeight
+  virtualState.scrollTop = el.scrollTop / zoomLevel.value
+  virtualState.viewH = el.clientHeight / zoomLevel.value
+  // 滚动时更新选区覆盖层位置（RAF 节流）
+  if (selCell.value && !_overlayScrollRaf) {
+    _overlayScrollRaf = requestAnimationFrame(() => {
+      _overlayScrollRaf = null
+      updateSelOverlay()
+    })
+  }
 }
 
 function binarySearchLE(arr, target) {
@@ -747,7 +800,7 @@ function avgRowHeight() {
   let sum = 0; for (let i = 1; i <= rowCount.value; i++) sum += getRowHeight(i)
   return sum / rowCount.value || defaultRowHeight.value
 }
-function setRowHeight(r, h) { rowHeights.value[r] = Math.max(16, Math.min(200, h)) }
+function setRowHeight(r, h) { rowHeights.value[r] = Math.max(1, Math.min(400, h)) }
 function clearColWidths() { colWidths.value = {} }
 function clearRowHeights() { rowHeights.value = {} }
 const rowCount = ref(40)
@@ -785,6 +838,8 @@ const paperSizes = [
   { value: 'a4', label: 'A4 (210×297mm)' },
   { value: 'letter', label: 'Letter (216×279mm)' },
   { value: 'legal', label: 'Legal (216×356mm)' },
+  { value: 'bt58', label: '蓝牙标签(小) 58mm' },
+  { value: 'bt80', label: '蓝牙标签(大) 80mm' },
 ]
 
 const paperDims = {
@@ -795,6 +850,8 @@ const paperDims = {
   a4: { w: 210, h: 297 },
   letter: { w: 215.9, h: 279.4 },
   legal: { w: 215.9, h: 355.6 },
+  bt58: { w: 58, h: 9999 },
+   bt80: { w: 80, h: 9999 },
 }
 
 const paperSize = ref('a4')
@@ -822,7 +879,7 @@ const pageBreakLines = computed(() => {
   const cpp = colsPerPage.value
   const rpp = rowsPerPage.value
   for (let i = 1; cpp * i < colCount.value; i++) v.push(colOffset(cpp * i + 1))
-  let rowY = 24
+  let rowY = 48
   for (let i = 1; i <= rowCount.value; i++) {
     if (i > 1 && (i - 1) % rpp === 0) h.push(rowY)
     rowY += getRowHeight(i)
@@ -879,66 +936,45 @@ const selCell = ref(null)
 
 // VXE 风格选区覆盖层：用绝对定位 div 代替 per-cell class 绑定，避免选中区域重渲染
 const selOverlay = reactive({ style: null })
+const dropTargetCell = ref(null) // 拖拽悬停目标格子 { r, c }，用于高亮指示
 function updateSelOverlay() {
-  if (!selCell.value || !selection.sR) {
+  if (!selCell.value) {
     selOverlay.style = null
     return
   }
   const scrollEl = sheetScrollRef?.value
   if (!scrollEl) { selOverlay.style = null; return }
 
-  let minR = Math.min(selection.sR, selection.eR)
-  let maxR = Math.max(selection.sR, selection.eR)
-  let minC = Math.min(selection.sC, selection.eC)
-  let maxC = Math.max(selection.sC, selection.eC)
+  const minR = Math.min(selection.sR, selection.eR)
+  const maxR = Math.max(selection.sR, selection.eR)
+  const minC = Math.min(selection.sC, selection.eC)
+  const maxC = Math.max(selection.sC, selection.eC)
 
-  // 解析 DOM 中可见单元格：被合并覆盖的 td 会被 v-show 隐藏 → offsetParent 为 null，
-  // 此时跟随合并范围找到实际渲染的起点 td
-  const resolveVisibleCell = (r, c) => {
-    const cell = scrollEl.querySelector(`[data-r="${r}"][data-c="${c}"]`)
-    if (cell && cell.offsetParent !== null) return cell
-    const mi = getMergeInfo(r, c)
-    if (mi) return scrollEl.querySelector(`[data-r="${mi.sR}"][data-c="${mi.sC}"]`)
-    return null
-  }
+  const cp = colPositions.value, rp = rowPositions.value
 
-  const startCell = resolveVisibleCell(minR, minC)
-  const endCell = resolveVisibleCell(maxR, maxC)
+  // 宽高始终用内容坐标计算（基于 colWidths/rowHeights，精确且不受合并子格隐藏影响）
+  const width = cp[maxC] - cp[minC - 1]
+  const height = rp[maxR] - rp[minR - 1]
 
-  let left, top, width, height
-  if (startCell && endCell) {
-    const scrollRect = scrollEl.getBoundingClientRect()
-    const sr = startCell.getBoundingClientRect()
-    const er = endCell.getBoundingClientRect()
+  // 位置：统一用 getBoundingClientRect 测量 + 内容坐标宽度，两者独立
+  // 对于 border-collapse:collapse 的 <td>，offsetLeft 在不同内容下可能因边框塌陷机制产生偏差
+  // 改用首格 rect 定左上角，内容坐标(rp/cp) 定宽高，两者互不干扰
+  const firstCell = scrollEl.querySelector(`[data-r="${minR}"][data-c="${minC}"]`)
+
+  let left, top
+  if (firstCell && firstCell.offsetHeight > 0) {
+    // rect 方案：不受 border-collapse 内容相关偏移影响
+    const tr = firstCell.getBoundingClientRect()
+    const sr = scrollEl.getBoundingClientRect()
     const z = zoomLevel.value
-    left = (sr.left - scrollRect.left) / z + scrollEl.scrollLeft
-    top = (sr.top - scrollRect.top) / z + scrollEl.scrollTop
-    width = (er.right - sr.left) / z
-    height = (er.bottom - sr.top) / z
+    left = (tr.left - sr.left) / z + scrollEl.scrollLeft
+    top = (tr.top - sr.top) / z + scrollEl.scrollTop
+    // 诊断日志：对比 offset 和 rect
+    console.log(`[sel] R${minR}C${minC} offset=(${firstCell.offsetLeft},${firstCell.offsetTop}) rect=(${left.toFixed(1)},${top.toFixed(1)}) z=${z} scroll=(${scrollEl.scrollLeft},${scrollEl.scrollTop}) size=(${width},${height})`)
   } else {
-    // 坐标兜底：在首可见行中找第一个实际渲染的单元格做参考（避免首列被合并时找不到）
-    const vr = visibleRows.value[0]
-    let refCell = null, refCol = 1
-    if (vr) {
-      for (let c = 1; c <= colCount.value; c++) {
-        const cell = scrollEl.querySelector(`[data-r="${vr}"][data-c="${c}"]`)
-        if (cell && cell.offsetParent !== null) { refCell = cell; refCol = c; break }
-      }
-    }
-    if (refCell) {
-      const scrollRect = scrollEl.getBoundingClientRect()
-      const rr = refCell.getBoundingClientRect()
-      const z = zoomLevel.value
-      const refLeft = (rr.left - scrollRect.left) / z + scrollEl.scrollLeft
-      const refTop = (rr.top - scrollRect.top) / z + scrollEl.scrollTop
-      const cp = colPositions.value, rp = rowPositions.value
-      left = refLeft + (cp[minC - 1] - cp[refCol - 1])
-      top = refTop + (rp[minR - 1] - rp[vr - 1])
-      width = cp[maxC] - cp[minC - 1]
-      height = rp[maxR] - rp[minR - 1]
-    } else {
-      selOverlay.style = null; return
-    }
+    left = 2 + 92 + cp[minC - 1]
+    top = 2 + theadHeight.value + rp[minR - 1]
+    console.log(`[sel] R${minR}C${minC} FALLBACK pos=(${left},${top})`)
   }
 
   selOverlay.style = {
@@ -947,10 +983,9 @@ function updateSelOverlay() {
     top: top + 'px',
     width: width + 'px',
     height: height + 'px',
-    pointerEvents: 'none',
-    zIndex: 5,
+    pointerEvents: 'none', zIndex: 5,
     border: '2px solid #2f6ef2',
-    background: 'transparent',
+    background: 'rgba(47, 110, 242, 0.06)',
   }
 }
 
@@ -970,17 +1005,21 @@ function onColWidthInput(e) { colWidthBuf.value = e.target.value }
 function onRowHeightInput(e) { rowHeightBuf.value = e.target.value }
 function applyColWidth() {
   let v = parseInt(colWidthBuf.value)
-  if (isNaN(v) || v < 30) v = 30
-  if (v > 600) v = 600
+  if (isNaN(v) || v < 1) v = defaultColWidth.value
+  if (v > 1200) v = 1200
   colWidthBuf.value = v
-  setColWidth(activeCellC.value, v)
+  const minC = Math.min(selection.sC, selection.eC)
+  const maxC = Math.max(selection.sC, selection.eC)
+  for (let c = minC; c <= maxC; c++) setColWidth(c, v)
 }
 function applyRowHeight() {
   let v = parseInt(rowHeightBuf.value)
-  if (isNaN(v) || v < 16) v = 16
-  if (v > 200) v = 200
+  if (isNaN(v) || v < 1) v = defaultRowHeight.value
+  if (v > 400) v = 400
   rowHeightBuf.value = v
-  setRowHeight(activeCellR.value, v)
+  const minR = Math.min(selection.sR, selection.eR)
+  const maxR = Math.max(selection.sR, selection.eR)
+  for (let r = minR; r <= maxR; r++) setRowHeight(r, v)
 }
 // 选中单元格变化时同步缓冲
 watch([activeCellR, activeCellC], () => {
@@ -991,6 +1030,7 @@ watch([activeCellR, activeCellC], () => {
 function deselectAllCells() {
   selCell.value = null
   selection.sR = selection.sC = selection.eR = selection.eC = 0
+  if (_overlayScrollRaf) { cancelAnimationFrame(_overlayScrollRaf); _overlayScrollRaf = null }
 }
 
 function selectCell(r, c) {
@@ -1061,10 +1101,12 @@ function cellClass(r, c) {
   const mi = getMergeInfo(r, c)
   const rr = mi ? mi.sR : r; const cc = mi ? mi.sC : c
   const f = cellData[`R${rr}C${cc}`]?.fmt
+  const v = getCellValue(r, c)
   const va = f?.verticalAlign
   return {
     'active-cell': isActive(r, c),
     'ss-wrap': !!(f?.wordWrap),
+    'ss-multiline': !!(v && v.includes('\n')),
     'ss-vmiddle': va === 'middle',
     'ss-vbottom': va === 'bottom',
     // flex 子项水平对齐（始终跟align 设置，对 .ss-text block 无影响，
@@ -1078,20 +1120,32 @@ function cellClass(r, c) {
 function cellStyle(r, c) {
   let key = `R${r}C${c}`
   let d = cellData[key]
-  if (!d || !d.fmt) {
-    const mi = getMergeInfo(r, c)
-    if (mi && !mi.isStart) {
-      key = `R${mi.sR}C${mi.sC}`
-      d = cellData[key]
-    }
+  const mi = getMergeInfo(r, c)
+  if ((!d || !d.fmt) && mi && !mi.isStart) {
+    key = `R${mi.sR}C${mi.sC}`
+    d = cellData[key]
   }
   const st = {}
-  // 始终设硬性尺寸，防止图片等内容撑开单元
-  const rh = getRowHeight(r)
-  st.height = rh + 'px'
-  st.maxWidth = getColWidth(c) + 'px'
-  st.overflow = 'hidden'
-  if (!d || !d.fmt) return st
+  const isMerge = mi && mi.isStart && (mi.eR > mi.sR || mi.eC > mi.sC)
+  // 合并单元格：计算跨行/跨列的总尺寸，用 border-box 确保边框不溢出被裁切
+  let totalHeight, totalWidth
+  if (isMerge) {
+    totalHeight = 0
+    for (let rr = mi.sR; rr <= mi.eR; rr++) totalHeight += getRowHeight(rr)
+    totalWidth = 0
+    for (let cc = mi.sC; cc <= mi.eC; cc++) totalWidth += getColWidth(cc)
+    st.height = totalHeight + 'px'
+    st.width = totalWidth + 'px'
+    st.boxSizing = 'border-box'
+    st.overflow = 'visible'
+  } else {
+    totalHeight = getRowHeight(r)
+    totalWidth = getColWidth(c)
+    st.height = totalHeight + 'px'
+    st.maxWidth = totalWidth + 'px'
+    st.overflow = 'hidden'
+  }
+  if (!d || !d.fmt) { st.borderStyle = 'none'; st.borderWidth = '0'; st.outline = 'none'; return st }
   const f = d.fmt
   if (f.bold) st.fontWeight = 'bold'
   if (f.italic) st.fontStyle = 'italic'
@@ -1103,23 +1157,20 @@ function cellStyle(r, c) {
   if (f.align) st.textAlign = f.align
   // 垂直对齐CSS class (.ss-vmiddle / .ss-vbottom) 处理，此处无需额外设置
   // 自动换行覆盖高度限制
-  if (f.wordWrap) { st.whiteSpace = 'normal'; st.wordBreak = 'break-all'; st.overflowWrap = 'break-word'; st.height = 'auto'; st.minHeight = rh + 'px'; st.overflow = 'visible' }
-  // 边框
+  if (f.wordWrap) { st.whiteSpace = 'normal'; st.wordBreak = 'break-all'; st.overflowWrap = 'break-word'; st.overflow = 'hidden'; st.maxHeight = totalHeight + 'px' }
+  // 边框：仅当单元格显式设置时才渲染，否则清掉 CSS 默认虚线框
   if (f.border && f.border !== 'none') {
-    const bc = f.borderColor || '#333333'
-    const bw = f.borderWidth || 1
-    const bs = f.borderStyle || 'solid'
-    const b = `${bw}px ${bs} ${bc}`
+    const bw = f.borderWidth || config.borderWidth || 1
+    const bc = f.borderColor || config.borderColor || config.fontColor || '#333333'
+    const b = `${bw}px solid ${bc}`
     if (f.border === 'all') { st.border = b }
     else if (f.border === 'top') { st.borderTop = b }
     else if (f.border === 'bottom') { st.borderBottom = b }
     else if (f.border === 'left') { st.borderLeft = b }
     else if (f.border === 'right') { st.borderRight = b }
     else if (f.border === 'outer') { st.outline = b; st.outlineOffset = '-1px' }
-  } else if (f.border === 'none') {
-    st.border = ''
-    st.outline = ''
-    st.borderTop = st.borderBottom = st.borderLeft = st.borderRight = ''
+  } else {
+    st.borderStyle = 'none'; st.borderWidth = '0'; st.outline = 'none'
   }
   return st
 }
@@ -1133,6 +1184,8 @@ function getCellValue(r, c) {
 function isImageCell(r, c) {
   const val = getCellValue(r, c)
   if (!val) return false
+  // Logo占位符
+  if (val === '${logo}' && config.logoImage) return true
   // 未解析的占位符（${thumbnail}），不当作图
   if (/\$\{/.test(val)) return false
   // 完整 URL 含图片扩展名
@@ -1145,7 +1198,7 @@ function isImageCell(r, c) {
   if (previewMode.value && previewTemplate.value) {
     const tpl = previewTemplate.value
     // 查模板中同列的单元格是否含图片占位符
-    if (tpl.cells.some(tc => tc.c === c && /\$\{(image|img|thumbnail|photo|pic|picture|image_path|imgUrl|photoUrl)\}/i.test(tc.val))) {
+    if (tpl.cells.some(tc => tc.c === c && /\$\{(image|img|thumbnail|photo|pic|picture|image_path|imgUrl|photoUrl|logo)\}/i.test(tc.val))) {
       const { masterRowCount, loopRows, dataRowSpan } = tpl
       if (!loopRows.size) return true
       const loopMinR = Math.min(...loopRows)
@@ -1177,6 +1230,10 @@ function getCellFmt(r, c, prop) {
 function setCellFmt(r, c, prop, val) {
   pushUndo()
   const cells = getSelectedCells()
+  if (prop === 'border') {
+    console.log(`[border] 选中区域 R${Math.min(selection.sR,selection.eR)}-R${Math.max(selection.sR,selection.eR)} C${Math.min(selection.sC,selection.eC)}-C${Math.max(selection.sC,selection.eC)}, 设置 border='${val}'`)
+  }
+  const writtenKeys = new Set()
   cells.forEach(({ r: cr, c: cc }) => {
     const mi = getMergeInfo(cr, cc)
     const rr = mi ? mi.sR : cr, rcc = mi ? mi.sC : cc
@@ -1184,12 +1241,56 @@ function setCellFmt(r, c, prop, val) {
     if (!cellData[key]) cellData[key] = { v: '' }
     if (!cellData[key].fmt) cellData[key].fmt = {}
     cellData[key].fmt[prop] = val
+    if (prop === 'border') writtenKeys.add(key)
   })
-  // wordWrap 变动时刷新对应行的缓存
+  // 同步回工具栏状态，避免工具栏后续操作覆盖右侧面板的修改
+  if (prop === 'fontSize') fmt.fontSize = val
+  else if (prop === 'fontFamily') fmt.fontFamily = val
+  else if (prop === 'bold') fmt.bold = val
+  else if (prop === 'italic') fmt.italic = val
+  else if (prop === 'underline') fmt.underline = val
+  else if (prop === 'color') fmt.color = val
+  else if (prop === 'bgColor') fmt.bgColor = val
+  else if (prop === 'align') selAlign.value = val
+  else if (prop === 'verticalAlign') selVAlign.value = val
+  else if (prop === 'wordWrap') fmt.wordWrap = val
+  if (prop === 'border') {
+    console.log(`[border] 实际写入单元格:`, [...writtenKeys].join(', '))
+  }
   if (prop === 'wordWrap') {
     const rows = new Set(cells.map(({ r: cr }) => cr))
     rows.forEach(row => refreshRowWordWrap(row))
   }
+}
+
+/** 一键清除所有单元格的边框格式 */
+function clearAllBorders() {
+  pushUndo()
+  const keys = Object.keys(cellData)
+  keys.forEach(key => {
+    const fmt = cellData[key].fmt
+    if (fmt) {
+      delete fmt.border
+      delete fmt.borderWidth
+      delete fmt.borderColor
+      delete fmt.borderStyle
+    }
+  })
+  rebuildMergeCache()
+  // 同步刷新快照，确保导出时不带残留边框
+  if (previewSnap.value) {
+    const snapKeys = Object.keys(previewSnap.value.cellData || {})
+    snapKeys.forEach(key => {
+      const fmt = previewSnap.value.cellData[key]?.fmt
+      if (fmt) {
+        delete fmt.border
+        delete fmt.borderWidth
+        delete fmt.borderColor
+        delete fmt.borderStyle
+      }
+    })
+  }
+  showToast('已清除全部边框格式', 'success')
 }
 
 function toggleCellFmt(r, c, prop) {
@@ -1328,23 +1429,38 @@ function onGlobalMouseMove(e) {
   if (!colResizeDrag.active && !rowResizeDrag.active && !cellDrag.active && !headerDrag.active) return
   if (colResizeDrag.active) {
     const delta = (e.clientX - colResizeDrag.startX) / zoomLevel.value
-    const w = Math.max(30, Math.min(600, colResizeDrag.startW + delta))
+    const w = Math.max(1, Math.min(1200, colResizeDrag.startW + delta))
     if (w !== getColWidth(colResizeDrag.colIdx)) setColWidth(colResizeDrag.colIdx, w)
     return
   }
   if (rowResizeDrag.active) {
     const delta = (e.clientY - rowResizeDrag.startY) / zoomLevel.value
-    const h = Math.max(16, Math.min(200, rowResizeDrag.startH + delta))
+    const h = Math.max(1, Math.min(400, rowResizeDrag.startH + delta))
     if (h !== getRowHeight(rowResizeDrag.rowIdx)) setRowHeight(rowResizeDrag.rowIdx, h)
     return
   }
+
+  // 共用变量：scrollEl & rect
+  const scrollEl = sheetScrollRef?.value
+  if (!scrollEl) return
+  const sr = scrollEl.getBoundingClientRect()
+  const z = zoomLevel.value
+  const EDGE = 50 // 边缘触发滚动的像素距离
+
+  // ── 边缘自动滚动 ──
+  if (cellDrag.active || headerDrag.active) {
+    const speedX = e.clientX < sr.left + EDGE ? -(EDGE - (e.clientX - sr.left)) * 0.3
+      : e.clientX > sr.right - EDGE ? (EDGE - (sr.right - e.clientX)) * 0.3 : 0
+    const speedY = e.clientY < sr.top + EDGE ? -(EDGE - (e.clientY - sr.top)) * 0.3
+      : e.clientY > sr.bottom - EDGE ? (EDGE - (sr.bottom - e.clientY)) * 0.3 : 0
+    if (speedX !== 0 || speedY !== 0) {
+      scrollEl.scrollBy({ left: speedX / z, top: speedY / z })
+    }
+  }
+
   if (cellDrag.active) {
     // 用坐标计算代替 elementFromPoint，兼容虚拟滚动
-    const scrollEl = sheetScrollRef?.value
-    if (!scrollEl) return
-    const sr = scrollEl.getBoundingClientRect()
-    const z = zoomLevel.value
-    const x = (e.clientX - sr.left) / z + scrollEl.scrollLeft - 46 // 减去行头列宽
+    const x = (e.clientX - sr.left) / z + scrollEl.scrollLeft - 92 // 减去行头列宽
     const y = (e.clientY - sr.top) / z + scrollEl.scrollTop - theadHeight.value
     const r = findRowAtY(y), c = findColAtX(x)
     const key = `${r}|${c}`
@@ -1366,11 +1482,7 @@ function onGlobalMouseMove(e) {
   if (!headerDrag.active) return
   if (headerDrag.type === 'col') {
     // 改用坐标计算代替 elementFromPoint，与虚拟滚动兼容
-    const scrollEl = sheetScrollRef?.value
-    if (!scrollEl) return
-    const sr = scrollEl.getBoundingClientRect()
-    const z = zoomLevel.value
-    const x = (e.clientX - sr.left) / z + scrollEl.scrollLeft - 46
+    const x = (e.clientX - sr.left) / z + scrollEl.scrollLeft - 92
     const c = findColAtX(x)
     const key = `col|${c}`
     if (key === lastDragTarget) return
@@ -1384,10 +1496,6 @@ function onGlobalMouseMove(e) {
     }
   } else if (headerDrag.type === 'row') {
     // 行头虚拟滚动下可能不在 DOM，用坐标计算
-    const scrollEl = sheetScrollRef?.value
-    if (!scrollEl) return
-    const sr = scrollEl.getBoundingClientRect()
-    const z = zoomLevel.value
     const y = (e.clientY - sr.top) / z + scrollEl.scrollTop - theadHeight.value
     const r = findRowAtY(y)
     const key = `row|${r}`
@@ -1409,6 +1517,9 @@ function onGlobalMouseUp() {
   lastDragTarget = ''
   colResizeDrag.active = false
   rowResizeDrag.active = false
+  if (_overlayScrollRaf) { cancelAnimationFrame(_overlayScrollRaf); _overlayScrollRaf = null }
+  // 拖拽结束后立即刷新选区覆盖层
+  if (selCell.value) updateSelOverlay()
 }
 
 // 单元格编辑
@@ -1436,6 +1547,20 @@ function commitEdit() {
     setCellValue(editing.r, editing.c, editing.val)
   }
   editing.r = 0; editing.c = 0; editing.val = ''
+}
+
+function onEditEnter(e) {
+  if (e.altKey || e.shiftKey) {
+    const input = e.target
+    const start = input.selectionStart
+    const end = input.selectionEnd
+    editing.val = editing.val.substring(0, start) + '\n' + editing.val.substring(end)
+    nextTick(() => {
+      input.selectionStart = input.selectionEnd = start + 1
+    })
+  } else {
+    commitEdit()
+  }
 }
 
 function cancelEdit() {
@@ -1690,7 +1815,7 @@ function cellRowSpan(r, c) {
 
 // ===== Format =====
 const fmt = reactive({
-  fontSize: 12,
+  fontSize: 24,
   fontFamily: 'SimSun, serif',
   bold: false,
   italic: false,
@@ -1730,6 +1855,7 @@ function closeColorPops() {
 function applyFmt() {
   if (guardEdit()) return
   if (!selCell.value) return
+  pushUndo()
   for (let r = 1; r <= rowCount.value; r++) {
     for (let c = 1; c <= colCount.value; c++) {
       if (!shouldRenderCell(r, c)) continue
@@ -1769,7 +1895,7 @@ function syncFmtFromSelection() {
     if (f.verticalAlign != null) selVAlign.value = f.verticalAlign
     if (f.wordWrap != null) fmt.wordWrap = f.wordWrap
   } else {
-    fmt.fontSize = 12; fmt.fontFamily = 'SimSun, serif'
+    fmt.fontSize = 18; fmt.fontFamily = 'SimSun, serif'
     fmt.bold = false; fmt.italic = false; fmt.underline = false; fmt.wordWrap = false
     fmt.color = '#333333'; fmt.bgColor = '#ffffff'
     selAlign.value = 'left'
@@ -1800,21 +1926,74 @@ const onCellDrop = (e) => {
   if (previewMode.value) return
   const val = e.dataTransfer.getData('text/plain')
   if (!val) return
-  // 用坐标计算代替 elementFromPoint，兼容虚拟滚动
-  const scrollEl = sheetScrollRef?.value
-  if (!scrollEl) return
-  const sr = scrollEl.getBoundingClientRect()
-  const z = zoomLevel.value
-  const x = (e.clientX - sr.left) / z + scrollEl.scrollLeft - 46
-  const y = (e.clientY - sr.top) / z + scrollEl.scrollTop - theadHeight.value
-  let r = findRowAtY(y), c = findColAtX(x)
-  if (!r || !c || r > rowCount.value || c > colCount.value) return
-  const mi = getMergeInfo(r, c)
-  if (mi) { r = mi.sR; c = mi.sC }
+  // 直接使用 dropTargetCell（由 onDragOver 设置），确保与绿色高亮框一致，避免鼠标微动导致偏差
+  const dt = dropTargetCell.value
+  if (!dt) { dropTargetCell.value = null; return }
+  const mi = getMergeInfo(dt.r, dt.c)
+  const r = mi ? mi.sR : dt.r
+  const c = mi ? mi.sC : dt.c
+  dropTargetCell.value = null
+  pushUndo()
   setCellValue(r, c, val)
   selectCell(r, c)
 }
 
+const onDragLeave = (e) => {
+  // 只有当鼠标真正离开 sheet-wrap 时才清除高亮（避免子元素间移动触发）
+  const wrap = e.currentTarget
+  if (!wrap.contains(e.relatedTarget)) {
+    dropTargetCell.value = null
+  }
+}
+
+const onDragOver = (e) => {
+  if (previewMode.value) return
+  // 方案：直接从鼠标位置找到底下的 td 元素，避免坐标计算与真实 DOM 的偏差
+  const el = document.elementFromPoint(e.clientX, e.clientY)
+  if (!el) { dropTargetCell.value = null; return }
+  const td = el.closest('td[data-r][data-c]')
+  if (!td) { dropTargetCell.value = null; return }
+  let r = parseInt(td.dataset.r), c = parseInt(td.dataset.c)
+  if (!r || !c || r > rowCount.value || c > colCount.value) {
+    dropTargetCell.value = null
+    return
+  }
+  const mi = getMergeInfo(r, c)
+  if (mi) { r = mi.sR; c = mi.sC }
+  const prev = dropTargetCell.value
+  if (!prev || prev.r !== r || prev.c !== c) {
+    dropTargetCell.value = { r, c }
+  }
+}
+
+// 拖拽目标格子高亮样式（仅在格子变化时用 DOM 精确定位，不会频繁触发）
+const dropTargetStyle = computed(() => {
+  const dt = dropTargetCell.value
+  if (!dt) return null
+  const scrollEl = sheetScrollRef?.value
+  if (!scrollEl) return null
+  // 找到目标格子所在的实际渲染 td（处理合并单元格：被覆盖的 td 用 v-show 隐藏）
+  const mi = getMergeInfo(dt.r, dt.c)
+  const r = mi ? mi.sR : dt.r
+  const c = mi ? mi.sC : dt.c
+  const cell = scrollEl.querySelector(`[data-r="${r}"][data-c="${c}"]`)
+  if (!cell || cell.offsetParent === null) return null
+  const scrollRect = scrollEl.getBoundingClientRect()
+  const cr = cell.getBoundingClientRect()
+  const z = zoomLevel.value
+  return {
+    position: 'absolute',
+    left: ((cr.left - scrollRect.left) / z + scrollEl.scrollLeft) + 'px',
+    top: ((cr.top - scrollRect.top) / z + scrollEl.scrollTop) + 'px',
+    width: (cr.width / z) + 'px',
+    height: (cr.height / z) + 'px',
+    pointerEvents: 'none',
+    zIndex: 10,
+    border: '2px dashed #22c55e',
+    background: 'rgba(34,197,94,0.08)',
+    boxSizing: 'border-box',
+  }
+})
 // 安全 JSON 解析，防HTML 响应报错
 async function safeFetchJson(url, opts = {}) {
   const token = sessionStorage.getItem('token') || localStorage.getItem('token') || ''
@@ -1858,7 +2037,7 @@ const sampleFieldLabels = {
   carton_length: '外箱长', carton_width: '外箱宽', carton_height: '外箱高',
   carton_spec: '外箱规格', carton_volume: '体积', carton_material_vol: '材积', carton_material_volume: '材积',
   carton_gross_wt: '外箱毛重', carton_net_wt: '外箱净重', carton_gross_weight: '外箱毛重', carton_net_weight: '外箱净重',
-  inner_box_qty: '内盒数', inner_box_count: '内盒数', inner_box: '内盒数', carton_capacity: '装箱量', packing_unit: '装箱单位',
+  inner_box_qty: '内盒数', inner_box_count: '内盒数', inner_box: '内盒数', box_count: '箱数', carton_capacity: '装箱量', packing_unit: '装箱单位',
   package_spec: '包装规格', packaging_method: '包装方式',
   package_length: '包装长', package_width: '包装宽', package_height: '包装高',
   certification: '产品认证', certification_count: '认证数量', category: '分类', type: '类型',
@@ -1877,7 +2056,7 @@ const sampleFieldLabels = {
   volume: '体积', gross_wt: '毛重', net_wt: '净重',
   length: '长度', width: '宽度', height: '高度', diameter: '直径',
   moq: '起订量', delivery_time: '交货期', port: '港口',
-  origin: '产地', supplier: '厂商名称',
+  origin: '产地', name: '厂商名称',
   sample_unit_en: '样品单位(英)', packaging_cn: '中文包装', packaging_en: '英文包装',
   package_code: '包装编号', color_en: '颜色(英)',
   contact_person: '联系人', contact_phone: '联系电话',
@@ -1903,6 +2082,7 @@ const sampleFieldLabels = {
   deleted: '已删除', isActive: '启用', isDeleted: '已删除',
   createBy: '创建人ID', createdBy: '创建人ID', updateBy: '更新人ID', updatedBy: '更新人ID',
   modifyBy: '修改人', deleteBy: '删除人', deletedBy: '删除人',
+  codeName: '本次代号', code_name: '本次代号',
   // 厂商信息
   vendorCode: '厂商编号', vendorName: '厂商名称', vendorId: '厂商ID',
   companyName: '公司名称', companyId: '厂商ID',
@@ -1920,19 +2100,19 @@ const sampleFieldLabels = {
   // 样品信息
   sampleId: '样品ID', sampleCode: '公司编号', sampleName: '样品名称', englishName: '英文名称',
   factoryCode: '出厂货号', sampleUnit: '样品单位', packaging: '包装方式',
-  factoryPrice: '出厂价', taxPrice: '税点价', productSpec: '产品规格',
+  factoryPrice: '出厂价', taxPrice: '价格1', taxPrice2: '价格2', productSpec: '产品规格',
   grossWeight: '产品毛重', netWeight: '产品净重',
   cartonLength: '外箱长', cartonWidth: '外箱宽', cartonHeight: '外箱高',
   cartonSpec: '外箱规格', cartonVolume: '体积', cartonMaterialVol: '材积', cartonMaterialVolume: '材积',
   cartonGrossWt: '外箱毛重', cartonNetWt: '外箱净重', cartonGrossWeight: '外箱毛重', cartonNetWeight: '外箱净重',
-  innerBoxQty: '内盒数', innerBoxCount: '内盒数', innerBox: '内盒数', cartonCapacity: '装箱量',
+  innerBoxQty: '内盒数', innerBoxCount: '内盒数', innerBox: '内盒数', boxCount: '箱数', cartonCapacity: '装箱量',
   packingUnit: '装箱单位', packageSpec: '包装规格', packagingMethod: '包装方式',
   packageLength: '包装长', packageWidth: '包装宽', packageHeight: '包装高',
   certification: '产品认证', certificationCount: '认证数量', category: '分类', type: '类型',
   color: '颜色', size: '尺寸',
   sampleContact: '样品联系人', samplePhone: '样品电话',
   batteryInfo: '电池信息', infringement: '侵权信息',
-  remarkCn: '中文备注', remarkEn: '英文备注', otherRemark: '其他备注',
+  remarkCn: '中文备注', remarkEn: '英文备注', otherRemark: '其他备注', sampleStatus: '择样状态', showroomReplenished: '展厅已补', borrowedSample: '借样',
   imagePath: '图片路径', image: '图片', images: '图片列表',
   thumbnail: '缩略图', photo: '照片', photoUrl: '照片URL',
   operatorName: '操作员', operator_name: '操作员', totalPages: '总页数',
@@ -1942,22 +2122,68 @@ const sampleFieldLabels = {
   volume: '体积', grossWt: '毛重', netWt: '净重',
   length: '长度', width: '宽度', height: '高度', diameter: '直径',
   moq: '起订量', deliveryTime: '交货期', port: '港口',
-  origin: '产地', supplier: '厂商名称',
+  origin: '产地', name: '厂商名称',
   sampleUnitEn: '样品单位(英)', packagingCn: '中文包装', packagingEn: '英文包装',
   packageCode: '包装编号', colorEn: '颜色(英)',
-  contactPerson: '联系人', contactPhone: '联系电话',
+  contact1: '联系人', phone1: '联系电话',
   sampleLength: '样品长', sampleWidth: '样品宽', sampleHeight: '样品高',
   sampleGrossWeight: '产品毛重', sampleNetWeight: '产品净重',
   categoryCode: '样品种类编号', packageCode: '包装编号',
   hideFromXzx: '是否不在小竹熊显示',
   visitorMobile: '见客手机',
   name: '厂商名称', code: '编码', notes: '附注',
+
+  // === 客户资料（camelCase / snake_case）===
+  customerCode: '客户编号', customerName: '客户名称',
+  contactPerson1: '联系人1', contactPerson2: '联系人2', contactPerson3: '联系人3',
+  region: '地区', smsNumber: '短信号码',
+  registerDate: '登记日期', modifyDate: '修改日期',
+  remark1: '备注1', remark2: '备注2',
+  customer_code: '客户编号', customer_name: '客户名称',
+  contact_person1: '联系人1', contact_person2: '联系人2', contact_person3: '联系人3',
+  register_date: '登记日期', modify_date: '修改日期',
 }
 
 // camelCase snake_case 转换器（用于反向查找映射表）
 function camelToSnake(str) {
   return str.replace(/[A-Z]/g, c => '_' + c.toLowerCase())
 }
+
+// === 字段别名映射（模块级常量，避免每次 resolveVal 重建） ===
+const FIELD_ALIAS_MAP = {
+  carton_gross_wt: 'cartonGrossWeight', carton_net_wt: 'cartonNetWeight',
+  inner_box_qty: 'innerBoxCount', inner_box: 'innerBoxCount',
+  packaging: 'packagingCn', packaging_cn: 'packagingCn',
+  packing_unit: 'packingUnit', packaging_method: 'packagingCn',
+  carton_material_vol: 'cartonMaterialVolume',
+  gross_weight: 'sampleGrossWeight', net_weight: 'sampleNetWeight',
+  vendor_name: 'vendorName', booth_no: 'boothNo', cert_no: 'certNo',
+  sample_code: 'sampleCode', sample_name: 'sampleName', english_name: 'englishName',
+  manufacturer_code: 'manufacturerCode', sample_unit: 'sampleUnit',
+  factory_price: 'factoryPrice', tax_price: 'taxPrice',
+  carton_length: 'cartonLength', carton_width: 'cartonWidth', carton_height: 'cartonHeight',
+  carton_volume: 'cartonVolume', carton_capacity: 'cartonCapacity',
+  remark_cn: 'remarkCn', remark_en: 'remarkEn', battery_info: 'batteryInfo',
+  image_path: 'imagePath', sample_id: 'sampleId', company_id: 'companyId',
+  vendor_code: 'vendorCode', vendor_id: 'vendorId',
+  booth_type: 'boothType', floor_zone: 'floorZone', booth_area: 'boothArea',
+  last_expiry: 'lastExpiry', expiry_date: 'expiryDate',
+  create_time: 'createTime', update_time: 'updateTime',
+  sample_contact: 'sampleContact', sample_phone: 'samplePhone',
+  print_time: 'printTime', operator_name: 'operatorName',
+  create_by: 'createBy', update_by: 'updateBy',
+  sample_length: 'sampleLength', sample_width: 'sampleWidth', sample_height: 'sampleHeight',
+  sample_gross_weight: 'sampleGrossWeight', sample_net_weight: 'sampleNetWeight',
+  package_length: 'packageLength', package_width: 'packageWidth', package_height: 'packageHeight',
+  product_spec: 'productSpec', package_spec: 'packageSpec', carton_spec: 'cartonSpec',
+}
+// 预编译反向别名 Map：key → camelCase 行字段名
+const REVERSE_ALIAS_MAP = {}
+for (const [k, camelK] of Object.entries(FIELD_ALIAS_MAP)) {
+  REVERSE_ALIAS_MAP[k] = camelK
+}
+// 前缀列表
+const FIELD_PREFIXES = ['sample_', 'vendor_', 'carton_', 'booth_', 'product_', 'company_']
 
 // 统一模板填充{field} @{field} 都替换，区别在于循环检测时只统${
 // 去除数值末尾无意义的 .00 / .0（如 25.00 → 25, 25.33 → 25.33）
@@ -1986,11 +2212,20 @@ function fillTemplate(str, row) {
     return v != null ? fmtNumeric(v) : ''
   })
 }
-// 判断单元格是否包含循环占位符 ${...}
-function hasLoopPlaceholder(val) { return /\$\{/.test(val) }
+// 判断单元格是否包含循环占位符 ${...}（排除全局/meta字段，与computeTemplateBands保持一致）
+function hasLoopPlaceholder(val) {
+  if (!/\$\{/.test(val)) return false
+  const globalFields = ['title', 'logo', 'currentPage', 'page', 'currentDate', 'currentMonth', 'total_pages', 'printTime', 'operatorName']
+  const fields = [...val.matchAll(/\$\{(\w+)\}/g)].map(m => m[1])
+  return fields.some(f => !globalFields.includes(f))
+}
 
 // resolveVal：从数据行解析占位符字段值（兼容 snake_case / camelCase / 前缀变体 / SQL计算字段）
 function resolveVal(row, field) {
+  // Logo 全局字段，不依赖数据行
+  if (field === 'logo' && config.logoImage) return config.logoImage
+  // title 全局字段
+  if (field === 'title') return config.title || ''
   // === 拼接字段（必须在通用 row[field] 之前，否则 SQL 的 CONCAT 结果会跳过本地格式化） ===
   if (field === 'carton_spec' || field === 'cartonSpec') {
     const len = row.cartonLength ?? row.carton_length ?? null
@@ -2017,6 +2252,14 @@ function resolveVal(row, field) {
     if (ib != null) return fmtNumeric(ib)
     if (ca != null) return fmtNumeric(ca)
   }
+  // 厂商联系方式：名称 + 电话1 + 手机1
+  if (field === 'vendorContact') {
+    const name = row.name ?? row.vendor_name ?? ''
+    const phone = row.phone1 ?? row.phone ?? row.contactPhone ?? ''
+    const mobile = row.mobile1 ?? row.mobile ?? ''
+    const parts = [name, phone, mobile].filter(p => p != null && p !== '')
+    return parts.join('  ') || ''
+  }
   // thumbnail: 拼接完整缩略图URL（必须在通用查找之前处理，否则返回裸文件名）
   if (field === 'thumbnail') {
     const tn = row.thumbnail ?? null
@@ -2027,20 +2270,18 @@ function resolveVal(row, field) {
   const sk = camelToSnake(field); if (row[sk] != null) return row[sk]
   const cc = field.replace(/_([a-z])/g, (_, c) => c.toUpperCase()); if (row[cc] != null) return row[cc]
   // 前缀变体
-  for (const p of ['sample_', 'vendor_', 'carton_', 'booth_', 'product_', 'company_']) {
+  for (const p of FIELD_PREFIXES) {
     if (field.startsWith(p)) { const sub = field.slice(p.length); if (row[sub] != null) return row[sub] }
   }
-  // 常用别名：模板用 name → API 返回 vendor_name；contactPerson/contactPhone → API contact/phone
+  // 常用别名check（提前，比完整 aliasMap 更高效）
   if (field === 'name' && row.vendor_name != null) return row.vendor_name
-  if (field === 'contactPerson' && row.contact != null) return row.contact
-  if (field === 'contactPhone' && row.phone != null) return row.phone
+  if (field === 'contact1' && row.contact != null) return row.contact
+  if (field === 'phone1' && row.phone != null) return row.phone
   // === SQL 计算字段 / 别名映射 ===
-  // carton_material_vol cartonMaterialVolume（实体字段名是完整拼写）
   if (field === 'carton_material_vol' || field === 'cartonMaterialVol') {
     if (row.cartonMaterialVolume != null) return row.cartonMaterialVolume
     if (row.carton_material_volume != null) return row.carton_material_volume
   }
-  // remark: 报表SQLremark_cn，实体用 remark
   if (field === 'remark' || field === 'remark_cn' || field === 'remarkCn') {
     if (row.remark != null) return row.remark
     if (row.remarkCn != null) return row.remarkCn
@@ -2050,45 +2291,19 @@ function resolveVal(row, field) {
     if (row.remarkEn != null) return row.remarkEn
     if (row.remark_en != null) return row.remark_en
   }
-  // image_path: 拼接缩略图完整URL（用于图片渲染）
   if (field === 'image_path' || field === 'imagePath') {
     const tn = row.thumbnail ?? null
     if (tn) return `${window.location.origin}/thumbnails/${tn}`
   }
-  // === snake_case 缩写别名（兼容历史模板）===
-  const aliasMap = {
-    carton_gross_wt: 'cartonGrossWeight', carton_net_wt: 'cartonNetWeight',
-    inner_box_qty: 'innerBoxCount', inner_box: 'innerBoxCount',
-    packaging: 'packagingCn', packaging_cn: 'packagingCn',
-    packing_unit: 'packingUnit', packaging_method: 'packagingCn',
-    carton_material_vol: 'cartonMaterialVolume',
-    gross_weight: 'sampleGrossWeight', net_weight: 'sampleNetWeight',
-    vendor_name: 'vendorName', booth_no: 'boothNo', cert_no: 'certNo',
-    sample_code: 'sampleCode', sample_name: 'sampleName', english_name: 'englishName',
-    manufacturer_code: 'manufacturerCode', sample_unit: 'sampleUnit',
-    factory_price: 'factoryPrice', tax_price: 'taxPrice',
-    carton_length: 'cartonLength', carton_width: 'cartonWidth', carton_height: 'cartonHeight',
-    carton_volume: 'cartonVolume', carton_capacity: 'cartonCapacity',
-    remark_cn: 'remarkCn', remark_en: 'remarkEn', battery_info: 'batteryInfo',
-    image_path: 'imagePath', sample_id: 'sampleId', company_id: 'companyId',
-    vendor_code: 'vendorCode', vendor_id: 'vendorId',
-    booth_type: 'boothType', floor_zone: 'floorZone', booth_area: 'boothArea',
-    last_expiry: 'lastExpiry', expiry_date: 'expiryDate',
-    create_time: 'createTime', update_time: 'updateTime',
-    sample_contact: 'sampleContact', sample_phone: 'samplePhone',
-    print_time: 'printTime', operator_name: 'operatorName',
-    create_by: 'createBy', update_by: 'updateBy',
-    sample_length: 'sampleLength', sample_width: 'sampleWidth', sample_height: 'sampleHeight',
-    sample_gross_weight: 'sampleGrossWeight', sample_net_weight: 'sampleNetWeight',
-    package_length: 'packageLength', package_width: 'packageWidth', package_height: 'packageHeight',
-    product_spec: 'productSpec', package_spec: 'packageSpec', carton_spec: 'cartonSpec',
-  }
-  const mapped = aliasMap[field]
+  // === 预编译别名映射（单次 Map 查找） ===
+  const mapped = REVERSE_ALIAS_MAP[field]
   if (mapped && row[mapped] != null) return row[mapped]
-  // 反向映射：camelCase snake_case 再查（如 packagingCn packaging_cn packaging
+  // 反向映射：camelCase → snake_case 后再查（兼容历史模板中 camelCase 占位符）
   const sk2 = camelToSnake(field)
-  const rev = aliasMap[sk2]
-  if (rev && row[rev] != null) return row[rev]
+  if (sk2 !== field) {
+    const rev = REVERSE_ALIAS_MAP[sk2]
+    if (rev && row[rev] != null) return row[rev]
+  }
   return null
 }
 
@@ -2132,6 +2347,8 @@ const compositeFields = [
   { field: '${packageSpec}', title: '包装规格(长×宽×高)' },
   { field: '${packagingCn}', title: '中文包装' },
   { field: '${innerCarton}', title: '内盒/装箱量' },
+  { field: '${logo}', title: '公司Logo(上传后可用)' },
+  { field: '${vendorContact}', title: '厂商联系方式(名称+电话+手机)' },
 ]
 
 // ===== 数据=====
@@ -2142,12 +2359,12 @@ const datasets = ref([
     expanded: true,
     fields: _makeFields([
       'vendor_name', 'boothNo', 'sampleCode', 'sampleName', 'englishName',
-      'manufacturerCode', 'category', 'categoryCode', 'factoryCode', 'sampleUnit', 'packagingCn', 'factoryPrice',
+      'manufacturerCode', 'category', 'categoryCode', 'factoryCode', 'sampleUnit', 'packagingCn', 'packagingEn', 'factoryPrice',
       'taxPrice', 'productSpec', 'sampleLength', 'sampleWidth', 'sampleHeight',
       'sampleGrossWeight', 'sampleNetWeight',
       'cartonSpec', 'cartonLength', 'cartonWidth', 'cartonHeight',
       'cartonVolume', 'cartonMaterialVolume', 'cartonGrossWeight', 'cartonNetWeight',
-      'innerBoxCount', 'cartonCapacity', 'packingUnit',
+      'innerBoxCount', 'boxCount', 'cartonCapacity', 'packingUnit',
       'packageCode', 'packageLength', 'packageWidth', 'packageHeight',
       'color', 'size', 'certification',
       'contact', 'mobile', 'phone', 'qq', 'address',
@@ -2160,7 +2377,7 @@ const datasets = ref([
     ], sampleFieldLabels)
   },
   {
-    name: '厂商数据',
+    name: '厂商资料',
     expanded: false,
     fields: _makeFields([
       'manufacturerCode', 'name', 'boothNo',
@@ -2173,6 +2390,39 @@ const datasets = ref([
       'lastExpiry', 'expiryDate', 'registrant',
       'remark', 'otherRemark', 'visitorMobile',
       'createTime', 'updateTime',
+    ])
+  },
+  {
+    name: '择样明细',
+    expanded: false,
+    fields: _makeFields([
+      'codeName', 'sampleCode', 'sampleName', 'englishName', 'factoryCode', 'manufacturerCode',
+      'category', 'categoryCode', 'factoryPrice',
+      'taxPrice', 'taxPrice2',
+      'boxCount', 'otherRemark',
+      'showroomReplenished', 'borrowedSample', 'sampleStatus',
+      'packagingCn', 'packagingEn', 'productSpec', 'cartonSpec',
+      'cartonCapacity', 'innerBoxCount',
+      'sampleLength', 'sampleWidth', 'sampleHeight',
+      'cartonLength', 'cartonWidth', 'cartonHeight',
+      'cartonVolume', 'cartonGrossWeight', 'cartonNetWeight',
+      'boothNo', 'color', 'size', 'certification',
+      'itemId', 'addDate', 'modifyDate',
+    ])
+  },
+  {
+    name: '客户资料',
+    expanded: false,
+    fields: _makeFields([
+      'customerCode', 'customerName', 'country', 'address',
+      'contactPerson1', 'mobile1', 'phone1',
+      'contactPerson2', 'mobile2', 'phone2',
+      'contactPerson3', 'mobile3', 'phone3',
+      'email', 'qq',
+      'region', 'smsNumber',
+      'registerDate', 'modifyDate',
+      'registrant', 'modifier',
+      'certificate',
     ])
   },
   {
@@ -2217,6 +2467,20 @@ const importing = ref(false)
 const csvFileRef = ref(null)
 let csvFileData = null
 
+const logoInput = ref(null)
+function onLogoUpload(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  if (!file.type.startsWith('image/')) { showToast('请选择图片文件', 'warn'); return }
+  const reader = new FileReader()
+  reader.onload = () => {
+    config.logoImage = reader.result
+    showToast('Logo已上传', 'success')
+  }
+  reader.onerror = () => showToast('文件读取失败', 'error')
+  reader.readAsDataURL(file)
+}
+
 async function quickImport(source) {
   showImportMenu.value = false
   importing.value = true
@@ -2253,7 +2517,7 @@ async function quickImport(source) {
       datasets.value = [...datasets.value.filter(d => d.name !== name), { name, expanded: true, fields }]
       showToast(`已导${fields.length} 个字段`, 'success')
       console.log('[quickImport] 样品资料:', { records: raw.length, fields: fields.length, keys: keys.length, sample: fields[0] })
-    } else if (source === 'vendor') {
+    } else if (source === 'manufacturer') {
       const resp = await safeFetchJson('/manufacturers?size=5')
       if (resp.ok) {
         const data = resp.data?.data?.records || resp.data?.records || resp.data?.data || resp.data || []
@@ -2264,7 +2528,35 @@ async function quickImport(source) {
         }
       }
       if (!fields.length) throw new Error('厂商数据为空')
-      const name = '厂商数据'
+      const name = '厂商资料'
+      datasets.value = [...datasets.value.filter(d => d.name !== name), { name, expanded: true, fields }]
+      showToast(`已导${fields.length} 个字段`, 'success')
+    } else if (source === 'client-items') {
+      const resp = await safeFetchJson('/client-samples/items/sample?size=5')
+      if (resp.ok) {
+        const data = resp.data?.data || resp.data || []
+        if (Array.isArray(data) && data.length > 0) {
+          const keys = [...new Set(data.flatMap(r => Object.keys(r)))]
+          fields = keys.map(k => ({ field: k, title: fieldLabel(k) }))
+          previewData.value = data
+        }
+      }
+      if (!fields.length) throw new Error('择样明细数据为空')
+      const name = '择样明细'
+      datasets.value = [...datasets.value.filter(d => d.name !== name), { name, expanded: true, fields }]
+      showToast(`已导${fields.length} 个字段`, 'success')
+    } else if (source === 'customer-info') {
+      const resp = await safeFetchJson('/customers?size=5')
+      if (resp.ok) {
+        const data = resp.data?.data?.records || resp.data?.records || resp.data?.data || resp.data || []
+        if (Array.isArray(data) && data.length > 0) {
+          const keys = [...new Set(data.flatMap(r => Object.keys(r)))]
+          fields = keys.map(k => ({ field: k, title: fieldLabel(k) }))
+          previewData.value = data
+        }
+      }
+      if (!fields.length) throw new Error('客户数据为空')
+      const name = '客户资料'
       datasets.value = [...datasets.value.filter(d => d.name !== name), { name, expanded: true, fields }]
       showToast(`已导${fields.length} 个字段`, 'success')
     }
@@ -2394,15 +2686,29 @@ const visibleColumns = computed(() => {
 })
 
 // 从模板单元格中提取占位行（支持从指定源数据提取，避免使用被覆盖的 cellData）
-function extractTemplateBands(srcData) {
+function extractTemplateBands(srcData, srcMerges) {
   const src = srcData || cellData
   const cells = []
+  // 构建可见性检查：有 srcMerges 时用它，否则用全局 mergeCache
+  const isVisible = (r, c) => {
+    if (!srcMerges) return shouldRenderCell(r, c)
+    const m = srcMerges.find(m => r >= m.sR && r <= m.eR && c >= m.sC && c <= m.eC)
+    if (!m) return true
+    return m.sR === r && m.sC === c
+  }
   for (let r = 1; r <= rowCount.value; r++) {
     for (let c = 1; c <= colCount.value; c++) {
-      if (!shouldRenderCell(r, c)) continue
+      if (!isVisible(r, c)) continue
       // 从指定源读取值（优先用传入的 srcData，否则读全局 cellData）
-      const mi = getMergeInfo(r, c)
-      const rr = mi ? mi.sR : r, cc = mi ? mi.sC : c
+      // 合并信息：优先用传入的 srcMerges，否则用全局 getMergeInfo
+      let rr = r, cc = c
+      if (srcMerges) {
+        const m = srcMerges.find(m => r >= m.sR && r <= m.eR && c >= m.sC && c <= m.eC)
+        if (m) { rr = m.sR; cc = m.sC }
+      } else {
+        const mi = getMergeInfo(r, c)
+        if (mi) { rr = mi.sR; cc = mi.sC }
+      }
       const val = src[`R${rr}C${cc}`]?.v ?? ''
       if (val && val.trim()) {
         cells.push({ r, c, val: val.trim(), fmt: src[`R${rr}C${cc}`]?.fmt ? { ...src[`R${rr}C${cc}`].fmt } : {} })
@@ -2418,32 +2724,67 @@ function extractTemplateBands(srcData) {
 
 // cells 计算模板区域划分（首表头/循环/页脚），共享给预览和导出使用
 function computeTemplateBands(cells, loopStartOverride) {
+  // 全局/meta 字段，不应参与循环起点计算
+  const globalFields = ['title', 'logo', 'currentPage', 'page', 'currentDate', 'currentMonth', 'total_pages', 'printTime', 'operatorName']
   const allPlaceholderRows = new Set()
-  cells.forEach(c => { if (/\$\{/.test(c.val)) allPlaceholderRows.add(c.r) })
+  cells.forEach(c => {
+    if (/\$\{/.test(c.val)) {
+      // 只把包含非全局占位符的行纳入占位符行集合
+      const fields = [...c.val.matchAll(/\$\{(\w+)\}/g)].map(m => m[1])
+      const hasNonGlobal = fields.some(f => !globalFields.includes(f))
+      if (hasNonGlobal) allPlaceholderRows.add(c.r)
+    }
+  })
   const autoLoopStart = allPlaceholderRows.size ? Math.min(...allPlaceholderRows) : 0
   const loopStart = loopStartOverride || autoLoopStart
   const sortedCandidate = [...allPlaceholderRows].filter(r => r >= loopStart).sort((a, b) => a - b)
-  const pureLoopRowsSet = new Set()
-  for (let i = 0; i < sortedCandidate.length; i++) {
-    if (i > 0 && sortedCandidate[i] - sortedCandidate[i - 1] > 1) break
-    pureLoopRowsSet.add(sortedCandidate[i])
+
+  // 将占位符行按连续性分组（允许中间夹1行非占位符行，如列标题）
+  // 取占位符单元格数最多的簇作为数据循环区，小簇归入页眉/页脚 — 避免"客户："等标签误入循环
+  const clusters = []
+  let cur = []
+  for (const r of sortedCandidate) {
+    if (cur.length && r - cur[cur.length - 1] > 1) { clusters.push([...cur]); cur = [] }
+    cur.push(r)
   }
-  const loopRows = pureLoopRowsSet
-  const dataRowSpan = loopRows.size ? Math.max(...loopRows) - Math.min(...loopRows) + 1 : 0
+  if (cur.length) clusters.push([...cur])
+
+  // 按簇内占位符单元格总数排序（而非行数），数据行通常单元格密度远高于信息行/页脚行
+  const clusterCellCount = (cluster) => {
+    let n = 0
+    for (const r of cluster) {
+      n += cells.filter(c => c.r === r && /\$\{/.test(c.val)).length
+    }
+    return n
+  }
+  let largestCluster = clusters[0] || []
+  let maxCount = clusterCellCount(largestCluster)
+  for (const cl of clusters) {
+    const cnt = clusterCellCount(cl)
+    if (cnt > maxCount) { largestCluster = cl; maxCount = cnt }
+  }
+  const loopRows = new Set(largestCluster)
+  const loopBaseR = loopRows.size ? Math.min(...loopRows) : 0
+  const loopMaxR = loopRows.size ? Math.max(...loopRows) : 0
+  const dataRowSpan = loopRows.size ? loopMaxR - loopBaseR + 1 : 0
+
   const hdrStart = pageHeaderStartRow.value || 1
   const firstPageRows = new Set()
   for (let r = 1; r < hdrStart; r++) firstPageRows.add(r)
   const firstPageRowCount = firstPageRows.size ? Math.max(...firstPageRows) : 0
+  // 每页表头 = hdrStart 到 循环第一行之前的所有行（覆盖可能被小簇占用的行）
   const everyPageHeaderRows = new Set()
-  for (let r = hdrStart; r < loopStart; r++) everyPageHeaderRows.add(r)
+  for (let r = hdrStart; r < loopBaseR; r++) everyPageHeaderRows.add(r)
   const everyPageHeaderRowCount = everyPageHeaderRows.size
   const masterRows = new Set([...firstPageRows, ...everyPageHeaderRows])
   const masterRowCount = masterRows.size ? Math.max(...masterRows) : 0
-  const loopBaseR = loopRows.size ? Math.min(...loopRows) : 0
-  const loopMaxR = loopRows.size ? Math.max(...loopRows) : 0
-  const trailingCells = cells.filter(c => c.r > loopMaxR && c.r > loopStart)
+  // 页脚 = 循环最大行之后的所有行（包含非占位符行）
+  const trailingCells = cells.filter(c => c.r > loopMaxR)
   const trailingRows = new Set(trailingCells.map(c => c.r))
   const trailingRowCount = trailingRows.size
+
+  console.log('[模板分析] allPlaceholderRows:', [...allPlaceholderRows].sort((a,b)=>a-b), 'clusters:', clusters.map(c=>`[${c[0]}..${c[c.length-1]}](${c.length})`).join(', '), 'largest:', largestCluster.length ? `[${largestCluster[0]}..${largestCluster[largestCluster.length-1]}]` : 'none', 'loopRows:', [...loopRows].sort((a,b)=>a-b), 'firstPageRows:', [...firstPageRows], 'everyPageHeaderRows:', [...everyPageHeaderRows], 'trailingRows:', [...trailingRows])
+
   return { cells, masterRows, firstPageRows, everyPageHeaderRows, firstPageRowCount, everyPageHeaderRowCount, loopRows, masterRowCount, dataRowSpan, loopBaseR, loopMaxR, trailingCells, trailingRows, trailingRowCount }
 }
 
@@ -2651,9 +2992,16 @@ function renderPreviewPage(arr, page) {
   }
 
   // 1. 首页专属行（仅首页）
+  let logoRendered = false
+  let titleRendered = false
   if (isFirstPage && firstPageRows.size) {
     cells.filter(c => firstPageRows.has(c.r)).forEach(c => {
-      const filled = fillTemplate(c.val, arr[0])
+      let val = c.val
+      if (val.includes('${logo}') && logoRendered) val = ''
+      if (val.includes('${title}') && titleRendered) val = ''
+      const filled = fillTemplate(val, arr[0])
+      if (c.val.includes('${logo}') && !logoRendered) logoRendered = true
+      if (c.val.includes('${title}') && !titleRendered) titleRendered = true
       const key = `R${c.r}C${c.c}`
       if (!batch[key]) batch[key] = { v: filled }
       else batch[key].v = filled
@@ -2665,7 +3013,12 @@ function renderPreviewPage(arr, page) {
     const hdrMinR = Math.min(...everyPageHeaderRows)
     cells.filter(c => everyPageHeaderRows.has(c.r)).forEach(c => {
       const r = isFirstPage ? c.r : (c.r - hdrMinR + 1)
-      const filled = fillTemplate(c.val, arr[0])
+      let val = c.val
+      if (val.includes('${logo}') && logoRendered) val = ''
+      if (val.includes('${title}') && titleRendered) val = ''
+      const filled = fillTemplate(val, arr[0])
+      if (c.val.includes('${logo}') && !logoRendered) logoRendered = true
+      if (c.val.includes('${title}') && !titleRendered) titleRendered = true
       const key = `R${r}C${c.c}`
       if (!batch[key]) batch[key] = { v: filled }
       else batch[key].v = filled
@@ -2675,7 +3028,12 @@ function renderPreviewPage(arr, page) {
   // 1c. 兼容旧版：无 pageHeaderStartRow 时，所masterRows 正常渲染
   if (!firstPageRows.size && !everyPageHeaderRows.size) {
     cells.filter(c => masterRows.has(c.r)).forEach(c => {
-      const filled = fillTemplate(c.val, arr[0])
+      let val = c.val
+      if (val.includes('${logo}') && logoRendered) val = ''
+      if (val.includes('${title}') && titleRendered) val = ''
+      const filled = fillTemplate(val, arr[0])
+      if (c.val.includes('${logo}') && !logoRendered) logoRendered = true
+      if (c.val.includes('${title}') && !titleRendered) titleRendered = true
       const key = `R${c.r}C${c.c}`
       if (!batch[key]) batch[key] = { v: filled }
       else batch[key].v = filled
@@ -2696,17 +3054,20 @@ function renderPreviewPage(arr, page) {
     const rowOffset = baseR - loopBaseR
     cells.filter(c => loopRows.has(c.r)).forEach(c => {
       const offsetR = c.r + rowOffset
-      const filled = fillTemplate(c.val, dataRow)
+      let val = c.val
+      if (val.includes('${logo}') && logoRendered) val = ''
+      if (val.includes('${title}') && titleRendered) val = ''
+      const filled = fillTemplate(val, dataRow)
+      if (c.val.includes('${logo}') && !logoRendered) logoRendered = true
+      if (c.val.includes('${title}') && !titleRendered) titleRendered = true
       const dstKey = `R${offsetR}C${c.c}`
       if (!batch[dstKey]) batch[dstKey] = { v: filled }
       else batch[dstKey].v = filled
       copyFmt(dstKey, c)
     })
-    if (snapRowHeights[loopBaseR] != null) {
-      for (let tr = loopBaseR; tr < loopBaseR + dataRowSpan; tr++) {
-        const offsetR = tr + rowOffset
-        if (snapRowHeights[tr] != null) rowHeights.value[offsetR] = snapRowHeights[tr]
-      }
+    for (let tr = loopBaseR; tr < loopBaseR + dataRowSpan; tr++) {
+      const offsetR = tr + rowOffset
+      if (snapRowHeights[tr] != null) rowHeights.value[offsetR] = snapRowHeights[tr]
     }
   })
 
@@ -2714,9 +3075,12 @@ function renderPreviewPage(arr, page) {
   const footBaseR = headerRowCount + pageItems.length * dataRowSpan + 1
   const trailingMinR = trailingRows.size ? Math.min(...trailingRows) : 0
   if (isLastPage && trailingCells.length) {
+    const totalPages = pagePlan.value.length
+    const opName = authState.userInfo?.realName || authState.userInfo?.username || arr[0]?.operator_name || ''
+    const footerData = { ...arr[0], operatorName: opName, printTime: new Date().toLocaleString('zh-CN'), currentPage: page, page: totalPages, total_pages: totalPages, title: config.title, logo: config.logoImage }
     trailingCells.forEach(c => {
       const offsetR = footBaseR + (c.r - trailingMinR)
-      const filled = fillTemplate(c.val, arr[0])
+      const filled = fillTemplate(c.val, footerData)
       const dstKey = `R${offsetR}C${c.c}`
       if (!batch[dstKey]) batch[dstKey] = { v: filled }
       else batch[dstKey].v = filled
@@ -2756,6 +3120,27 @@ function renderPreviewPage(arr, page) {
     }
   }
   rebuildMergeCache()
+
+  // 被合并完全覆盖或完全没有单元格数据的行设最小高度，避免 logo 底部多余空白
+  for (let r = 1; r <= rowCount.value; r++) {
+    let allCovered = true
+    for (let c = 1; c <= colCount.value; c++) {
+      const m = getMergeInfo(r, c)
+      if (!m) { allCovered = false; break }
+      // 是某合并的起始格，说明该行有独立内容
+      if (m.isStart) { allCovered = false; break }
+    }
+    // 补充检查：行中是否有任何有效单元格数据
+    if (!allCovered) {
+      let hasAnyCell = false
+      for (let c = 1; c <= colCount.value; c++) {
+        const key = `R${r}C${c}`
+        if (batch[key] && (batch[key].v != null && batch[key].v !== '')) { hasAnyCell = true; break }
+      }
+      if (!hasAnyCell) allCovered = true
+    }
+    if (allCovered) rowHeights.value[r] = 0
+  }
 
   Object.assign(cellData, batch)
 }
@@ -2812,6 +3197,7 @@ const showDraftModal = ref(false)
 const showTemplateModal = ref(false)
 const templateList = ref([])
 const templateLoading = ref(false)
+const templateTypeFilter = ref('')
 const draftTitleInput = ref('')
 
 // ===== 模板锁定管理（锁信息存储在服务端 templateData.__lock_pwd 中） =====
@@ -2821,6 +3207,8 @@ const templateLockMap = ref({})
 const sessionUnlocked = new Map()
 // 当前加载模板的锁哈希（用于保存时保留锁）
 let currentTemplateLockHash = null
+
+let currentTemplateType = '' // 当前编辑模板的类型
 
 function isTemplateLocked(templateId) {
   return !!templateLockMap.value[templateId]
@@ -2907,7 +3295,7 @@ function lockDialogConfirm() {
 
 // 模板命名弹窗
 const nameDialog = reactive({
-  show: false, name: '', error: '', onSave: null
+  show: false, name: '', type: '', error: '', onSave: null
 })
 
 function nameDialogConfirm() {
@@ -3051,10 +3439,18 @@ function applyDraftData(d) {
   }
   if (d.mergedCells) mergedCells.value = d.mergedCells
   if (d.datasets?.length) {
-    // 组合字段始终使用最新代码定义，其他数据集从草稿恢复
-    const restored = d.datasets.filter(ds => ds.name !== '组合字段')
+    // 内置数据集始终使用最新代码定义，自定义数据集从草稿恢复
+    const builtinNames = ['样品资料', '厂商资料', '择样明细', '客户资料', '组合字段']
+    const builtinDefaults = {
+      '样品资料': datasets.value.find(ds => ds.name === '样品资料'),
+      '厂商资料': datasets.value.find(ds => ds.name === '厂商资料'),
+      '择样明细': datasets.value.find(ds => ds.name === '择样明细'),
+      '客户资料': datasets.value.find(ds => ds.name === '客户资料'),
+    }
+    const restored = d.datasets.filter(ds => !builtinNames.includes(ds.name))
     datasets.value = [
       ...restored,
+      ...Object.values(builtinDefaults).filter(Boolean),
       { name: '组合字段', expanded: true, fields: compositeFields },
     ]
   }
@@ -3130,13 +3526,15 @@ async function saveAsTemplate() {
   doSaveAsTemplate()
 }
 async function doSaveAsTemplate() {
-  // 无标题时需要先命名
-  if (!config.title.trim()) {
-    nameDialog.name = ''
+  // 新建模板或无标题时需要先命名 + 选类型
+  if (!config.title.trim() && !currentTemplateId.value) {
+    nameDialog.name = config.title.trim()
+    nameDialog.type = currentTemplateType
     nameDialog.error = ''
     nameDialog.onSave = (name) => {
       config.title = name
-      doSaveAsTemplate() // 命名后重新执行保存
+      currentTemplateType = nameDialog.type
+      doSaveAsTemplate()
     }
     nameDialog.show = true
     nextTick(() => {
@@ -3147,21 +3545,23 @@ async function doSaveAsTemplate() {
   }
   try {
     const title = config.title.trim()
+    const templateType = nameDialog.type || currentTemplateType
     const data = buildDraftData()
     const tid = currentTemplateId.value
     const resp = tid
       ? await api('/report-templates/' + tid, {
           method: 'PUT',
-          body: JSON.stringify({ title, description: '', templateData: JSON.stringify(data) })
+          body: JSON.stringify({ title, description: '', type: templateType || '', templateData: JSON.stringify(data) })
         })
       : await api('/report-templates', {
           method: 'POST',
-          body: JSON.stringify({ title, description: '', templateData: JSON.stringify(data) })
+          body: JSON.stringify({ title, description: '', type: templateType || '', templateData: JSON.stringify(data) })
         })
     if (resp.code === 200) {
       if (!tid && resp.data?.id) {
         currentTemplateId.value = resp.data.id
       }
+      currentTemplateType = templateType
       showToast(tid ? '模板已更新' : '模板已保存', 'success')
     } else {
       showToast('保存失败: ' + (resp.message || '未知错误'), 'error')
@@ -3175,7 +3575,8 @@ async function doSaveAsTemplate() {
 async function loadTemplatesFromServer() {
   templateLoading.value = true
   try {
-    const resp = await api('/report-templates/all')
+    const typeParam = templateTypeFilter.value ? '?type=' + templateTypeFilter.value : ''
+    const resp = await api('/report-templates/all' + typeParam)
     if (resp.code === 200) {
       templateList.value = resp.data || []
       // 从每个模板的 templateData 中提取锁信息
@@ -3229,6 +3630,7 @@ async function loadTemplateById(id) {
       applyDraftData(data)
       config.title = tpl.title || config.title
       currentTemplateId.value = tpl.id
+      currentTemplateType = tpl.type || ''
       showTemplateModal.value = false
       selectCell(1, 1)
       showToast('已加载模板: ' + tpl.title, 'success')
@@ -3350,6 +3752,7 @@ function resetToNew() {
   config.title = ''
   currentDraftId.value = null
   currentTemplateId.value = null
+  currentTemplateType = ''
   currentTemplateLockHash = null
   localStorage.removeItem('report_current_draft')
 }
@@ -3468,9 +3871,13 @@ const doExportExcel = () => {
   const data = previewData.value
   if (!data.length) { showToast('请先加载预览数据', 'warn'); return }
   const headers = visibleColumns.value.map(c => c.title)
+  const fs = config.fontSize || 24
+  const ff = (config.fontFamily || 'SimSun').split(',')[0].trim()
+  const fc = config.fontColor || '#333333'
+  const bold = config.bold ? 'font-weight:bold;' : ''
   let html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">'
     + '<head><meta charset="UTF-8"><style>'
-    + 'table{border-collapse:collapse;}td{border:1px solid #ccc;padding:4px 8px;font-size:12px;}'
+    + `table{border-collapse:collapse;}td{padding:8px 16px;font-size:${fs}px;font-family:${ff},serif;color:${fc};border:none;${bold}}`
     + '.th{background:#f0f0f0;font-weight:bold;text-align:center;}'
     + '</style></head><body>'
     + '<table>'
@@ -3490,18 +3897,34 @@ const doExportExcel = () => {
 const doExportFull = async () => {
   const arr = rawPreviewData.value
   if (!arr.length) { showToast('无数据可导出', 'warn'); return }
-  if (!previewSnap.value) { showToast('请先加载预览数据', 'warn'); return }
+  // 如果没有预览快照，从当前设计态自动生成（导出不需要先预览）
+  if (!previewSnap.value) {
+    previewSnap.value = {
+      cellData: JSON.parse(JSON.stringify(cellData)),
+      mergedCells: JSON.parse(JSON.stringify(mergedCells.value)),
+      rowCount: rowCount.value,
+      rowHeights: { ...rowHeights.value },
+      colWidths: { ...colWidths.value },
+    }
+  }
   // 从快照重新提取最新模板（避免使用可能过期的 previewTemplate 缓存）
   const snapCellData = previewSnap.value.cellData
-  const freshTemplate = extractTemplateBands(snapCellData)
+  const snapMerges = previewSnap.value?.mergedCells || []
+  const freshTemplate = extractTemplateBands(snapCellData, snapMerges)
   if (!freshTemplate) { showToast('模板为空，无法导出', 'warn'); return }
   console.log('[导出] 重新从快照提取模板, 全部cells:', freshTemplate.cells.map(c => `R${c.r}C${c.c}="${c.val}"`))
   const bands = computeTemplateBands(freshTemplate.cells, dataLoopStartRow.value)
   const { cells, masterRows, firstPageRows, firstPageRowCount, everyPageHeaderRows, everyPageHeaderRowCount, loopRows, masterRowCount, dataRowSpan, loopBaseR, trailingCells, trailingRows, trailingRowCount } = bands
-  const snapMerges = previewSnap.value?.mergedCells || []
   const cellMaxC = cells.length ? Math.max(...cells.map(c => c.c)) : 0
   const mergeMaxC = snapMerges.length ? Math.max(...snapMerges.map(m => m.eC)) : 0
   const maxC = Math.max(cellMaxC, mergeMaxC)
+  // 自动计算分页计划（用户可能未先预览就直接导出）
+  if (!pagePlan.value.length && arr.length) {
+    const savedTpl = previewTemplate.value
+    previewTemplate.value = bands
+    computePagePlan(arr)
+    previewTemplate.value = savedTpl
+  }
   const plan = pagePlan.value.length ? pagePlan.value : null
   const totalPages = plan?.length || Math.ceil(arr.length / previewPageSize.value)
   const snapColWidths = previewSnap.value?.colWidths || {}
@@ -3511,10 +3934,22 @@ const doExportFull = async () => {
   // ---- ExcelJS workbook ----
   const wb = new ExcelJS.Workbook()
   const ws = wb.addWorksheet(config.title || '报表')
-  // 列宽（px Excel 字符宽度单位，近似转换）
+  // 关闭默认网格线，只显示显式设定的边框
+  ws.properties.showGridLines = false
+  // 列宽（根据字体族动态计算 px→Excel 字符宽度单位）
+  // Excel 列宽单位 = 默认字体下 "0" 字符的像素宽度
+  const colWidthPxPerChar = (() => {
+    const ff = (config.fontFamily || 'SimSun').split(',')[0].trim().toLowerCase()
+    // 常见中文字体字符宽度近似值（11pt 基准）
+    if (ff.includes('simsun') || ff.includes('宋体') || ff.includes('楷体')) return 7.0
+    if (ff.includes('simhei') || ff.includes('黑体')) return 7.2
+    if (ff.includes('microsoft yahei') || ff.includes('微软雅黑')) return 7.5
+    if (ff.includes('arial') || ff.includes('helvetica')) return 7.8
+    return 7.2 // 默认中文字体
+  })()
   for (let c = 1; c <= maxC; c++) {
     const cw = snapColWidths[c] || defaultColWidth.value
-    ws.getColumn(c).width = Math.round(cw / 7)
+    ws.getColumn(c).width = Math.round((cw / colWidthPxPerChar) * 10) / 10
   }
 
   // 合并辅助
@@ -3528,10 +3963,36 @@ const doExportFull = async () => {
   const isMergeStart = (r, c) => { const m = getMerge(r, c); return (m && m.sR === r && m.sC === c) ? m : null }
   const isMergeCovered = (r, c) => { const m = getMerge(r, c); return m && !(m.sR === r && m.sC === c) }
 
+  // === 性能优化：预建索引，避免 cells.filter/find 在循环内 O(n²) ===
+  const cellsByRow = {}
+  for (const cd of cells) {
+    if (!cellsByRow[cd.r]) cellsByRow[cd.r] = []
+    cellsByRow[cd.r].push(cd)
+  }
+  const cellsByKey = {}
+  for (const cd of cells) {
+    cellsByKey[cd.r + '_' + cd.c] = cd
+  }
+  // 预计算合并覆盖集合（O(1) 查找，替代 isMergeCovered 的 O(n) 扫描）
+  const mergeCoveredKeySet = new Set()
+  const mergeStartKeyMap = {} // "R_C" -> merge object
+  for (const m of snapMerges) {
+    for (let rr = m.sR; rr <= m.eR; rr++) {
+      for (let cc = m.sC; cc <= m.eC; cc++) {
+        const k = rr + '_' + cc
+        if (rr === m.sR && cc === m.sC) {
+          mergeStartKeyMap[k] = m
+        } else {
+          mergeCoveredKeySet.add(k)
+        }
+      }
+    }
+  }
+
   // fmt ExcelJS style
   const fmtToXlsx = (fmt) => {
     const f = fmt || {}
-    const style = { font: {}, alignment: {}, border: {}, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } } }
+    const style = { font: {}, alignment: {}, border: {} }
     // alignment
     if (f.align) style.alignment.horizontal = f.align
     style.alignment.vertical = f.verticalAlign || 'top'
@@ -3543,18 +4004,18 @@ const doExportFull = async () => {
     if (f.color) style.font.color = { argb: 'FF' + f.color.replace('#', '') }
     else if (config.fontColor) style.font.color = { argb: 'FF' + (config.fontColor || '#333').replace('#', '') }
     if (f.fontSize) style.font.size = f.fontSize
-    else style.font.size = config.fontSize || 12
+    else style.font.size = config.fontSize || 24
     if (f.fontFamily) style.font.name = f.fontFamily.split(',')[0].trim()
     else if (config.fontFamily) style.font.name = config.fontFamily.split(',')[0].trim()
-    // fill
+    // fill：仅当有显式背景色时才设置
     if (f.bgColor) style.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + f.bgColor.replace('#', '') } }
-    // border
-    const bc = (f.borderColor || '#d4d6da').replace('#', '')
-    const bw = f.borderWidth || 1
-    const xbStyle = bw <= 1 ? 'thin' : bw <= 2 ? 'medium' : 'thick'
-    const xb = { style: xbStyle, color: { argb: 'FF' + bc } }
+    // 边框：默认无边框，仅当显式设置了 f.border 且不为 none 时才画线
     const xbNone = { style: 'none' }
     if (f.border && f.border !== 'none') {
+      const bw = f.borderWidth || config.borderWidth || 1
+      const bwStyle = bw <= 1 ? 'thin' : bw <= 2 ? 'medium' : 'thick'
+      const bc = (f.borderColor || config.borderColor || '#333333').replace('#', '')
+      const xb = { style: bwStyle, color: { argb: 'FF' + bc } }
       if (f.border === 'all' || f.border === 'outer') {
         style.border = { top: xb, bottom: xb, left: xb, right: xb }
       } else if (f.border === 'top') {
@@ -3566,19 +4027,21 @@ const doExportFull = async () => {
       } else if (f.border === 'right') {
         style.border = { top: xbNone, bottom: xbNone, left: xbNone, right: xb }
       }
-    } else if (f.border === 'none') {
-      style.border = { top: xbNone, bottom: xbNone, left: xbNone, right: xbNone }
     } else {
-      // 未设置边框：不添加
-      style.border = {}
+      // 显式清零：避免 ExcelJS 默认行为产生意外边线
+      style.border = { top: xbNone, bottom: xbNone, left: xbNone, right: xbNone }
     }
     return style
   }
 
-  // 写单元格（始终写入，确保边框等样式应用到空单元格
-  const isImageUrl = (val) => val && /^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(String(val))
+  // 写单元格
+  const isImageUrl = (val) => val && (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(String(val)) || /^data:image\//i.test(String(val)) || /^\/?[\w\/\.\-]+\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i.test(String(val)))
   const pendingImages = []
   const writeCell = (r, c, val, fmt, ms) => {
+    // 空值、无边框、且非合并起始格时跳过（合并起始格必须写入以应用样式，否则 Excel 会用默认格式产生灰线）
+    const hasBorder = fmt && fmt.border && fmt.border !== 'none'
+    const isMergeStartCell = !!ms
+    if ((val === '' || val == null) && !hasBorder && !isMergeStartCell) return
     const cell = ws.getCell(r, c)
     const st = fmtToXlsx(fmt)
     cell.style = st
@@ -3591,24 +4054,71 @@ const doExportFull = async () => {
   }
 
   // 计算行高：优先取设计值，否则根据该行最大字体自动计
+  // 已合并的 Excel 单元格集合，防止重复合并
+  const mergedExcelCells = new Set()
+  const cellKey = (r, c) => `${r},${c}`
+  const isRangeAlreadyMerged = (sR, sC, eR, eC) => {
+    for (let rr = sR; rr <= eR; rr++) {
+      for (let cc = sC; cc <= eC; cc++) {
+        if (mergedExcelCells.has(cellKey(rr, cc))) return true
+      }
+    }
+    return false
+  }
+  const markRangeMerged = (sR, sC, eR, eC) => {
+    for (let rr = sR; rr <= eR; rr++) {
+      for (let cc = sC; cc <= eC; cc++) {
+        mergedExcelCells.add(cellKey(rr, cc))
+      }
+    }
+  }
+  const safeMergeCells = (sR, sC, eR, eC) => {
+    if (isRangeAlreadyMerged(sR, sC, eR, eC)) {
+      // 查找冲突的已有合并，方便快速定位重叠区域
+      const conflicts = []
+      for (let rr = sR; rr <= eR; rr++) {
+        for (let cc = sC; cc <= eC; cc++) {
+          if (mergedExcelCells.has(cellKey(rr, cc))) conflicts.push(`R${rr}C${cc}`)
+        }
+      }
+      console.warn(`[导出合并] 跳过重复合并 Excel R${sR}C${sC}-R${eR}C${eC}（重叠格：${conflicts.join(',')}），当前 excelRow=${excelRow}`)
+      return
+    }
+    markRangeMerged(sR, sC, eR, eC)
+    ws.mergeCells(sR, sC, eR, eC)
+  }
+
+  // px→pt 转换系数（72pt/inch ÷ 96px/inch）
+  const pxToPt = 0.75
+
   const computeRowHeight = (r) => {
-    if (snapRowHeights[r] != null) return Math.round(snapRowHeights[r] * 0.75)
-    // 从该行单元格中找最大字体，估算浏览器渲染高
-    const rowCells = cells.filter(c => c.r === r)
-    let maxFs = config.fontSize || 12
+    // 优先使用设计时设定的行高（px → pt）
+    if (snapRowHeights[r] != null) return Math.round(snapRowHeights[r] * pxToPt)
+    // 自动计算：从该行单元格中找最大字体（用预建索引 O(1)）
+    const rowCells = cellsByRow[r] || []
+    let maxFs = config.fontSize || 24
+    let hasWordWrap = false
     for (const cv of rowCells) {
       if (cv.fmt?.fontSize && cv.fmt.fontSize > maxFs) maxFs = cv.fmt.fontSize
+      if (cv.fmt?.wordWrap) hasWordWrap = true
     }
-    const estPx = Math.max(defaultRowHeight.value, Math.round(maxFs * 2.0))
-    return Math.round(estPx * 0.75)
+    // 行高 = 字号 × 行间距系数；中文需要 1.5-1.8 倍，英文 ~1.3 倍
+    const lineHeightRatio = (config.fontFamily || '').includes('宋体') || (config.fontFamily || '').includes('SimSun') ? 1.7 : 1.5
+    let estH = Math.round(maxFs * lineHeightRatio)
+    // 自动换行单元格至少给 3 行空间
+    if (hasWordWrap) estH = Math.max(estH, Math.round(maxFs * lineHeightRatio * 2.5))
+    // 不低于面板默认行高的 pt 等价
+    const minH = Math.round(defaultRowHeight.value * pxToPt)
+    return Math.max(minH, estH)
   }
   // 写页面行
   let excelRow = 1
+  let logoRendered = false // logo 只渲染一次，避免循环区域重复
+  let titleRendered = false // title 只渲染一次，避免循环区域重复
   const firstMaxR = firstPageRows.size ? Math.max(...firstPageRows) : 0
   // 表头范围：有显式每页表头就用它，否则masterRows 但跳过已渲染的首页行
   const hdrMinR = everyPageHeaderRows.size ? Math.min(...everyPageHeaderRows) : (firstMaxR ? firstMaxR + 1 : 1)
   const hdrMaxR = everyPageHeaderRows.size ? Math.max(...everyPageHeaderRows) : masterRowCount
-  const hdrSet = everyPageHeaderRows.size ? everyPageHeaderRows : masterRows
   const loopMinR = loopRows.size ? Math.min(...loopRows) : 0
   const loopMaxR = loopRows.size ? Math.max(...loopRows) : 0
   const trMinR = trailingRows?.size ? Math.min(...trailingRows) : 0
@@ -3617,20 +4127,34 @@ const doExportFull = async () => {
   const renderRowRange = (startR, endR, rowSet, dataRow) => {
     const start = excelRow
     for (let tr = startR; tr <= endR; tr++) {
-      const rowCells = cells.filter(c => rowSet ? (rowSet.has(c.r) && c.r === tr) : c.r === tr)
+      // 用预建索引 O(1) 替代 cells.filter
+      const rowCells = cellsByRow[tr] || []
+      let rowHasContent = rowCells.length > 0
+      if (!rowHasContent) {
+        // 检查整行是否被合并覆盖
+        let covered = false
+        for (let c = 1; c <= maxC; c++) {
+          if (mergeCoveredKeySet.has(tr + '_' + c)) { covered = true; break }
+        }
+        if (!covered) continue
+      }
       for (let c = 1; c <= maxC; c++) {
-        if (isMergeCovered(tr, c)) continue
-        const ms = isMergeStart(tr, c)
-        const cv = rowCells.find(rc => rc.c === c)
-        const raw = cv ? fillTemplate(cv.val, dataRow) : ''
-        if (rowSet === trailingRows && cv) console.log(`[导出渲染] excelRow=${excelRow} tr=${tr} c=${c} 模板值="${cv.val}" 填充后="${raw}" covered=${isMergeCovered(tr, c)}`)
+        if (mergeCoveredKeySet.has(tr + '_' + c)) continue
+        const ms = mergeStartKeyMap[tr + '_' + c] || null
+        // 用预建索引 O(1) 替代 rowCells.find
+        const cv = cellsByKey[tr + '_' + c] || null
+        let cellVal = cv ? cv.val : ''
+        if (/\\$\\{logo\\}/.test(cellVal || '') && logoRendered) cellVal = ''
+        if (/\\$\\{title\\}/.test(cellVal || '') && titleRendered) cellVal = ''
+        const raw = cv ? fillTemplate(cellVal, dataRow) : ''
+        if (cv && /\\$\\{logo\\}/.test(cv.val || '') && !logoRendered) logoRendered = true
+        if (cv && /\\$\\{title\\}/.test(cv.val || '') && !titleRendered) titleRendered = true
         writeCell(excelRow, c, raw, cv?.fmt || null, ms)
         if (ms) {
-          ws.mergeCells(excelRow, c, excelRow + (ms.eR - ms.sR), c + (ms.eC - ms.sC))
+          safeMergeCells(excelRow, c, excelRow + (ms.eR - ms.sR), c + (ms.eC - ms.sC))
         }
       }
-      // 行高（px pt，优先设计值，否则按字体估算）
-      ws.getRow(excelRow).height = computeRowHeight(tr)
+      ws.getRow(excelRow).height = rowHasContent ? computeRowHeight(tr) : 0.1
       excelRow++
     }
     return excelRow - start
@@ -3640,25 +4164,47 @@ const doExportFull = async () => {
    if (firstPageRows.size) {
      for (let r = 1; r <= firstMaxR; r++) {
        if (!firstPageRows.has(r)) continue
-       const rowCells = cells.filter(c => c.r === r)
+       const rowCells = cellsByRow[r] || []
+       let rowHasContent = rowCells.length > 0
+       if (!rowHasContent) {
+         let covered = false
+         for (let c = 1; c <= maxC; c++) {
+           if (mergeCoveredKeySet.has(r + '_' + c)) { covered = true; break }
+         }
+         if (!covered) continue
+       }
+       const firstData = { ...arr[0], currentPage: 1, page: totalPages, title: config.title, logo: config.logoImage }
        for (let c = 1; c <= maxC; c++) {
-         if (isMergeCovered(r, c)) continue
-         const ms = isMergeStart(r, c)
-         const cv = rowCells.find(rc => rc.c === c)
-         const raw = cv ? fillTemplate(cv.val, arr[0]) : ''
+         if (mergeCoveredKeySet.has(r + '_' + c)) continue
+         const ms = mergeStartKeyMap[r + '_' + c] || null
+         const cv = cellsByKey[r + '_' + c] || null
+         let cellVal = cv ? cv.val : ''
+         if (/\\$\\{logo\\}/.test(cellVal || '') && logoRendered) cellVal = ''
+         if (/\\$\\{title\\}/.test(cellVal || '') && titleRendered) cellVal = ''
+         const raw = cv ? fillTemplate(cellVal, firstData) : ''
+         if (cv && /\\$\\{logo\\}/.test(cv.val || '') && !logoRendered) logoRendered = true
+         if (cv && /\\$\\{title\\}/.test(cv.val || '') && !titleRendered) titleRendered = true
          writeCell(excelRow, c, raw, cv?.fmt || null, ms)
          if (ms) {
-           ws.mergeCells(excelRow, c, excelRow + (ms.eR - ms.sR), c + (ms.eC - ms.sC))
+           safeMergeCells(excelRow, c, excelRow + (ms.eR - ms.sR), c + (ms.eC - ms.sC))
          }
        }
-       ws.getRow(excelRow).height = computeRowHeight(r)
+       ws.getRow(excelRow).height = rowHasContent ? computeRowHeight(r) : 0.1
        excelRow++
      }
    }
 
   // 表头（导出只渲染一次，不每页重复）
-  renderRowRange(hdrMinR, hdrMaxR, everyPageHeaderRows.size ? everyPageHeaderRows : hdrSet, arr[0])
+  const hdrData = { ...arr[0], currentPage: 1, page: totalPages, title: config.title, logo: config.logoImage }
+  renderRowRange(hdrMinR, hdrMaxR, everyPageHeaderRows.size ? everyPageHeaderRows : null, hdrData)
+  showToast(`正在构建报表...（共 ${totalPages} 页，${arr.length} 条数据）`, 'info', 0)
+  let writtenRows = 0
   for (let pg = 0; pg < totalPages; pg++) {
+    // 每 5 页让出主线程 + 更新进度提示（含百分比）
+    if (pg > 0 && pg % 5 === 0) {
+      showToast(`正在构建报表... 第 ${pg}/${totalPages} 页 (${Math.round(pg / totalPages * 100)}%)`, 'info', 0)
+      await new Promise(r => setTimeout(r, 0))
+    }
     const pp = plan ? plan[pg] : null
     const pageItems = pp ? arr.slice(pp.start, pp.end + 1) : arr.slice(pg * previewPageSize.value, (pg + 1) * previewPageSize.value)
     // 数据行默认值兜底
@@ -3670,54 +4216,156 @@ const doExportFull = async () => {
     }
     // 数据
     for (const dataRow of pageItems) {
+      const rowData = { ...dataRow, currentPage: pg + 1, page: totalPages, title: config.title, logo: config.logoImage }
       for (let tr = loopMinR; tr <= loopMaxR; tr++) {
-        renderRowRange(tr, tr, loopRows.has(tr) ? loopRows : null, dataRow)
+        renderRowRange(tr, tr, loopRows.has(tr) ? loopRows : null, rowData)
       }
+      writtenRows++
     }
-    // 每页页脚（仅最后一页，currentPage 动态为当前页码）
-    if (trailingCells.length && pg === totalPages - 1) {
+    // 每页页脚（每页都渲染，currentPage 动态为当前页码）
+    if (trailingCells.length) {
       const opName = authState.userInfo?.realName || authState.userInfo?.username || arr[0]?.operator_name || ''
-      const footerData = { ...arr[0], operatorName: opName, printTime: new Date().toLocaleString('zh-CN'), currentPage: pg + 1, page: totalPages }
+      const footerData = { ...arr[0], operatorName: opName, printTime: new Date().toLocaleString('zh-CN'), currentPage: pg + 1, page: totalPages, total_pages: totalPages, title: config.title, logo: config.logoImage }
       renderRowRange(trMinR, trMaxR, trailingRows, footerData)
     }
   }
+  showToast(`表格构建完成，共 ${writtenRows} 行，正在生成文件...`, 'info', 0)
+  await new Promise(r => setTimeout(r, 0))
 
-  // 嵌入图片Excel
-  showToast('正在导出...', 'info')
-  for (const img of pendingImages) {
+  // 嵌入图片Excel（并发加载，避免串行瓶颈）
+  if (pendingImages.length) {
+    showToast(`正在导出图片...（共 ${pendingImages.length} 张）`, 'info', 0)
+  }
+  console.log(`[导出图片] 待处理图片数: ${pendingImages.length}`, pendingImages.map(p => ({ row: p.excelRow, col: p.col, ms: p.ms ? `${p.ms.sR}-${p.ms.eR},${p.ms.sC}-${p.ms.eC}` : null, isDataUri: /^data:image/.test(p.url) })))
+
+  // 图片并发加载辅助函数
+  const loadImageBuffer = async (imgUrl) => {
+    let arrBuf, ext
+    if (/^data:image\//i.test(imgUrl)) {
+      // data URI (base64) — 使用 fetch 直接获取 ArrayBuffer，避免 atob/charCodeAt 性能问题
+      try {
+        const resp = await fetch(imgUrl)
+        if (!resp.ok) return null
+        arrBuf = await resp.arrayBuffer()
+        const m = imgUrl.match(/^data:image\/(\w+);/)
+        ext = (m ? m[1] : 'png').toLowerCase()
+      } catch {
+        // fallback: atob 解码（旧方案兼容）
+        const m = imgUrl.match(/^data:image\/(\w+);base64,/)
+        if (!m) return null
+        ext = m[1].toLowerCase()
+        const base64 = imgUrl.split(',')[1]
+        try {
+          const binaryStr = atob(base64)
+          const bytes = Uint8Array.from(binaryStr, c => c.charCodeAt(0))
+          arrBuf = bytes.buffer
+        } catch (atobErr) {
+          console.error('[导出图片] atob/base64解码失败:', atobErr.message)
+          return null
+        }
+      }
+    } else {
+      try {
+        const resp = await fetch(imgUrl, { mode: 'cors' })
+        if (!resp.ok) {
+          console.error(`[导出图片] HTTP ${resp.status} 加载失败: ${imgUrl}`)
+          return null
+        }
+        const blob = await resp.blob()
+        arrBuf = await blob.arrayBuffer()
+        let extRaw = (imgUrl.split('.').pop() || 'png').split('?')[0].toLowerCase()
+        const mimeMap = { jpg: 'jpeg', jpeg: 'jpeg', png: 'png', gif: 'gif', webp: 'png', bmp: 'bmp', svg: 'png' }
+        ext = mimeMap[extRaw] || 'png'
+      } catch (fetchErr) {
+        console.error('[导出图片] 网络请求失败:', fetchErr.message, imgUrl)
+        return null
+      }
+    }
+    const mimeMap2 = { jpg: 'jpeg', jpeg: 'jpeg', png: 'png', gif: 'gif', webp: 'png', bmp: 'bmp', svg: 'png' }
+    ext = mimeMap2[ext] || 'png'
+    // 读取图片原始尺寸，用于等比缩放
+    let dims = null
     try {
-      const resp = await fetch(img.url, { mode: 'cors' })
-      if (!resp.ok) continue
-      const blob = await resp.blob()
-      const arrBuf = await blob.arrayBuffer()
-      // 推断扩展
-      let ext = (img.url.split('.').pop() || 'png').split('?')[0].toLowerCase()
-      const mimeMap = { jpg: 'jpeg', jpeg: 'jpeg', png: 'png', gif: 'gif', webp: 'png' }
-      ext = mimeMap[ext] || 'png'
+      const mimeType = ext === 'jpeg' ? 'image/jpeg' : `image/${ext}`
+      dims = await new Promise((resolve) => {
+        const img = new Image()
+        img.onload = () => { const r = { w: img.naturalWidth, h: img.naturalHeight }; URL.revokeObjectURL(img.src); resolve(r) }
+        img.onerror = () => { URL.revokeObjectURL(img.src); resolve(null) }
+        img.src = URL.createObjectURL(new Blob([arrBuf], { type: mimeType }))
+      })
+    } catch { dims = null }
+    return { arrBuf, ext, dims }
+  }
+
+  // 分批并发加载图片（每批 6 张并发）
+  const IMG_CONCURRENCY = 6
+  const failedImages = []
+  let loadedCount = 0
+  const totalImgCount = pendingImages.length
+  for (let batchStart = 0; batchStart < pendingImages.length; batchStart += IMG_CONCURRENCY) {
+    const batch = pendingImages.slice(batchStart, batchStart + IMG_CONCURRENCY)
+    const batchResults = await Promise.all(
+      batch.map(async (img) => {
+        const result = await loadImageBuffer(img.url)
+        return { img, result }
+      })
+    )
+    for (const { img, result } of batchResults) {
+      loadedCount++
+      if (loadedCount % 30 === 0 || loadedCount === totalImgCount) {
+        showToast(`正在导出图片... ${loadedCount}/${totalImgCount}`, 'info', 0)
+      }
+      if (!result) {
+        failedImages.push(img)
+        continue
+      }
+      const { arrBuf, ext } = result
       const imgId = wb.addImage({ buffer: arrBuf, extension: ext })
-      // 计算图片位置：由合并单元格确定范
       let startCol = img.col, endCol = img.col
       let startRow = img.excelRow, endRow = img.excelRow
       if (img.ms) {
         startCol = img.ms.sC; endCol = img.ms.eC
         endRow = img.excelRow + (img.ms.eR - img.ms.sR)
       }
-      // 像素尺寸：列~7px/单位，行pt*4/3
-      let totalW = 0
-      for (let cc = startCol; cc <= endCol; cc++) totalW += (ws.getColumn(cc).width || 8) * 7
-      let totalH = 0
-      for (let rr = startRow; rr <= endRow; rr++) totalH += (ws.getRow(rr).height || 18) * 4 / 3
-      // ExcelJS tl 使用 0-based 行列
+      // 图片像素尺寸：用设计器快照值（精确对应预览效果，避免Excel单位换算偏差）
+      let totalW = 0, totalH = 0
+      if (img.ms) {
+        for (let cc = img.ms.sC; cc <= img.ms.eC; cc++) totalW += snapColWidths[cc] || defaultColWidth.value
+        for (let rr = img.ms.sR; rr <= img.ms.eR; rr++) totalH += snapRowHeights[rr] || defaultRowHeight.value
+      } else {
+        totalW = snapColWidths[img.col] || defaultColWidth.value
+        totalH = (ws.getRow(img.excelRow).height || (defaultRowHeight.value * pxToPt)) * (4 / 3)
+      }
+      // 等比缩放：保持原图比例，不撑满合并区域（避免logo等被拉伸）
+      let extW = Math.round(totalW), extH = Math.round(totalH)
+      if (result.dims && result.dims.w && result.dims.h) {
+        const ratio = result.dims.w / result.dims.h
+        if (totalW / totalH > ratio) {
+          extW = Math.round(totalH * ratio)
+          extH = Math.round(totalH)
+        } else {
+          extW = Math.round(totalW)
+          extH = Math.round(totalW / ratio)
+        }
+      }
       ws.addImage(imgId, {
         tl: { col: startCol - 1, row: startRow - 1 },
-        ext: { width: Math.round(totalW), height: Math.round(totalH) }
+        ext: { width: extW, height: extH }
       })
-    } catch (e) {
-      // 图片获取失败（跨域等），单元格保持空
+    }
+    // 更新进度提示（每批最后更新一次）
+    if (totalImgCount > IMG_CONCURRENCY && batchStart + IMG_CONCURRENCY >= pendingImages.length) {
+      showToast(`正在生成文件...`, 'info', 0)
     }
   }
+  if (failedImages.length > 0) {
+    console.warn(`[导出图片] ${failedImages.length}/${pendingImages.length} 张图片加载失败:`, failedImages.map(p => ({ row: p.excelRow, col: p.col, url: p.url.slice(0,80) })))
+    showToast(`警告: ${failedImages.length} 张图片未能加载，对应单元格已留空`, 'warn', 4000)
+  }
 
-  // 写入 Blob 并下
+  // 写入 Blob 并下载（writeBuffer 对大工作簿可能耗时较长，给出提示）
+  showToast('正在生成 Excel 文件，请稍候...', 'info', 0)
+  await new Promise(r => setTimeout(r, 0))
   const buffer = await wb.xlsx.writeBuffer()
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   downloadBlob(blob, config.title + '.xlsx')
@@ -3778,7 +4426,7 @@ const buildPrintHtml = (singleTable = false) => {
     else if (config.fontColor) s.push(`color:${config.fontColor}`)
     if (f.bgColor)    s.push(`background-color:${f.bgColor}`)
     if (f.fontSize)   s.push(`font-size:${f.fontSize}pt`)
-    else s.push(`font-size:${config.fontSize || 12}pt`)
+    else s.push(`font-size:${config.fontSize || 24}pt`)
     if (f.fontFamily) s.push(`font-family:${f.fontFamily}`)
     else if (config.fontFamily) s.push(`font-family:${config.fontFamily}`)
     // 换行与溢
@@ -3787,21 +4435,19 @@ const buildPrintHtml = (singleTable = false) => {
     } else {
       s.push('white-space:nowrap;overflow:hidden')
     }
-    // 边框：仅当显式设置时才添加
+    // 边框：默认无边框，仅当显式设置时才渲染
     if (f.border && f.border !== 'none') {
-      const bc = f.borderColor || '#999'
-      const bw = f.borderWidth || 1
-      const bs = f.borderStyle || 'solid'
-      const b = `${bw}px ${bs} ${bc}`
+      const bw = f.borderWidth || config.borderWidth || 1
+      const bc = f.borderColor || config.borderColor || config.fontColor || '#333333'
+      const b = `${bw}px solid ${bc}`
       if (f.border === 'all' || f.border === 'outer') s.push(`border:${b}`)
       else if (f.border === 'top') s.push(`border-top:${b};border-left:none;border-right:none;border-bottom:none`)
       else if (f.border === 'bottom') s.push(`border-bottom:${b};border-left:none;border-right:none;border-top:none`)
       else if (f.border === 'left') s.push(`border-left:${b};border-top:none;border-right:none;border-bottom:none`)
       else if (f.border === 'right') s.push(`border-right:${b};border-top:none;border-left:none;border-bottom:none`)
-    } else if (f.border === 'none') {
+    } else {
       s.push('border:none')
     }
-    // 未设置 border 时不添加任何边框
     return s.join(';')
   }
 
@@ -3815,37 +4461,24 @@ const buildPrintHtml = (singleTable = false) => {
   // 构建HTML
   const buildRowHtml = (r, rowSet, dataRow) => {
     const rowCells = cells.filter(c => rowSet.has(c.r) && c.r === r)
-    // 检查本行是否有 wordWrap 单元
     const hasWordWrap = rowCells.some(rc => rc.fmt?.wordWrap)
     const baseH = snapRowHeights[r] != null ? snapRowHeights[r] : defaultRowHeight.value
 
-    if (!rowCells.length && !isMergeStart(r, 1)) {
-      // 空行：占+ 保留合并
-      let tr = '<tr style="mso-height-source:userset;">'
-      for (let c = 1; c <= maxC; c++) {
-        if (isMergeCovered(r, c)) continue
-        const ms = isMergeStart(r, c)
-        let td = `<td height="${baseH}" style="height:${baseH}px;`
-        if (hasWordWrap) td += 'min-height:' + baseH + 'px;height:auto;'
-        td += fmtToStyle(null)
-        td += '"'
-        if (ms) td += ` colspan="${ms.eC - ms.sC + 1}" rowspan="${ms.eR - ms.sR + 1}"`
-        td += '></td>'
-        tr += td
-      }
-      tr += '</tr>'
-      return tr
-    }
     let tr = '<tr style="mso-height-source:userset;">'
     for (let c = 1; c <= maxC; c++) {
       if (isMergeCovered(r, c)) continue
       const ms = isMergeStart(r, c)
       const cv = rowCells.find(rc => rc.c === c)
-      const raw = cv ? fillTemplate(cv.val, dataRow) : ''
-      const isImg = raw && /^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i.test(raw)
+      // logo、title 等全局字段只渲染一次
+      let cellVal = cv ? cv.val : ''
+      if (cellVal.includes('${logo}') && logoRendered) cellVal = ''
+      if (cellVal.includes('${title}') && titleRendered) cellVal = ''
+      const raw = cv ? fillTemplate(cellVal, dataRow) : ''
+      if (cv && cv.val.includes('${logo}') && !logoRendered) logoRendered = true
+      if (cv && cv.val.includes('${title}') && !titleRendered) titleRendered = true
+      const isImg = raw && (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i.test(raw) || /^data:image\//i.test(raw) || /^\/[\w\/\.\-]+\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i.test(raw))
 
       let td = `<td height="${baseH}" style="height:${baseH}px;`
-      // wordWrap 行允许撑
       if (cv?.fmt?.wordWrap) {
         td += 'height:auto;min-height:' + baseH + 'px;'
       }
@@ -3855,8 +4488,8 @@ const buildPrintHtml = (singleTable = false) => {
       if (ms) td += ` colspan="${ms.eC - ms.sC + 1}" rowspan="${ms.eR - ms.sR + 1}"`
       td += '>'
       if (isImg) {
-        // 图片居中显示
-        const imgH = Math.max(baseH - 6, 20)
+        const mergedRows = ms ? (ms.eR - ms.sR + 1) : 1
+        const imgH = Math.max(baseH * mergedRows - 6, 20)
         td += `<img src="${raw}" style="max-width:100%;max-height:${imgH}px;display:block;margin:0 auto;" onerror="this.style.display='none'"/>`
       } else {
         td += escHtml(raw)
@@ -3869,6 +4502,8 @@ const buildPrintHtml = (singleTable = false) => {
   }
 
   // 首页专属行（仅第1页）
+  let logoRendered = false
+  let titleRendered = false
   const firstPageHtmlArr = []
   if (firstPageRows.size) {
     for (let r = 1; r <= firstPageRowCount; r++) {
@@ -3919,7 +4554,7 @@ const buildPrintHtml = (singleTable = false) => {
       if (trailingCells.length && pg === totalPages - 1) {
         const trMinR = Math.min(...trailingRows), trMaxR = Math.max(...trailingRows)
         const opName = authState.userInfo?.realName || authState.userInfo?.username || arr[0]?.operator_name || ''
-        const footerData = { ...arr[0], operatorName: opName, printTime: new Date().toLocaleString('zh-CN'), currentPage: pg + 1, page: totalPages }
+        const footerData = { ...arr[0], operatorName: opName, printTime: new Date().toLocaleString('zh-CN'), currentPage: pg + 1, page: totalPages, total_pages: totalPages, title: config.title, logo: config.logoImage }
         for (let r = trMinR; r <= trMaxR; r++) {
           bodyHtml += buildRowHtml(r, trailingRows, footerData)
         }
@@ -3961,7 +4596,7 @@ const buildPrintHtml = (singleTable = false) => {
       let estPages = 1
       let remaining = Math.max(0, arr.length - estFirstCap)
       if (remaining > 0) estPages += Math.ceil(remaining / estNormalCap)
-      const footerData = { ...arr[0], operatorName: opName, printTime: new Date().toLocaleString('zh-CN'), currentPage: estPages, page: estPages }
+      const footerData = { ...arr[0], operatorName: opName, printTime: new Date().toLocaleString('zh-CN'), currentPage: estPages, page: estPages, total_pages: estPages, title: config.title, logo: config.logoImage }
       for (let r = trMinR; r <= trMaxR; r++) {
         dataBodyParts.push(buildRowHtml(r, trailingRows, footerData))
       }
@@ -3984,9 +4619,9 @@ const buildPrintHtml = (singleTable = false) => {
     + pageCss
     + 'body{font-family:' + config.fontFamily + ';font-size:' + config.fontSize + 'pt;color:' + (config.fontColor || '#333') + ';}'
     + 'table{border-collapse:collapse;margin:0 auto;}'
-    + 'td{padding:2px 4px;}'
-    + (singleTable ? '' : '.print-title{text-align:center;font-weight:bold;font-size:16px;padding:8px 0;margin-bottom:6px;}')
-    + '.print-footer{text-align:left;font-size:11px;color:#666;margin-top:10px;}'
+    + 'td{padding:4px 8px;}'
+    + (singleTable ? '' : '.print-title{text-align:center;font-weight:bold;font-size:32px;padding:16px 0;margin-bottom:12px;}')
+    + '.print-footer{text-align:left;font-size:22px;color:#666;margin-top:20px;}'
     + printMediaCss
     + '</style></head><body>'
     + (singleTable ? '' : '')  // 不额外输出模板标题，模板单元格已有
@@ -3996,14 +4631,15 @@ const buildPrintHtml = (singleTable = false) => {
 
 function escHtml(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
 function downloadBlob(blob, filename) {
-  const reader = new FileReader()
-  reader.onload = function() {
-    const a = document.createElement('a')
-    a.href = reader.result
-    a.download = filename
-    a.click()
-  }
-  reader.readAsDataURL(blob)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  // 延迟 revoke 确保下载触发完成（大文件可能需要更长时间，使用60s）
+  setTimeout(() => URL.revokeObjectURL(url), 60000)
 }
 
 // ===== 撤销 / 重做 =====
@@ -4065,6 +4701,44 @@ onMounted(async () => {
   document.addEventListener('visibilitychange', onVisibilityChange)
   window.addEventListener('pagehide', onPageHide)
   rebuildMergeCache()
+  // 诊断：在控制台输入 dumpBorders() 查看所有有边框的单元格
+  window.__cellData = cellData
+  window.__selCell = selCell
+  window.dumpBorders = () => {
+    const result = []
+    Object.entries(cellData).forEach(([key, d]) => {
+      if (d.fmt?.border && d.fmt.border !== 'none') {
+        result.push(`${key}: border=${d.fmt.border} w=${d.fmt.borderWidth||1} c=${d.fmt.borderColor||'default'}`)
+      }
+    })
+    console.log(`[dumpBorders] 共 ${result.length} 个单元格有边框:\n` + (result.length ? result.join('\n') : '(无)'))
+    return result
+  }
+  // DOM 诊断：inspectCell(r, c) 查看单元格的实际渲染样式
+  window.inspectCell = (r, c) => {
+    const el = document.querySelector(`[data-r="${r}"][data-c="${c}"]`)
+    if (!el) { console.log(`[inspect] R${r}C${c} 未找到 DOM 元素`); return }
+    const cs = getComputedStyle(el)
+    const mi = getMergeInfo(r, c)
+    console.log(`[inspect] R${r}C${c}:`, {
+      display: cs.display,
+      height: cs.height,
+      width: cs.width,
+      border: cs.border,
+      borderTop: cs.borderTopWidth + ' ' + cs.borderTopStyle + ' ' + cs.borderTopColor,
+      borderRight: cs.borderRightWidth + ' ' + cs.borderRightStyle + ' ' + cs.borderRightColor,
+      borderBottom: cs.borderBottomWidth + ' ' + cs.borderBottomStyle + ' ' + cs.borderBottomColor,
+      borderLeft: cs.borderLeftWidth + ' ' + cs.borderLeftStyle + ' ' + cs.borderLeftColor,
+      boxShadow: cs.boxShadow,
+      overflow: cs.overflow,
+      rowSpan: el.rowSpan,
+      colSpan: el.colSpan,
+      offsetHeight: el.offsetHeight,
+      offsetWidth: el.offsetWidth,
+      mergeInfo: mi,
+      cellData: cellData[`R${r}C${c}`] || (mi ? cellData[`R${mi.sR}C${mi.sC}`] : null),
+    })
+  }
   // 启动时清除超过12小时的过期草稿
   getDrafts()
 
@@ -4169,6 +4843,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', onVisibilityChange)
   window.removeEventListener('pagehide', onPageHide)
   clearInterval(autoSaveTimer)
+  if (_overlayScrollRaf) { cancelAnimationFrame(_overlayScrollRaf); _overlayScrollRaf = null }
 })
 </script>
 
@@ -4177,7 +4852,7 @@ onBeforeUnmount(() => {
 .sr-designer {
   position: fixed; inset: 0; display: flex; flex-direction: column;
   background: #f0f2f5; color: #333; overflow: hidden;
-  font: 13px -apple-system, BlinkMacSystemFont, 'Microsoft YaHei', sans-serif;
+  font: 26px -apple-system, BlinkMacSystemFont, 'Microsoft YaHei', sans-serif;
 }
 
 .sr-main {
@@ -4186,120 +4861,121 @@ onBeforeUnmount(() => {
 
 /* ========== 左面板：数据========== */
 .sr-left {
-  width: 260px; background: #fff; border-right: 1px solid #e0e3e8;
+  width: 520px; background: #fff; border-right: 2px solid #e0e3e8;
   display: flex; flex-direction: column; flex-shrink: 0;
 }
 .sr-left-header {
-  height: 36px; padding: 0 10px; font-weight: 600; font-size: 13px;
+  height: 72px; padding: 0 20px; font-weight: 600; font-size: 26px;
   color: #333; display: flex; align-items: center; justify-content: space-between;
-  border-bottom: 1px solid #f0f1f3;
+  border-bottom: 2px solid #f0f1f3;
 }
 .ds-import-btn {
-  border: 1px solid #d0d5dd; border-radius: 4px; background: #fff;
-  font-size: 11px; padding: 2px 8px; cursor: pointer; color: #2f6ef2;
+  border: 2px solid #d0d5dd; border-radius: 8px; background: #fff;
+  font-size: 22px; padding: 4px 16px; cursor: pointer; color: #2f6ef2;
   font-family: inherit; transition: .12s;
 }
 .ds-import-btn:hover { background: #eef1f7; border-color: #a3bbf0; }
 .ds-import-wrap { position: relative; }
 .ds-import-menu {
   position: absolute; right: 0; top: 100%; z-index: 200; background: #fff;
-  border: 1px solid #e0e3e8; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.1);
-  min-width: 180px; padding: 4px; margin-top: 4px;
+  border: 2px solid #e0e3e8; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,.1);
+  min-width: 360px; padding: 8px; margin-top: 8px;
 }
 .import-item {
-  padding: 8px 12px; font-size: 13px; cursor: pointer; border-radius: 4px;
+  padding: 16px 24px; font-size: 26px; cursor: pointer; border-radius: 8px;
   color: #333; white-space: nowrap;
 }
 .import-item:hover { background: #f0f4ff; color: #2f6ef2; }
-.sr-left-body { flex: 1; overflow-y: auto; padding: 4px 0; }
-.ds-search-wrap { position: relative; margin: 4px 8px; }
+.sr-left-body { flex: 1; overflow-y: auto; padding: 8px 0; }
+.ds-search-wrap { position: relative; margin: 8px 16px; }
 .ds-search {
-  width: 100%; padding: 6px 26px 6px 10px; border: 1px solid #d4d6da; border-radius: 5px;
-  font-size: 12px; outline: none; background: #f9fafb; box-sizing: border-box;
+  width: 100%; padding: 12px 52px 12px 20px; border: 2px solid #d4d6da; border-radius: 10px;
+  font-size: 24px; outline: none; background: #f9fafb; box-sizing: border-box;
 }
-.ds-search:focus { border-color: #2563eb; background: #fff; box-shadow: 0 0 0 2px rgba(37,99,235,.12); }
-.ds-search-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 12px; color: #9ca3af; cursor: pointer; }
-.ds-count { font-size: 11px; color: #9ca3af; flex-shrink: 0; }
+.ds-search:focus { border-color: #2563eb; background: #fff; box-shadow: 0 0 0 4px rgba(37,99,235,.12); }
+.ds-search-clear { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); font-size: 24px; color: #9ca3af; cursor: pointer; }
+.ds-count { font-size: 22px; color: #9ca3af; flex-shrink: 0; }
 .ds-group-head {
-  display: flex; align-items: center; gap: 6px; padding: 7px 12px;
-  font-size: 13px; font-weight: 500; color: #333; cursor: pointer;
+  display: flex; align-items: center; gap: 12px; padding: 14px 24px;
+  font-size: 26px; font-weight: 500; color: #333; cursor: pointer;
   user-select: none;
 }
 .ds-group-head:hover { background: #f5f6f8; }
 .ds-group-head svg.expanded { transform: rotate(90deg); }
 .ds-name-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ds-del-btn {
-  width: 18px; height: 18px; border: none; background: none; cursor: pointer;
-  color: #c0c5cc; font-size: 14px; border-radius: 3px; flex-shrink: 0;
+  width: 36px; height: 36px; border: none; background: none; cursor: pointer;
+  color: #c0c5cc; font-size: 28px; border-radius: 6px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center; opacity: 0; transition: .12s;
 }
 .ds-group-head:hover .ds-del-btn { opacity: 1; }
 .ds-del-btn:hover { background: #fee2e2; color: #ef4444; }
-.ds-empty { padding: 12px 16px; font-size: 11px; color: #9ca3af; text-align: center; }
-.ds-fields { padding-left: 24px; }
+.ds-empty { padding: 24px 32px; font-size: 22px; color: #9ca3af; text-align: center; }
+.ds-fields { padding-left: 48px; }
 .ds-field {
-  display: flex; flex-direction: column; gap: 2px; padding: 6px 10px;
-  cursor: grab; font-size: 12px; user-select: none;
-  border-bottom: 1px solid #f5f6f8;
+  display: flex; flex-direction: column; gap: 4px; padding: 12px 20px;
+  cursor: grab; font-size: 24px; user-select: none;
+  border-bottom: 2px solid #f5f6f8;
 }
 .ds-field:hover { background: #eef1f7; }
 .ds-field:active { cursor: grabbing; }
-.df-key { font-weight: 600; font-size: 12px; color: #1a2233; font-family: 'Consolas','Monaco','Courier New',monospace; word-break: break-all; }
-.df-info { color: #6b7280; font-size: 11px; line-height: 1.3; }
+.df-key { font-weight: 600; font-size: 24px; color: #1a2233; font-family: 'Consolas','Monaco','Courier New',monospace; word-break: break-all; }
+.df-info { color: #6b7280; font-size: 22px; line-height: 1.3; }
 
 /* ========== 中心========== */
 .sr-center { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #e8ebf0; }
 .sr-format-bar {
-  display: flex; align-items: center; gap: 5px; padding: 5px 12px;
-  background: #fff; border-bottom: 1px solid #e0e3e8; flex-shrink: 0; height: 36px; user-select: none;
+  display: flex; align-items: center; gap: 10px; padding: 10px 24px;
+  background: #fff; border-bottom: 2px solid #e0e3e8; flex-shrink: 0; height: 72px; user-select: none;
+  overflow-x: auto; white-space: nowrap;
 }
-.fmt-group { display: flex; gap: 3px; }
-.fmt-sel { height: 26px; padding: 0 5px; border: 1px solid #d0d5dd; border-radius: 3px; font-size: 12px; background: #fff; color: #333; outline: none; cursor: pointer; }
+.fmt-group { display: flex; gap: 6px; }
+.fmt-sel { height: 52px; padding: 0 10px; border: 2px solid #d0d5dd; border-radius: 6px; font-size: 24px; background: #fff; color: #333; outline: none; cursor: pointer; }
 .fmt-sel:focus { border-color: #2f6ef2; }
-.fmt-sel-w { width: 85px; }
-.fmt-sep { width: 1px; height: 20px; background: #e0e3e8; margin: 0 3px; }
+.fmt-sel-w { width: 170px; }
+.fmt-sep { width: 2px; height: 40px; background: #e0e3e8; margin: 0 6px; }
 .fmt-btn {
-  width: 28px; height: 26px; border: 1px solid #d0d5dd; border-radius: 3px;
-  background: #fff; cursor: pointer; font-size: 12px; color: #555;
+  width: 56px; height: 52px; border: 2px solid #d0d5dd; border-radius: 6px;
+  background: #fff; cursor: pointer; font-size: 24px; color: #555;
   display: flex; align-items: center; justify-content: center;
   font-family: inherit; transition: .12s;
 }
 .fmt-btn:hover { background: #f3f4f6; }
 .fmt-btn.on { background: #e8edf9; color: #2f6ef2; border-color: #a3bbf0; }
-.fmt-btn-merge { width: auto; padding: 0 8px; font-size: 12px; }
-.fmt-btn-preview { width: auto; padding: 0 10px; background: #2f6ef2; color: #fff; border-color: #2f6ef2; font-weight: 500; }
+.fmt-btn-merge { width: auto; padding: 0 16px; font-size: 24px; }
+.fmt-btn-preview { width: auto; padding: 0 20px; background: #2f6ef2; color: #fff; border-color: #2f6ef2; font-weight: 500; }
 .fmt-btn-preview:hover { background: #2563eb; }
 
 /* 预览模式横幅 */
 .preview-banner {
-  display: flex; align-items: center; gap: 8px;
-  width: 100%; padding: 4px 8px;
+  display: flex; align-items: center; gap: 16px;
+  width: 100%; padding: 8px 16px;
   background: linear-gradient(135deg, #ede9fe, #f5f3ff);
-  border: 1px solid #c4b5fd; border-radius: 4px; flex-shrink: 0;
+  border: 2px solid #c4b5fd; border-radius: 8px; flex-shrink: 0;
 }
 .preview-badge {
-  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  font-size: 22px; font-weight: 600; text-transform: uppercase;
   background: #7c3aed; color: #fff;
-  padding: 2px 8px; border-radius: 3px; letter-spacing: 0.5px;
+  padding: 4px 16px; border-radius: 6px; letter-spacing: 1px;
 }
-.preview-info { font-size: 12px; color: #6d28d9; font-weight: 500; }
+.preview-info { font-size: 24px; color: #6d28d9; font-weight: 500; }
 
 /* 预览模式浮动按钮 */
 .preview-float-actions {
-  position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
-  display: flex; gap: 8px; z-index: 100;
-  background: #fff; padding: 8px 16px; border-radius: 10px;
-  box-shadow: 0 2px 16px rgba(0,0,0,0.15);
-  border: 1px solid #e5e7eb;
+  position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 16px; z-index: 100;
+  background: #fff; padding: 16px 32px; border-radius: 20px;
+  box-shadow: 0 4px 32px rgba(0,0,0,0.15);
+  border: 2px solid #e5e7eb;
 }
 .preview-float-btn {
-  padding: 8px 18px; border-radius: 6px; border: 1px solid #d1d5db;
-  background: #fff; font-size: 13px; cursor: pointer; white-space: nowrap;
+  padding: 16px 36px; border-radius: 12px; border: 2px solid #d1d5db;
+  background: #fff; font-size: 26px; cursor: pointer; white-space: nowrap;
   transition: background 0.15s;
 }
 .preview-float-btn:hover { background: #f3f4f6; }
 .preview-float-btn:disabled { opacity: 0.3; cursor: default; }
-.preview-page-label { font-size: 13px; font-weight: 600; color: #374151; padding: 8px 4px; white-space: nowrap; }
+.preview-page-label { font-size: 26px; font-weight: 600; color: #374151; padding: 16px 8px; white-space: nowrap; }
 .preview-float-btn--primary { background: #16a34a; color: #fff; border-color: #16a34a; }
 .preview-float-btn--primary:hover { background: #15803d; }
 .preview-float-btn--exit { background: #dc2626; color: #fff; border-color: #dc2626; }
@@ -4307,22 +4983,22 @@ onBeforeUnmount(() => {
 
 /* ===== viewOnly 模式顶栏 ===== */
 .sr-viewonly-topbar {
-  height: 44px; background: #fff; border-bottom: 1px solid #e5e7eb;
-  display: flex; align-items: center; padding: 0 20px; gap: 16px;
+  height: 88px; background: #fff; border-bottom: 2px solid #e5e7eb;
+  display: flex; align-items: center; padding: 0 40px; gap: 32px;
   flex-shrink: 0;
 }
 .sr-viewonly-title {
-  font-size: 16px; font-weight: 700; color: #1d1d1f;
+  font-size: 32px; font-weight: 700; color: #1d1d1f;
 }
 .sr-viewonly-pages {
-  font-size: 13px; color: #888;
+  font-size: 26px; color: #888;
 }
 .sr-viewonly-actions {
-  display: flex; gap: 8px; margin-left: auto;
+  display: flex; gap: 16px; margin-left: auto;
 }
 .sr-viewonly-btn {
-  padding: 6px 14px; border-radius: 8px; border: 1px solid #d0d0d0;
-  background: #fff; font-size: 13px; cursor: pointer; color: #333;
+  padding: 12px 28px; border-radius: 16px; border: 2px solid #d0d0d0;
+  background: #fff; font-size: 26px; cursor: pointer; color: #333;
   font-family: inherit;
 }
 .sr-viewonly-btn:hover { background: #f0f0f0; }
@@ -4337,93 +5013,95 @@ onBeforeUnmount(() => {
 .preview-cell-readonly .ss-text { user-select: none; }
 .fmt-color-pair { position: relative; }
 .fmt-clr-btn {
-  display: flex; align-items: center; justify-content: center; height: 26px; width: 30px;
-  border: 1px solid #d0d5dd; border-radius: 3px; background: #fff; cursor: pointer; color: #555;
+  display: flex; align-items: center; justify-content: center; height: 52px; width: 60px;
+  border: 2px solid #d0d5dd; border-radius: 6px; background: #fff; cursor: pointer; color: #555;
 }
 .fmt-clr-btn:hover { border-color: #999; }
 .fmt-clr-pop {
-  position: fixed; z-index: 20000; padding: 5px; background: #fff;
-  border: 1px solid #d0d5dd; border-radius: 4px;
-  box-shadow: 0 4px 14px rgba(0,0,0,.1);
-  display: grid; grid-template-columns: repeat(8, 20px); gap: 2px;
+  position: fixed; z-index: 20000; padding: 10px; background: #fff;
+  border: 2px solid #d0d5dd; border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.1);
+  display: grid; grid-template-columns: repeat(8, 40px); gap: 4px;
 }
-.fmt-clr-chip { width: 20px; height: 20px; border-radius: 2px; cursor: pointer; border: 1px solid #e0e3e8; transition: transform .1s; }
+.fmt-clr-chip { width: 40px; height: 40px; border-radius: 4px; cursor: pointer; border: 2px solid #e0e3e8; transition: transform .1s; }
 .fmt-clr-chip:hover { transform: scale(1.2); z-index: 1; }
-.fmt-clr-chip.picked { box-shadow: 0 0 0 2px #2f6ef2; }
+.fmt-clr-chip.picked { box-shadow: 0 0 0 4px #2f6ef2; }
 
-.sr-sheet-wrap { flex: 1; overflow: hidden; padding: 8px; background: #e8ebf0; }
+.sr-sheet-wrap { flex: 1; overflow: hidden; padding: 16px; background: #e8ebf0; }
 .sr-sheet-scroll { overflow: auto; position: relative; width: 100%; height: 100%; }
 .page-break-overlay { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 10; }
 .pb-line { position: absolute; pointer-events: none; }
-.pb-h { left: 0; width: 100%; height: 0; border-top: 1px dashed #b0b8c8; }
-.pb-v { top: 0; height: 100%; width: 0; border-left: 1px dashed #b0b8c8; }
-.sr-sheet { border-collapse: collapse; table-layout: fixed; background: #fff; border: 1px solid #c0c5cc; }
-.ss-corner { background: #f5f6f8; border-bottom: 1px solid #c0c5cc; border-right: 1px solid #c0c5cc; width: 46px; min-width: 46px; position: sticky; top: 0; left: 0; z-index: 3; }
-.ss-col-hdr { background: #f5f6f8; border-bottom: 1px solid #c0c5cc; border-right: 1px solid #e0e3e8; height: 24px; font-size: 11px; color: #555; font-weight: 500; text-align: center; user-select: none; position: sticky; top: 0; z-index: 2; cursor: pointer; }
+.pb-h { left: 0; width: 100%; height: 0; border-top: 4px dashed #2563eb; }
+.pb-v { top: 0; height: 100%; width: 0; border-left: 4px dashed #2563eb; }
+.sr-sheet { border-collapse: separate; border-spacing: 0; table-layout: fixed; background: #fff; border: 2px solid #c0c5cc; }
+.ss-corner { background: #f5f6f8; border-bottom: 2px solid #c0c5cc; border-right: 2px solid #c0c5cc; width: 92px; min-width: 92px; position: sticky; top: 0; left: 0; z-index: 3; }
+.ss-col-hdr { background: #f5f6f8; border-bottom: 2px solid #c0c5cc; border-right: 2px solid #e0e3e8; height: 48px; font-size: 22px; color: #555; font-weight: 500; text-align: center; user-select: none; position: sticky; top: 0; z-index: 2; cursor: pointer; }
 .ss-col-hdr:hover { background: #e0e4ec; }
 .ss-col-hdr.sel-col { background: #d6e0f5; color: #2f6ef2; font-weight: 600; }
-.col-resize-grip { position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; z-index: 10; }
+.col-resize-grip { position: absolute; right: 0; top: 0; bottom: 0; width: 10px; cursor: col-resize; z-index: 10; }
 .col-resize-grip:hover { background: #2f6ef2; }
-.ss-row-hdr { background: #f5f6f8; border-bottom: 1px solid #e0e3e8; border-right: 1px solid #c0c5cc; width: 46px; font-size: 11px; color: #555; text-align: center; user-select: none; position: sticky; left: 0; z-index: 1; cursor: pointer; position: relative; }
+.ss-row-hdr { background: #f5f6f8; border-bottom: 2px solid #e0e3e8; border-right: 2px solid #c0c5cc; width: 92px; font-size: 22px; color: #555; text-align: center; user-select: none; position: sticky; left: 0; z-index: 1; cursor: pointer; position: relative; }
 .ss-row-hdr:hover { background: #e0e4ec; }
 .ss-row-hdr.sel-row { background: #d6e0f5; color: #2f6ef2; font-weight: 600; }
-.ss-row-hdr.loop-start { background: #fef3c7; color: #b45309; font-weight: 700; border-bottom: 2px solid #f59e0b; }
-.ss-row-hdr.page-hdr-start { background: #dbeafe; color: #1d4ed8; font-weight: 700; border-top: 2px solid #3b82f6; }
-.loop-badge { position: absolute; top: 1px; right: 2px; font-size: 8px; color: #f59e0b; }
-.row-resize-grip { position: absolute; bottom: 0; left: 0; right: 0; height: 5px; cursor: row-resize; z-index: 10; }
+.ss-row-hdr.loop-start { background: #fef3c7; color: #b45309; font-weight: 700; border-bottom: 4px solid #f59e0b; }
+.ss-row-hdr.page-hdr-start { background: #dbeafe; color: #1d4ed8; font-weight: 700; border-top: 4px solid #3b82f6; }
+.loop-badge { position: absolute; top: 2px; right: 4px; font-size: 16px; color: #f59e0b; }
+.row-resize-grip { position: absolute; bottom: 0; left: 0; right: 0; height: 10px; cursor: row-resize; z-index: 10; }
 .row-resize-grip:hover { background: #2f6ef2; }
-.ss-cell { border: 1px dotted #d4d6da; padding: 0; position: relative; cursor: cell; overflow: hidden; background: #fff; min-width: 0; font-size: 12px; font-family: SimSun, serif; color: #333; user-select: none; }
+.ss-cell { border: none; padding: 0; position: relative; cursor: cell; overflow: hidden; background: #fff; min-width: 0; font-size: 24px; font-family: SimSun, serif; color: #333; user-select: none; }
 .ss-cell.active-cell { /* overlay 已负责选区视觉，active-cell 不再需要额外样*/ }
-.ss-cell.ss-wrap { overflow: visible; }
-.ss-text { display: block; padding: 1px 4px; line-height: 1.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 100%; }
-.ss-wrap .ss-text { white-space: normal; word-break: break-all; overflow-wrap: break-word; height: auto; overflow: visible; text-overflow: clip; }
+.ss-cell.ss-wrap { overflow: hidden; }
+.ss-text { display: block; padding: 2px 8px; line-height: 1.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 100%; }
+.ss-wrap .ss-text { position: absolute; top: 0; left: 0; right: 0; bottom: 0; white-space: normal; word-break: break-all; overflow-wrap: break-word; overflow: hidden; text-overflow: clip; }
+/* 含手动换行的单元格：保留\n换行 */
+.ss-cell.ss-multiline .ss-text { position: absolute; top: 0; left: 0; right: 0; bottom: 0; white-space: pre-line; overflow: hidden; }
 /* 垂直居中：用 flex 让文本在单元格内纵向居中 */
-.ss-cell.ss-vmiddle .ss-text { display: flex; align-items: center; height: 100%; padding: 0 4px; }
-.ss-cell.ss-vbottom .ss-text { display: flex; align-items: flex-end; height: 100%; padding: 0 4px; }
+.ss-cell.ss-vmiddle .ss-text { display: flex; align-items: center; height: 100%; padding: 0 8px; }
+.ss-cell.ss-vbottom .ss-text { display: flex; align-items: flex-end; height: 100%; padding: 0 8px; }
 /* flex 子项水平对齐 */
 .ss-flex-left .ss-text { justify-content: flex-start; }
 .ss-flex-center .ss-text { justify-content: center; }
 .ss-flex-right .ss-text { justify-content: flex-end; }
 .ss-img { display: block; max-width: 100%; max-height: 100%; object-fit: scale-down; }
-.ss-img-wrap { display: flex; align-items: flex-start; justify-content: flex-start; height: 100%; width: 100%; }
+.ss-img-wrap { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: flex-start; justify-content: flex-start; overflow: hidden; }
 /* 图片容器也响应垂水平居中 */
 .ss-cell.ss-vmiddle .ss-img-wrap { align-items: center; }
 .ss-cell.ss-vbottom .ss-img-wrap { align-items: flex-end; }
 .ss-flex-left .ss-img-wrap { justify-content: flex-start; }
 .ss-flex-center .ss-img-wrap { justify-content: center; }
 .ss-flex-right .ss-img-wrap { justify-content: flex-end; }
-.ss-input { width: calc(100% + 2px); height: calc(100% + 1px); border: none; outline: none; padding: 1px 4px; font-size: inherit; font-family: inherit; background: #fff; position: absolute; top: -1px; left: -1px; right: -1px; bottom: -1px; z-index: 2; }
+.ss-input { width: calc(100% + 4px); height: calc(100% + 2px); border: none; outline: none; padding: 2px 8px; font-size: inherit; font-family: inherit; background: #fff; position: absolute; top: -2px; left: -2px; right: -2px; bottom: -2px; z-index: 2; }
 
 /* ========== 右侧面板 ========== */
 .sr-right {
-  width: 244px;
+  width: 488px;
   background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%);
-  border-left: 1px solid #e2e5ea;
+  border-left: 2px solid #e2e5ea;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  box-shadow: -1px 0 4px rgba(0,0,0,.03);
+  box-shadow: -2px 0 8px rgba(0,0,0,.03);
   overflow: hidden;
 }
 .sr-right-tabs {
   display: flex;
-  border-bottom: 1px solid #e8ebef;
+  border-bottom: 2px solid #e8ebef;
   flex-shrink: 0;
   background: rgba(255,255,255,.6);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(16px);
 }
 .srt {
   flex: 1;
-  height: 38px;
+  height: 76px;
   border: none;
   background: transparent;
-  font-size: 13px;
+  font-size: 26px;
   color: #8b95a5;
   cursor: pointer;
   font-family: inherit;
   position: relative;
   transition: color .2s;
-  letter-spacing: .5px;
+  letter-spacing: .10px;
 }
 .srt:hover { color: #4a5568; }
 .srt.on {
@@ -4433,28 +5111,28 @@ onBeforeUnmount(() => {
 .srt.on::after {
   content: '';
   position: absolute;
-  bottom: -1px;
+  bottom: -2px;
   left: 20%;
   right: 20%;
-  height: 2px;
+  height: 4px;
   background: linear-gradient(90deg, transparent, #1a56db, transparent);
-  border-radius: 1px;
+  border-radius: 2px;
 }
 .sr-right-body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 10px 10px;
+  padding: 20px 20px;
 }
-.sr-right-body::-webkit-scrollbar { width: 4px; }
+.sr-right-body::-webkit-scrollbar { width: 8px; }
 .sr-right-body::-webkit-scrollbar-track { background: transparent; }
-.sr-right-body::-webkit-scrollbar-thumb { background: #c9cdd4; border-radius: 2px; }
+.sr-right-body::-webkit-scrollbar-thumb { background: #c9cdd4; border-radius: 4px; }
 
 .sr-empty {
   color: #b0b7c3;
-  font-size: 12px;
+  font-size: 24px;
   text-align: center;
-  padding-top: 60px;
+  padding-top: 120px;
   line-height: 1.6;
 }
 
@@ -4465,9 +5143,9 @@ onBeforeUnmount(() => {
 }
 .sr-props > .prop-row,
 .sr-props > .prop-toggles {
-  padding: 5px 6px;
-  margin: 1px 0;
-  border-radius: 5px;
+  padding: 10px 12px;
+  margin: 2px 0;
+  border-radius: 10px;
   transition: background .15s;
 }
 .sr-props > .prop-row:hover,
@@ -4478,27 +5156,27 @@ onBeforeUnmount(() => {
 .prop-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 12px;
+  font-size: 24px;
 }
 .prop-row label {
-  width: 30px;
+  width: 60px;
   color: #7a8599;
   flex-shrink: 0;
   font-weight: 500;
-  font-size: 11.5px;
-  letter-spacing: .3px;
+  font-size: 23px;
+  letter-spacing: .6px;
 }
 
 /* 输入框 */
 .prop-inp {
   flex: 1;
   min-width: 0;
-  height: 28px;
-  padding: 0 8px;
-  border: 1px solid #dde1e8;
-  border-radius: 5px;
-  font-size: 12px;
+  height: 56px;
+  padding: 0 16px;
+  border: 2px solid #dde1e8;
+  border-radius: 10px;
+  font-size: 24px;
   outline: none;
   color: #2d3748;
   font-family: inherit;
@@ -4507,20 +5185,20 @@ onBeforeUnmount(() => {
 }
 .prop-inp:focus {
   border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59,130,246,.1);
+  box-shadow: 0 0 0 4px rgba(59,130,246,.1);
 }
-.prop-inp-s { width: 54px; flex: none; }
-.prop-inp-xs { width: 68px; flex: none; }
+.prop-inp-s { width: 108px; flex: none; }
+.prop-inp-xs { width: 136px; flex: none; }
 
 /* 下拉框 */
 .prop-sel {
   flex: 1;
   min-width: 0;
-  height: 28px;
-  padding: 0 6px;
-  border: 1px solid #dde1e8;
-  border-radius: 5px;
-  font-size: 12px;
+  height: 56px;
+  padding: 0 12px;
+  border: 2px solid #dde1e8;
+  border-radius: 10px;
+  font-size: 24px;
   outline: none;
   color: #2d3748;
   font-family: inherit;
@@ -4530,16 +5208,16 @@ onBeforeUnmount(() => {
 }
 .prop-sel:focus {
   border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59,130,246,.1);
+  box-shadow: 0 0 0 4px rgba(59,130,246,.1);
 }
 
 /* 颜色选择器 */
 .prop-color {
-  width: 30px;
-  height: 28px;
-  border: 1px solid #dde1e8;
-  border-radius: 5px;
-  padding: 2px;
+  width: 60px;
+  height: 56px;
+  border: 2px solid #dde1e8;
+  border-radius: 10px;
+  padding: 4px;
   cursor: pointer;
   background: #fff;
   flex: none;
@@ -4551,15 +5229,15 @@ onBeforeUnmount(() => {
 }
 
 /* 开关按钮 B/I/U / 自动换行 */
-.prop-toggles { gap: 4px; }
+.prop-toggles { gap: 8px; }
 .prop-toggles button {
-  width: 28px;
-  height: 26px;
-  border: 1px solid #dde1e8;
-  border-radius: 5px;
+  width: 56px;
+  height: 52px;
+  border: 2px solid #dde1e8;
+  border-radius: 10px;
   background: #fff;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 24px;
   color: #64748b;
   font-family: inherit;
   transition: all .18s;
@@ -4574,214 +5252,214 @@ onBeforeUnmount(() => {
   background: linear-gradient(135deg, #3b82f6, #2563eb);
   color: #fff;
   border-color: transparent;
-  box-shadow: 0 2px 6px rgba(59,130,246,.35);
+  box-shadow: 0 4px 12px rgba(59,130,246,.35);
 }
 .prop-toggles button i { font-style: italic; }
 .prop-toggles .btn-wordwrap {
   width: auto;
-  padding: 0 10px;
+  padding: 0 20px;
   white-space: nowrap;
 }
 
 /* 边框预设按钮组 */
 .prop-border-bar {
   display: flex;
-  gap: 3px;
+  gap: 6px;
   flex-wrap: wrap;
-  padding: 6px 6px;
-  margin: 2px 0;
+  padding: 12px 12px;
+  margin: 4px 0;
   background: rgba(255,255,255,.5);
-  border-radius: 6px;
-  border: 1px solid rgba(222,226,232,.5);
+  border-radius: 12px;
+  border: 2px solid rgba(222,226,232,.5);
 }
 .bdr-btn {
-  width: 28px;
-  height: 26px;
+  width: 56px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #e0e4ea;
-  border-radius: 5px;
+  border: 2px solid #e0e4ea;
+  border-radius: 10px;
   background: #fff;
   cursor: pointer;
-  padding: 2px;
+  padding: 4px;
   transition: all .18s;
 }
 .bdr-btn:hover {
   border-color: #93c5fd;
   background: #eff6ff;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(59,130,246,.12);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(59,130,246,.12);
 }
 .bdr-btn.on {
   border-color: #3b82f6;
   background: linear-gradient(135deg, #dbeafe, #bfdbfe);
-  box-shadow: 0 2px 6px rgba(59,130,246,.25), inset 0 1px 0 rgba(255,255,255,.6);
+  box-shadow: 0 4px 12px rgba(59,130,246,.25), inset 0 2px 0 rgba(255,255,255,.6);
 }
-.bdr-svg { width: 18px; height: 18px; }
+.bdr-svg { width: 36px; height: 36px; }
 
 /* 预设颜色条 */
 .prop-color-bar {
   display: flex;
-  gap: 4px;
+  gap: 8px;
   flex-wrap: wrap;
-  padding: 6px 6px;
-  margin-top: 2px;
+  padding: 12px 12px;
+  margin-top: 4px;
 }
 .clr-swatch {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  border: 2px solid transparent;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: 4px solid transparent;
   cursor: pointer;
   flex-shrink: 0;
   transition: all .18s;
-  box-shadow: 0 1px 2px rgba(0,0,0,.08);
+  box-shadow: 0 2px 4px rgba(0,0,0,.08);
 }
 .clr-swatch:hover {
   border-color: #93c5fd;
-  transform: scale(1.15) translateY(-1px);
-  box-shadow: 0 3px 6px rgba(0,0,0,.12);
+  transform: scale(1.15) translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0,0,0,.12);
 }
 .clr-swatch.on {
   border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59,130,246,.3), 0 2px 4px rgba(0,0,0,.1);
+  box-shadow: 0 0 0 4px rgba(59,130,246,.3), 0 4px 8px rgba(0,0,0,.1);
   transform: scale(1.1);
 }
 
 /* 配置面板分组卡片 */
 .cfg-grp {
-  margin-bottom: 10px;
-  padding: 10px;
+  margin-bottom: 20px;
+  padding: 20px;
   background: #fff;
-  border-radius: 8px;
-  border: 1px solid #e8ecf1;
-  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  border-radius: 16px;
+  border: 2px solid #e8ecf1;
+  box-shadow: 0 2px 6px rgba(0,0,0,.04);
   transition: box-shadow .2s;
 }
 .cfg-grp:hover {
-  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  box-shadow: 0 4px 16px rgba(0,0,0,.06);
 }
 .cfg-grp:last-child { margin-bottom: 0; }
 .cfg-ttl {
-  font-size: 12px;
+  font-size: 24px;
   font-weight: 600;
   color: #374151;
-  margin-bottom: 8px;
-  padding-bottom: 5px;
-  border-bottom: 1px solid #f0f2f5;
-  letter-spacing: .3px;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #f0f2f5;
+  letter-spacing: .6px;
 }
 .cfg-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
-  font-size: 12px;
+  gap: 12px;
+  margin-bottom: 12px;
+  font-size: 24px;
 }
 .cfg-row:last-child { margin-bottom: 0; }
 .cfg-row label {
-  width: 56px;
+  width: 112px;
   color: #7a8599;
   flex-shrink: 0;
-  font-size: 11.5px;
+  font-size: 23px;
 }
-.cfg-hint { color: #a0aab8; font-size: 11px; margin-left: 2px; }
+.cfg-hint { color: #a0aab8; font-size: 22px; margin-left: 4px; }
 
-.cfg-acts { display: flex; flex-direction: column; gap: 6px; padding-top: 2px; }
-.hint-row { color: #a0aab8; font-size: 11px; }
+.cfg-acts { display: flex; flex-direction: column; gap: 12px; padding-top: 4px; }
+.hint-row { color: #a0aab8; font-size: 22px; }
 .hint-row label { display: none; }
 .hint-row span { flex: 1; }
 
 /* 操作按钮 */
 .btn-a {
-  height: 32px;
-  border: 1px solid #dde1e8;
-  border-radius: 6px;
-  font-size: 12px;
+  height: 64px;
+  border: 2px solid #dde1e8;
+  border-radius: 12px;
+  font-size: 24px;
   cursor: pointer;
   font-family: inherit;
   background: #fff;
   color: #4a5568;
   transition: all .18s;
   font-weight: 500;
-  letter-spacing: .2px;
+  letter-spacing: .4px;
 }
 .btn-a:hover {
   background: #f8fafc;
   border-color: #c9cdd4;
-  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  box-shadow: 0 2px 6px rgba(0,0,0,.06);
 }
 .btn-save {
   background: linear-gradient(135deg, #3b82f6, #2563eb);
   color: #fff;
   border-color: transparent;
   font-weight: 600;
-  box-shadow: 0 2px 6px rgba(59,130,246,.25);
+  box-shadow: 0 4px 12px rgba(59,130,246,.25);
 }
 .btn-save:hover {
   background: linear-gradient(135deg, #2563eb, #1d4ed8);
-  box-shadow: 0 3px 10px rgba(59,130,246,.35);
-  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(59,130,246,.35);
+  transform: translateY(-2px);
 }
 .btn-exp { display: flex; align-items: center; justify-content: center; }
 
 /* 导入弹窗 */
 .modal-mask { position: fixed; inset: 0; z-index: 30000; background: rgba(0,0,0,.3); display: flex; align-items: center; justify-content: center; }
-.modal-card { background: #fff; border-radius: 12px; width: 760px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 16px 50px rgba(0,0,0,.18); border: 1px solid #e5e7eb; overflow: hidden; }
-.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 20px 28px; border-bottom: 1px solid #f0f1f5; font-size: 16px; font-weight: 600; color: #1a1a2e; background: #fafbfc; }
-.modal-close { width: 32px; height: 32px; border: none; background: transparent; font-size: 22px; cursor: pointer; color: #b0b5c0; border-radius: 6px; transition: all .15s; line-height: 1; }
+.modal-card { background: #fff; border-radius: 24px; width: 1520px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 32px 100px rgba(0,0,0,.18); border: 2px solid #e5e7eb; overflow: hidden; }
+.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 40px 56px; border-bottom: 2px solid #f0f1f5; font-size: 32px; font-weight: 600; color: #1a1a2e; background: #fafbfc; }
+.modal-close { width: 64px; height: 64px; border: none; background: transparent; font-size: 44px; cursor: pointer; color: #b0b5c0; border-radius: 12px; transition: all .15s; line-height: 1; }
 .modal-close:hover { background: #eef1f6; color: #555; }
-.modal-tabs { display: flex; padding: 0 20px; border-bottom: 1px solid #f0f1f3; gap: 0; }
-.modal-tabs button { border: none; background: none; padding: 10px 16px; cursor: pointer; font-size: 13px; color: #6b7280; border-bottom: 2px solid transparent; font-family: inherit; transition: .12s; }
+.modal-tabs { display: flex; padding: 0 40px; border-bottom: 2px solid #f0f1f3; gap: 0; }
+.modal-tabs button { border: none; background: none; padding: 20px 32px; cursor: pointer; font-size: 26px; color: #6b7280; border-bottom: 4px solid transparent; font-family: inherit; transition: .12s; }
 .modal-tabs button:hover { color: #333; }
 .modal-tabs button.on { color: #2f6ef2; border-bottom-color: #2f6ef2; font-weight: 500; }
-.modal-body { padding: 24px 28px; overflow-y: auto; }
-.modal-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; font-size: 14px; }
-.modal-row label { width: 80px; color: #6b7280; flex-shrink: 0; }
+.modal-body { padding: 48px 56px; overflow-y: auto; }
+.modal-row { display: flex; align-items: center; gap: 24px; margin-bottom: 32px; font-size: 28px; }
+.modal-row label { width: 160px; color: #6b7280; flex-shrink: 0; }
 .modal-row.flex-col { flex-direction: column; align-items: stretch; }
-.modal-row.flex-col label { width: auto; margin-bottom: 4px; }
-.modal-row input[type="file"] { font-size: 12px; }
-.sql-textarea { resize: vertical; min-height: 80px; font-family: 'Consolas','Monaco',monospace !important; font-size: 12px; line-height: 1.5; }
-.modal-hint { color: #9ca3af; font-size: 11px; margin-top: 4px; }
-.modal-foot { display: flex; gap: 12px; justify-content: flex-end; padding: 18px 28px; border-top: 1px solid #f0f1f5; background: #fafbfc; }
+.modal-row.flex-col label { width: auto; margin-bottom: 8px; }
+.modal-row input[type="file"] { font-size: 24px; }
+.sql-textarea { resize: vertical; min-height: 160px; font-family: 'Consolas','Monaco',monospace !important; font-size: 24px; line-height: 1.5; }
+.modal-hint { color: #9ca3af; font-size: 22px; margin-top: 8px; }
+.modal-foot { display: flex; gap: 24px; justify-content: flex-end; padding: 36px 56px; border-top: 2px solid #f0f1f5; background: #fafbfc; }
 
 /* 草稿/模板列表项 */
-.draft-item { display: flex; align-items: center; padding: 16px 24px; cursor: pointer; border-bottom: 1px solid #f3f4f6; transition: background .12s; gap: 10px; }
+.draft-item { display: flex; align-items: center; padding: 32px 48px; cursor: pointer; border-bottom: 2px solid #f3f4f6; transition: background .12s; gap: 20px; }
 .draft-info { flex: 1; min-width: 0; }
-.draft-title { font-size: 15px; font-weight: 500; color: #1e293b; }
-.draft-meta { font-size: 13px; color: #94a3b8; margin-top: 4px; }
-.draft-del { width: 32px; height: 32px; border: none; background: transparent; font-size: 20px; color: #c8ccd4; cursor: pointer; border-radius: 6px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.draft-title { font-size: 30px; font-weight: 500; color: #1e293b; }
+.draft-meta { font-size: 26px; color: #94a3b8; margin-top: 8px; }
+.draft-del { width: 64px; height: 64px; border: none; background: transparent; font-size: 40px; color: #c8ccd4; cursor: pointer; border-radius: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 .draft-del:hover { background: #fef2f2; color: #ef4444; }
-.draft-action { width: 34px; height: 34px; border: none; background: transparent; font-size: 16px; color: #a0a6b4; cursor: pointer; border-radius: 6px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all .15s; }
+.draft-action { width: 68px; height: 68px; border: none; background: transparent; font-size: 32px; color: #a0a6b4; cursor: pointer; border-radius: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all .15s; }
 .draft-action:hover { background: #eef2ff; color: #6366f1; }
 
 /* 弹窗内专用按钮 */
 .modal-card .fmt-btn,
 .modal-card .fmt-btn-preview {
-  height: 38px; min-width: 80px; padding: 0 28px; border-radius: 8px; font-size: 14px; font-weight: 500;
+  height: 76px; min-width: 160px; padding: 0 56px; border-radius: 16px; font-size: 28px; font-weight: 500;
   white-space: nowrap; box-sizing: border-box;
 }
 .modal-card .fmt-btn {
   background: #f8f9fb; color: #4b5563; border-color: #e2e5ea;
 }
 .modal-card .fmt-btn:hover { background: #eef0f4; border-color: #c9cdd6; color: #333; }
-.modal-card .fmt-btn-preview { font-weight: 600; letter-spacing: .3px; }
+.modal-card .fmt-btn-preview { font-weight: 600; letter-spacing: .6px; }
 
 /* 右键菜单 */
-.ctx-menu { position: fixed; z-index: 9998; background: #fff; border: 1px solid #e0e3e8; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,.12); padding: 6px 0; min-width: 140px; }
-.ctx-item { padding: 7px 16px; font-size: 12px; cursor: pointer; color: #374151; }
+.ctx-menu { position: fixed; z-index: 9998; background: #fff; border: 2px solid #e0e3e8; border-radius: 16px; box-shadow: 0 16px 64px rgba(0,0,0,.12); padding: 12px 0; min-width: 280px; }
+.ctx-item { padding: 14px 32px; font-size: 24px; cursor: pointer; color: #374151; }
 .ctx-item:hover { background: #f0f4ff; color: #2f6ef2; }
-.ctx-sep { height: 1px; background: #e5e7eb; margin: 4px 8px; }
+.ctx-sep { height: 2px; background: #e5e7eb; margin: 8px 16px; }
 
 /* Toast */
-.sr-toast { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%); padding: 10px 28px; border-radius: 8px; font-size: 13px; font-weight: 500; z-index: 9999; pointer-events: none; box-shadow: 0 4px 24px rgba(0,0,0,.15); }
-.sr-toast.success { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
-.sr-toast.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
-.sr-toast.warn { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
-.sr-toast.info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+.sr-toast { position: fixed; bottom: 64px; left: 50%; transform: translateX(-50%); padding: 20px 56px; border-radius: 16px; font-size: 26px; font-weight: 500; z-index: 9999; pointer-events: none; box-shadow: 0 8px 48px rgba(0,0,0,.15); }
+.sr-toast.success { background: #ecfdf5; color: #065f46; border: 2px solid #a7f3d0; }
+.sr-toast.error { background: #fef2f2; color: #991b1b; border: 2px solid #fecaca; }
+.sr-toast.warn { background: #fffbeb; color: #92400e; border: 2px solid #fde68a; }
+.sr-toast.info { background: #eff6ff; color: #1e40af; border: 2px solid #bfdbfe; }
 .toast-fade-enter-active { transition: all .25s ease-out; }
 .toast-fade-leave-active { transition: all .2s ease-in; }
-.toast-fade-enter-from { opacity: 0; transform: translateX(-50%) translateY(12px); }
-.toast-fade-leave-to { opacity: 0; transform: translateX(-50%) translateY(8px); }
+.toast-fade-enter-from { opacity: 0; transform: translateX(-50%) translateY(24px); }
+.toast-fade-leave-to { opacity: 0; transform: translateX(-50%) translateY(16px); }
 </style>

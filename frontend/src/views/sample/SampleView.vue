@@ -45,7 +45,8 @@
         <div class="sample-form-scroll">
           <div class="sample-form-grid">
             <template v-for="f in visibleFormFields" :key="f.key || f.label">
-              <div v-if="f.group" class="sample-form-field sample-form-group" :style="f.width || f.fields.some(sf => sf.width) ? { flex: '0 0 auto' } : {}">
+              <div v-if="f.break" style="flex:0 0 100%;height:0"></div>
+              <div v-else-if="f.group" class="sample-form-field sample-form-group" :style="f.width || f.fields.some(sf => sf.width) ? { flex: '0 0 auto' } : {}">
                 <label class="sample-form-label" :style="{ ...(f.labelWidth ? { flex: '0 0 ' + f.labelWidth + 'px' } : {}), ...(f.labelJustify ? { textAlign: 'justify', textAlignLast: 'justify' } : {}) }">{{ f.label }}</label>
                 <div class="sample-form-group-inputs">
                   <input v-for="sf in f.fields" :key="sf.key"
@@ -59,14 +60,14 @@
                   />
                 </div>
               </div>
-              <div v-else class="sample-form-field" :style="f.width ? { flex: '0 0 auto' } : {}">
+              <div v-else class="sample-form-field" :style="f.width ? { flex: '0 0 auto' } : { flex: 1 }">
                 <label class="sample-form-label" :style="{ ...(f.labelWidth ? { flex: '0 0 ' + f.labelWidth + 'px' } : {}), ...(f.labelJustify ? { textAlign: 'justify', textAlignLast: 'justify' } : {}), ...(f.color ? { color: f.color } : {}) }">{{ f.label }}</label>
                 <input
                   class="sample-form-input"
                   :readonly="formMode === 'readonly'"
                   :placeholder="formMode === 'readonly' ? '' : f.label"
                   :title="formData[f.key] || ''"
-                  :style="{ ...(f.width ? { flex: '0 0 ' + f.width + 'px' } : {}), ...(f.color ? { color: f.color } : {}) }"
+                  :style="{ ...(f.width ? { flex: '0 0 ' + f.width + 'px' } : { flex: 1 }), ...(f.color ? { color: f.color } : {}) }"
                   v-model="formData[f.key]"
                 />
               </div>
@@ -95,7 +96,7 @@
             <span class="sample-image-strip-empty" style="cursor:pointer" @click="viewOriginal">暂无图片</span>
           </template>
           <label v-if="formMode === 'edit' || formMode === 'add'" class="sample-image-upload-btn">
-            <Upload :size="14" /> 上传
+            <Upload :size="22" /> 上传
             <input type="file" accept="image/*" hidden @change="onImageUpload" />
           </label>
         </div>
@@ -106,7 +107,7 @@
       <div class="sample-toolbar-row">
         <!-- 展示区隐藏时，在搜索框左侧显示恢复按钮 -->
         <button v-if="!formVisible" class="sample-btn sample-btn-primary" style="font-size:11px;height:30px;flex-shrink:0;margin-right:6px" @click="formVisible = true" title="显示展示区">
-          <Eye :size="13" />
+          <Eye :size="22" />
         </button>
         <div class="sample-search">
           <Search :size="14" />
@@ -117,7 +118,7 @@
           />
         </div>
         <button class="sample-btn sample-btn-primary" @click="onSearch">
-          <Search :size="14" /> 查询
+          <Search :size="22" /> 查询
         </button>
         <div class="sample-search">
           <Crosshair :size="14" />
@@ -126,27 +127,28 @@
             placeholder="定位搜索..."
             @keyup.enter="onLocate"
           />
+          <button v-if="locateKeyword" class="sample-search-clear" @click="locateKeyword='';locateCursor=-1">&times;</button>
         </div>
         <button class="sample-btn sample-btn-ghost" @click="onLocate">
-          <MapPin :size="14" /> 定位
+          <MapPin :size="22" /> 定位
         </button>
         <button v-if="searchKeyword || locateKeyword" class="sample-btn sample-btn-ghost" @click="clearSearch">
-          <X :size="14" /> 清除
+          <X :size="22" /> 清除
         </button>
         <div class="toolbar-sep"></div>
         <button class="sample-btn sample-btn-primary" @click="startAdd">
-          <Plus :size="14" /> 添加资料
+          <Plus :size="22" /> 添加资料
         </button>
         <template v-if="formMode === 'edit' || formMode === 'add'">
           <button class="sample-btn sample-btn-primary" @click="saveSample">
-            <Save :size="14" /> 保存
+            <Save :size="22" /> 保存
           </button>
           <button class="sample-btn sample-btn-ghost" @click="cancelEdit">
-            <X :size="14" /> 取消
+            <X :size="22" /> 取消
           </button>
         </template>
         <button v-else class="sample-btn sample-btn-ghost" :disabled="!currentSample" @click="startEdit">
-          <Pencil :size="14" /> 修改
+          <Pencil :size="22" /> 修改
         </button>
         <button class="sample-btn sample-btn-danger" :disabled="selectedIds.length === 0" @click="onDeleteSelected">
           <Trash2 :size="14" /> 删除
@@ -156,26 +158,26 @@
         </button>
         <div class="sample-more-dropdown" style="position:relative">
           <button class="sample-btn sample-btn-ghost" @click.stop="toggleMoreDropdown">
-            <MoreHorizontal :size="14" /> 其他功能
+            <MoreHorizontal :size="20" /> 其他功能
           </button>
         </div>
         <Teleport to="body">
           <div v-if="showMoreDropdown" class="sample-more-dropdown-panel" :style="moreDropdownStyle">
-            <div class="sample-more-group-label"><PackageOpen :size="13" /> 导入</div>
-            <div class="sample-more-item" @click="downloadTemplate"><Download :size="16" /> 下载导入模板</div>
-            <div class="sample-more-item" @click="openBatchImageModal"><ImagePlus :size="16" /> 批量导入图片</div>
-            <div class="sample-more-item" @click="openBatchVideoModal"><VideoIcon :size="16" /> 批量导入视频</div>
+            <div class="sample-more-group-label"><PackageOpen :size="16" /> 导入</div>
+            <div class="sample-more-item" @click="downloadTemplate"><Download :size="18" /> 下载导入模板</div>
+            <div class="sample-more-item" @click="openBatchImageModal"><ImagePlus :size="18" /> 批量导入图片</div>
+            <div class="sample-more-item" @click="openBatchVideoModal"><VideoIcon :size="18" /> 批量导入视频</div>
             <div class="sample-more-sep"></div>
-            <div class="sample-more-group-label"><Database :size="13" /> 数据</div>
-            <div class="sample-more-item" @click="openReferenceDataModal"><ListChecks :size="16" /> 对照资料管理</div>
-            <div class="sample-more-item" @click="openRestoreDeletedModal"><RotateCcw :size="16" /> 恢复误删数据</div>
-            <div class="sample-more-item" @click="openMainBatchQuery"><List :size="16" /> 按编号批量查询</div>
-            <div class="sample-more-item" @click="batchSetPrice"><Coins :size="16" /> 批量设置价格</div>
+            <div class="sample-more-group-label"><Database :size="16" /> 数据</div>
+            <div class="sample-more-item" @click="openReferenceDataModal"><ListChecks :size="18" /> 对照资料管理</div>
+            <div class="sample-more-item" @click="openRestoreDeletedModal"><RotateCcw :size="18" /> 恢复误删数据</div>
+            <div class="sample-more-item" @click="openMainBatchQuery"><List :size="18" /> 按编号批量查询</div>
+            <div class="sample-more-item" @click="batchSetPrice"><Coins :size="18" /> 批量设置价格</div>
             <div class="sample-more-sep"></div>
-            <div class="sample-more-group-label"><FileOutput :size="13" /> 导出</div>
-            <div class="sample-more-item" @click="exportExcel"><FileDown :size="16" /> 导出Excel</div>
+            <div class="sample-more-group-label"><FileOutput :size="16" /> 导出</div>
+            <div class="sample-more-item" @click="exportExcel"><FileDown :size="18" /> 导出Excel</div>
             <div class="sample-more-sep"></div>
-            <div class="sample-more-item sample-more-item-accent" @click="openReportDesigner"><LayoutGrid :size="16" /> 报表设计器</div>
+            <div class="sample-more-item sample-more-item-accent" @click="openReportDesigner"><LayoutGrid :size="18" /> 报表设计器</div>
           </div>
         </Teleport>
         <div class="toolbar-sep"></div>
@@ -188,7 +190,7 @@
         </button>
         <div class="sample-more-dropdown" style="position:relative">
           <button class="sample-btn sample-btn-ghost" @click.stop="togglePrintDropdown">
-            <Printer :size="14" /> 其他打印 <ChevronsDown :size="12" />
+            <Printer :size="18" /> 其他打印 <ChevronsDown :size="16" />
           </button>
         </div>
         <button class="sample-btn sample-btn-primary" @click="openVendorConfirmReport">
@@ -199,47 +201,58 @@
           <ImageIcon :size="14" /> 图像搜索
         </button>
         <div class="toolbar-sep"></div>
+        <span v-if="searchElapsed != null" style="margin-left:auto;color:#3b82f6;font-size:20px;white-space:nowrap;align-self:center">
+          查询耗时 {{ searchElapsed }} ms
+        </span>
       </div>
     </div>
 
     <div class="sample-table-card">
       <div ref="tableWrapRef" class="sample-table-wrap">
-        <vxe-grid
+        <vxe-grid v-if="prefReady"
           ref="gridRef"
+          :id="gridStorageKey"
           :columns="allColumns"
           :data="tableData"
           :loading="tableLoading"
           :height="tableWrapHeight"
           :toolbar-config="gridToolbarConfig"
+          :custom-config="{ storage: true }"
           :column-config="{ resizable: true, drag: true }"
           :row-config="{ isHover: true, isCurrent: true, keyField: 'id' }"
-          :cell-config="{ height: 44 }"
+          :cell-config="{ height: 100 }"
           :checkbox-config="{ highlight: true, range: true }"
           :sort-config="{ trigger: 'header', remote: true, defaultSort: { field: 'recent', order: 'desc' } }"
-          :scroll-y="{ enabled: true, gt: 0, oSize: 0, rSize: 60, rHeight: 44 }"
+          :scroll-y="{ enabled: true, gt: 0, oSize: 0, rSize: 100, rHeight: 100 }"
           :virtual-y-config="{ enabled: true, gt: 0 }"
-          :virtual-x-config="{ enabled: true, gt: 20 }"
-          :optimization="{ animat: false, delayHover: 300, scrollX: { gt: 0, oSize: 0, rSize: 0 }, scrollY: { gt: 0, oSize: 0, rSize: 60, rHeight: 44 } }"
+          :virtual-x-config="{ enabled: true, gt: 0 }"
+          :optimization="{ animat: false, delayHover: 300, scrollX: { gt: 0, oSize: 0, rSize: 0 }, scrollY: { gt: 0, oSize: 0, rSize: 100, rHeight: 100 } }"
           :border="true"
-          :header-cell-style="{ background: '#ffffff', borderColor: '#a0bddb', color: '#1d1d1f', fontWeight: 600, textAlign: 'center' }"
+          :header-cell-style="headerCellStyleFn"
           :cell-style="cellAreaStyle"
           @checkbox-change="onCheckboxChange"
           @checkbox-all="onCheckboxAll"
           @cell-click="onCellClick"
           @sort-change="onSortChange"
+          @resizable-change="saveGridPrefs"
+          @custom="onCustomChange"
+          @column-dragstart="onColumnDragStart"
+          @column-dragend="onColumnDragEnd"
         >
           <template #image_default="{ row }">
-            <div style="display:flex;align-items:center;justify-content:center;height:100%">
+            <div style="display:flex;align-items:center;justify-content:center;height:100%;line-height:1">
               <img
                 v-if="row.thumbnail"
                 :src="'/thumbnails/' + row.thumbnail"
                 loading="lazy"
-                style="width:48px;height:36px;object-fit:cover;border-radius:6px;cursor:pointer"
+                draggable="true"
+                style="width:80px;height:80px;object-fit:cover;border-radius:6px;cursor:pointer;-webkit-user-drag:element"
                 @click.stop="openPhotoModalFor(row)"
                 @mouseenter="onThumbMouseEnter($event, row)"
                 @mouseleave="onThumbMouseLeave"
+                @dragstart="onSampleImgDragStart"
               />
-              <span v-else style="color:rgba(29,29,31,0.25);font-size:11px;cursor:pointer" @click.stop="openPhotoModalFor(row)">无图</span>
+              <span v-else style="display:flex;align-items:center;justify-content:center;width:64px;height:64px;color:rgba(29,29,31,0.25);font-size:11px;cursor:pointer;border-radius:6px;border:1px dashed rgba(0,0,0,0.1);background:rgba(0,0,0,0.02)" @click.stop="openPhotoModalFor(row)">无图</span>
             </div>
           </template>
           <template #action_default="{ row }">
@@ -257,45 +270,33 @@
           <div class="sample-card-grid">
             <div v-for="item in cardVisibleItems" :key="item.id"
                  class="sample-card-item" :class="{ 'card-selected': isCardSelected(item) }" @click="onCellClick({ row: item })">
-              <div class="sample-card-img">
+              <div class="sample-card-img" @click.stop="openPhotoModalFor(item)">
                 <div class="card-checkbox" :class="{ checked: isCardSelected(item) }" @click.stop="toggleCardSelect(item)">
                   <Check v-if="isCardSelected(item)" :size="14" />
                 </div>
-                <img v-if="item.thumbnail || item.firstImageHash" :src="item.thumbnail ? '/thumbnails/' + item.thumbnail : '/images/view/hash/' + item.firstImageHash" :data-thumb="item.thumbnail" @error="onCardImgError" @click.stop="openPhotoModalFor(item)" loading="lazy" decoding="async" />
+                <img v-if="item.thumbnail || item.firstImageHash" :src="item.thumbnail ? '/thumbnails/' + item.thumbnail : '/images/view/hash/' + item.firstImageHash" :data-thumb="item.thumbnail" @error="onCardImgError" @click.stop="openPhotoModalFor(item)" @mouseenter="onThumbMouseEnter($event, item)" @mouseleave="onThumbMouseLeave" loading="lazy" decoding="async" draggable="true" @dragstart="onSampleImgDragStart" style="-webkit-user-drag:element" />
                 <div v-else class="sample-card-no-img" @click.stop="openPhotoModalFor(item)"><ImageIcon :size="36" /></div>
               </div>
               <div class="sample-card-body">
-                <div class="sample-card-name" :title="item.sampleName">{{ item.sampleName || '--' }}</div>
-                <div class="sample-card-field">
-                  <span class="card-val-cell" style="grid-column:1/3"><span class="card-val" :title="item.sampleCode">{{ item.sampleCode || '-' }}</span><button v-if="item.sampleCode" class="card-copy-btn" @click.stop="copyCardCode(item.sampleCode)" :title="'复制 ' + item.sampleCode"><Copy :size="10" /></button></span>
-                  <span class="card-label">货号</span><span class="card-val" :title="item.factoryCode">{{ item.factoryCode || '-' }}</span>
-                </div>
-                <div class="sample-card-field">
-                  <span class="card-label">装量</span><span class="card-val" :title="(item.innerBoxCount ?? '0') + ' / ' + (item.cartonCapacity ?? '0')">{{ item.innerBoxCount != null ? item.innerBoxCount : '0' }} / {{ item.cartonCapacity != null ? item.cartonCapacity : '0' }}</span>
-                  <span class="card-label">毛/净</span><span class="card-val" :title="(item.cartonGrossWeight ?? '-') + ' / ' + (item.cartonNetWeight ?? '-')">{{ item.cartonGrossWeight != null ? item.cartonGrossWeight : '-' }} / {{ item.cartonNetWeight != null ? item.cartonNetWeight : '-' }}</span>
-                </div>
-                <div class="sample-card-field">
-                  <span class="card-label">材积体积</span><span class="card-val" :title="(item.cartonMaterialVolume ?? '-') + ' / ' + (item.cartonVolume ?? '-')">{{ item.cartonMaterialVolume != null ? item.cartonMaterialVolume : '-' }} / {{ item.cartonVolume != null ? item.cartonVolume : '-' }}</span>
-                  <span class="card-label">摊位号</span><span class="card-val" :title="item.boothNo">{{ item.boothNo || '-' }}</span>
-                </div>
-                <div class="sample-card-field">
-                  <span class="card-label">出厂价</span>
-                  <span v-if="item.factoryPrice" class="card-val card-price" style="grid-column:2/-1" :title="'¥' + item.factoryPrice">¥{{ item.factoryPrice }}</span>
-                  <span v-else class="card-val" style="grid-column:2/-1">-</span>
+                <div class="sample-card-name" :title="item.sampleName">{{ item.sampleName || '0' }}</div>
+                <div class="sample-card-fields">
+                  <span class="card-val card-val-copy card-code" :title="item.sampleCode">
+                    {{ item.sampleCode || '0' }}
+                    <button v-if="item.sampleCode" class="card-copy-btn" @click.stop="copyCardCode(item.sampleCode)" :title="'复制 ' + item.sampleCode"><Copy :size="16" /></button>
+                  </span>
+                  <span class="card-val" :title="item.factoryCode">{{ item.factoryCode || '0' }}</span>
+                  <span class="card-val" :title="(item.innerBoxCount ?? '0') + ' / ' + (item.cartonCapacity ?? '0')">{{ item.innerBoxCount ?? '0' }} / {{ item.cartonCapacity ?? '0' }}</span>
+                  <span class="card-val" :title="(item.cartonGrossWeight ?? '0') + ' / ' + (item.cartonNetWeight ?? '0')">{{ item.cartonGrossWeight ?? '0' }} / {{ item.cartonNetWeight ?? '0' }}</span>
+                  <span class="card-val" :title="(item.cartonMaterialVolume ?? '0') + ' / ' + (item.cartonVolume ?? '0')">{{ item.cartonMaterialVolume ?? '0' }} / {{ item.cartonVolume ?? '0' }}</span>
+                  <span class="card-val" :title="item.boothNo">{{ item.boothNo || '0' }}</span>
+                  <span class="card-val card-price" :title="item.factoryPrice != null ? '¥' + item.factoryPrice : '0'">{{ item.factoryPrice != null ? '¥' + item.factoryPrice : '0' }}</span>
                 </div>
                 <div class="sample-card-divider"></div>
-                <div class="sample-card-field">
-                  <span class="card-label">厂名</span><span class="card-val" style="grid-column:2/-1" :title="item.supplier">{{ item.supplier || '-' }}</span>
-                </div>
-                <div class="sample-card-field">
-                  <span class="card-label">手机</span><span class="card-val" :title="item.mobile">{{ item.mobile || '-' }}</span>
-                  <span class="card-label">电话</span><span class="card-val" :title="item.contactPhone">{{ item.contactPhone || '-' }}</span>
-                </div>
-                <div class="sample-card-field">
-                  <span class="card-label">登记日期</span><span class="card-val" style="grid-column:2/-1" :title="formatCardDate(item.createTime)">{{ formatCardDate(item.createTime) }}</span>
-                </div>
-                <div class="sample-card-field">
-                  <span class="card-label">修改日期</span><span class="card-val" style="grid-column:2/-1" :title="formatCardDate(item.updateTime)">{{ formatCardDate(item.updateTime) }}</span>
+                <div class="sample-card-fields" style="grid-template-columns:1fr">
+                  <span class="card-val" :title="item.name">{{ item.name || '0' }}</span>
+                  <span class="card-val" :title="item.mobile1">{{ item.mobile1 || '0' }}</span>
+                  <span class="card-val" :title="formatCardDate(item.createTime)">{{ formatCardDate(item.createTime) || '0' }}</span>
+                  <span class="card-val" :title="formatCardDate(item.updateTime)">{{ formatCardDate(item.updateTime) || '0' }}</span>
                 </div>
               </div>
             </div>
@@ -353,61 +354,51 @@
     </div>
 
     <Teleport to="body">
-    <div v-if="showRestoreDeletedModal" class="batch-image-modal-overlay" @click.self="showRestoreDeletedModal = false">
-      <div class="batch-image-modal" style="width:960px;max-height:85vh;display:flex;flex-direction:column">
+    <div v-if="showRestoreDeletedModal" class="batch-image-modal-overlay import-modal-overlay" style="background:transparent;backdrop-filter:none">
+      <div class="batch-image-modal" style="width:85vw;height:85vh;display:flex;flex-direction:column">
         <div class="batch-image-modal-header" style="flex-shrink:0">
-          <strong>恢复误删数据</strong>
-          <button class="modal-close-btn" @click="showRestoreDeletedModal = false"><X :size="16" /></button>
-        </div>
-        <div class="batch-image-modal-body" style="padding:0;flex:1;overflow:hidden;display:flex;flex-direction:column">
-          <div style="display:flex;gap:8px;padding:10px 12px;border-bottom:1px solid #e5e5ea;background:#fafafa;align-items:center;flex-shrink:0">
-            <select v-model="deletedFilterField" style="height:32px;border:1px solid #d1d1d6;border-radius:6px;padding:0 8px;font-size:13px;background:#fff;color:#333">
+          <strong style="font-size:24px;">恢复误删数据</strong>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <select v-model="deletedFilterField" style="height:48px;border:1px solid #d1d1d6;border-radius:8px;padding:0 14px;font-size:20px;background:#fff;color:#333">
               <option value="">全部字段</option>
               <option value="sampleCode">公司编号</option>
               <option value="manufacturerCode">厂商编号</option>
               <option value="updateTime">删除日期</option>
             </select>
-            <input v-model="deletedFilterKeyword" placeholder="输入关键词搜索..." style="flex:1;height:32px;border:1px solid #d1d1d6;border-radius:6px;padding:0 12px;font-size:13px;outline:none" @keyup.enter="doDeletedFilter" />
-            <button class="sample-btn sample-btn-primary" style="height:32px;padding:0 16px;font-size:13px;border-radius:6px" @click="doDeletedFilter">筛选查询</button>
-            <button class="sample-btn sample-btn-ghost" style="height:32px;padding:0 14px;font-size:12px;border-radius:6px" @click="doDeletedResetFilter" v-if="deletedFilterActive">清除</button>
+            <input v-model="deletedFilterKeyword" placeholder="搜索..." style="width:240px;height:48px;border:1px solid #d1d1d6;border-radius:8px;padding:0 14px;font-size:20px;outline:none" @keyup.enter="doDeletedFilter" />
+            <button class="sample-btn sample-btn-primary" style="height:44px;padding:0 20px;font-size:18px;border-radius:8px" @click="doDeletedFilter">筛选</button>
+            <button v-if="deletedFilterActive" class="sample-btn sample-btn-ghost" style="height:44px;padding:0 18px;font-size:18px;border-radius:8px" @click="doDeletedResetFilter">清除</button>
+            <button class="sample-btn sample-btn-ghost" style="font-size:18px;padding:8px 18px;border-radius:8px" @click="doDeletedFilter">刷新</button>
+            <button class="sample-btn sample-btn-ghost" style="font-size:18px;padding:8px 18px" @click="openDeletedBatchQuery">批量查询</button>
+            <button class="sample-btn sample-btn-ghost" style="font-size:20px;padding:10px 24px;" @click="showRestoreDeletedModal = false">关闭</button>
           </div>
-          <vxe-grid ref="deletedGridRef" :columns="deletedGridColumns" :data="deletedData" :loading="deletedLoading"
+        </div>
+        <div class="batch-image-modal-body" style="padding:16px 24px;flex:1;overflow:hidden;display:flex;flex-direction:column;">
+          <vxe-grid id="deletedGrid" ref="deletedGridRef" :columns="deletedGridColumns" :data="deletedData" :loading="deletedLoading"
+            height="100%"
             :checkbox-config="{ highlight: true, range: true }"
-            :pager-config="{ enabled: true, pageSize: 1000, pageSizes: [100, 500, 1000, 2000, 5000], layouts: ['Total', 'PrevJump', 'PrevPage', 'Number', 'NextPage', 'NextJump', 'Sizes', 'FullJump'] }"
-            :toolbar-config="{ custom: true, refresh: true, zoom: true, slots: { buttons: 'deletedToolbarBtns' } }"
+            :pager-config="{ enabled: true, pageSize: 50, pageSizes: [50, 100, 200, 500], layouts: ['Total', 'PrevPage', 'PrevJump', 'Number', 'NextPage', 'NextJump', 'Sizes', 'FullJump'] }"
+            :toolbar-config="{ custom: true }"
             :column-config="{ resizable: true, drag: true }"
-            :sort-config="{ multiple: true, remote: false, sortMethod: deletedSortMethod }"
+            :sort-config="{ trigger: 'header', remote: false, sortMethod: deletedSortMethod }"
             :row-config="{ isHover: true, keyField: 'id' }"
-            :cell-config="{ height: 44 }"
-            :scroll-y="{ enabled: true, gt: 0, oSize: 0, rSize: 60, rHeight: 44 }"
-            :virtual-y-config="{ enabled: true, gt: 0 }"
-            :optimization="{ animat: false, delayHover: 300, scrollX: { gt: 0, oSize: 0, rSize: 24 }, scrollY: { gt: 0, oSize: 0, rSize: 60, rHeight: 44 } }"
+            :cell-config="{ height: 80 }"
+            :virtual-y-config="{ enabled: true }"
+            :scroll-y="{ enabled: true, gt: 0, oSize: 0 }"
+            :scroll-x="{ enabled: true, gt: 0, oSize: 0 }"
+            :optimization="{ animat: false, delayHover: 300, scrollX: { gt: 0, oSize: 0 }, scrollY: { gt: 0, oSize: 0, rSize: 80, rHeight: 80 } }"
             :border="true"
-            :header-cell-style="{ background: '#ffffff', borderColor: '#a0bddb', color: '#1d1d1f', fontWeight: 600, textAlign: 'center' }"
-            :cell-style="{ textAlign: 'center' }"
-            :max-height="deletedGridMaxHeight"
-            style="flex:1;min-height:0"
-            @checkbox-change="onDeletedCheckChange" @checkbox-all="onDeletedCheckChange"
-            @zoom="onDeletedZoom" @toolbar-button-click="onDeletedToolbarClick">
-            <template #deletedToolbarBtns>
-              <div v-if="deletedFullscreen" style="display:flex;align-items:center;gap:6px;margin-left:8px">
-                <input v-model="deletedFullscreenSearch" placeholder="搜索全部字段..."
-                  style="width:220px;height:28px;border:1px solid #c7c7cc;border-radius:6px;padding:0 10px;font-size:12px;outline:none;transition:border-color 0.15s"
-                  @input="onDeletedFullscreenSearch" @keyup.enter="onDeletedFullscreenSearch" />
-                <button v-if="deletedFullscreenSearch"
-                  style="height:26px;padding:0 10px;font-size:11px;border-radius:4px;border:1px solid #d1d1d6;background:#f5f5f7;color:#555;cursor:pointer"
-                  @click="clearDeletedFullscreenSearch">清除</button>
-                <button
-                  style="height:28px;padding:0 12px;font-size:12px;border-radius:5px;border:1px solid #007aff;background:#007aff;color:#fff;cursor:pointer;white-space:nowrap"
-                  @click="openDeletedBatchQuery">批量查询</button>
-              </div>
-              <button class="sample-btn sample-btn-primary" style="height:30px;padding:0 16px;font-size:13px;border-radius:6px;margin-left:10px" :disabled="deletedSelected.length === 0"
-                @click="doRestoreDeleted">恢复选中 ({{ deletedSelected.length }})</button>
-            </template>
+            :header-cell-style="{ background: '#e8f0fe', borderColor: '#d0d5dd', fontSize: '16px', fontWeight: 600, textAlign: 'center', borderBottom: '2px solid #d0d5dd' }"
+            :cell-style="{ textAlign: 'center', fontSize: '15px' }"
+            @checkbox-change="onDeletedCheckChange" @checkbox-all="onDeletedCheckChange">
           </vxe-grid>
         </div>
-        <div class="modal-footer" style="border-top:none;padding:8px 16px">
-          <button class="sample-btn sample-btn-ghost" @click="showRestoreDeletedModal = false">关闭</button>
+        <div class="modal-footer" style="display:flex;align-items:center;justify-content:space-between;padding:10px 24px;border-top:1px solid #e5e5ea;">
+          <div style="display:flex;align-items:center;gap:16px;font-size:18px;color:#666;">
+            已选 <strong>{{ deletedSelected.length }}</strong> / 共 <strong>{{ deletedTotal }}</strong> 条
+          </div>
+          <button class="sample-btn sample-btn-primary" style="font-size:18px;padding:8px 28px;" :disabled="deletedSelected.length === 0"
+            @click="doRestoreDeleted">恢复选中 ({{ deletedSelected.length }})</button>
         </div>
       </div>
     </div>
@@ -480,29 +471,29 @@
     </Teleport>
 
     <Teleport to="body">
-    <div v-if="showMainBatchQuery" class="batch-image-modal-overlay" @click.self="showMainBatchQuery = false">
-      <div class="batch-image-modal" style="width:460px">
+    <div v-if="showMainBatchQuery" class="batch-image-modal-overlay import-modal-overlay" style="background:transparent">
+      <div class="batch-image-modal" style="width:900px">
         <div class="batch-image-modal-header">
           <strong>按编号批量查询</strong>
-          <button class="modal-close-btn" @click="showMainBatchQuery = false"><X :size="16" /></button>
+          <button class="modal-close-btn" @click="showMainBatchQuery = false"><X :size="22" /></button>
         </div>
-        <div class="batch-image-modal-body" style="display:flex;flex-direction:column;gap:12px">
-          <div style="display:flex;gap:16px;align-items:center">
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
-              <input type="radio" v-model="mainBatchField" value="sampleCode" style="accent-color:#007aff" />
+        <div class="batch-image-modal-body" style="display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;gap:20px;align-items:center">
+            <label style="display:flex;align-items:center;gap:8px;font-size:22px;cursor:pointer">
+              <input type="radio" v-model="mainBatchField" value="sampleCode" style="accent-color:#007aff;width:20px;height:20px" />
               公司编号
             </label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
-              <input type="radio" v-model="mainBatchField" value="factoryCode" style="accent-color:#007aff" />
+            <label style="display:flex;align-items:center;gap:8px;font-size:22px;cursor:pointer">
+              <input type="radio" v-model="mainBatchField" value="factoryCode" style="accent-color:#007aff;width:20px;height:20px" />
               出厂货号
             </label>
           </div>
           <textarea v-model="mainBatchInput" placeholder="每行一个编号，可输入多个..."
-            style="width:100%;height:180px;border:1px solid #d1d1d6;border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.6;resize:vertical;outline:none;box-sizing:border-box"
+            style="width:100%;height:360px;border:1px solid #d1d1d6;border-radius:8px;padding:14px 16px;font-size:22px;line-height:1.6;resize:vertical;outline:none;box-sizing:border-box"
           ></textarea>
-          <div style="display:flex;gap:8px;justify-content:flex-end">
-            <button class="sample-btn sample-btn-ghost" style="height:32px;padding:0 16px;font-size:13px;border-radius:6px" @click="showMainBatchQuery = false">取消</button>
-            <button class="sample-btn sample-btn-primary" style="height:32px;padding:0 20px;font-size:13px;border-radius:6px" @click="doMainBatchQuery">查询</button>
+          <div style="display:flex;gap:12px;justify-content:flex-end">
+            <button class="sample-btn sample-btn-ghost" style="height:44px;padding:0 20px;font-size:20px;border-radius:8px" @click="showMainBatchQuery = false">取消</button>
+            <button class="sample-btn sample-btn-primary" style="height:44px;padding:0 24px;font-size:20px;border-radius:8px" @click="doMainBatchQuery">查询</button>
           </div>
         </div>
       </div>
@@ -510,29 +501,29 @@
     </Teleport>
 
     <Teleport to="body">
-    <div v-if="showDeletedBatchQuery" class="batch-image-modal-overlay" @click.self="showDeletedBatchQuery = false">
-      <div class="batch-image-modal" style="width:460px">
+    <div v-if="showDeletedBatchQuery" class="batch-image-modal-overlay" style="background:transparent;backdrop-filter:none" @click.self="showDeletedBatchQuery = false">
+      <div class="batch-image-modal" style="width:600px">
         <div class="batch-image-modal-header">
-          <strong>批量查询</strong>
-          <button class="modal-close-btn" @click="showDeletedBatchQuery = false"><X :size="16" /></button>
+          <strong style="font-size:22px;">批量查询</strong>
+          <button class="sample-btn sample-btn-ghost" style="font-size:18px;padding:6px 16px;" @click="showDeletedBatchQuery = false">关闭</button>
         </div>
-        <div class="batch-image-modal-body" style="display:flex;flex-direction:column;gap:12px">
-          <div style="display:flex;gap:16px;align-items:center">
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
-              <input type="radio" v-model="deletedBatchField" value="sampleCode" style="accent-color:#007aff" />
+        <div class="batch-image-modal-body" style="display:flex;flex-direction:column;gap:16px;padding:20px 24px;">
+          <div style="display:flex;gap:24px;align-items:center">
+            <label style="display:flex;align-items:center;gap:8px;font-size:18px;cursor:pointer">
+              <input type="radio" v-model="deletedBatchField" value="sampleCode" style="accent-color:#007aff;width:18px;height:18px" />
               公司编号
             </label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
-              <input type="radio" v-model="deletedBatchField" value="factoryCode" style="accent-color:#007aff" />
+            <label style="display:flex;align-items:center;gap:8px;font-size:18px;cursor:pointer">
+              <input type="radio" v-model="deletedBatchField" value="factoryCode" style="accent-color:#007aff;width:18px;height:18px" />
               出厂货号
             </label>
           </div>
           <textarea v-model="deletedBatchInput" placeholder="每行一个编号，可输入多个..."
-            style="width:100%;height:180px;border:1px solid #d1d1d6;border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.6;resize:vertical;outline:none;box-sizing:border-box"
+            style="width:100%;height:240px;border:1px solid #d1d1d6;border-radius:8px;padding:14px 16px;font-size:18px;line-height:1.8;resize:vertical;outline:none;box-sizing:border-box"
           ></textarea>
-          <div style="display:flex;gap:8px;justify-content:flex-end">
-            <button class="sample-btn sample-btn-ghost" style="height:32px;padding:0 16px;font-size:13px;border-radius:6px" @click="showDeletedBatchQuery = false">取消</button>
-            <button class="sample-btn sample-btn-primary" style="height:32px;padding:0 20px;font-size:13px;border-radius:6px" @click="doDeletedBatchQuery">查询</button>
+          <div style="display:flex;gap:12px;justify-content:flex-end">
+            <button class="sample-btn sample-btn-ghost" style="font-size:18px;padding:8px 20px;border-radius:8px" @click="showDeletedBatchQuery = false">取消</button>
+            <button class="sample-btn sample-btn-primary" style="font-size:18px;padding:8px 24px;border-radius:8px" @click="doDeletedBatchQuery">查询</button>
           </div>
         </div>
       </div>
@@ -606,73 +597,71 @@
       </div>
     </div>
 
-    <div v-if="showScanPrintModal" class="batch-image-modal-overlay" @click.self="showScanPrintModal = false">
-      <div class="batch-image-modal scan-print-modal" style="width:760px;max-height:80vh;display:flex;flex-direction:column">
+    <div v-if="showScanPrintModal" class="batch-image-modal-overlay import-modal-overlay" style="background:transparent">
+      <div class="batch-image-modal scan-print-modal" style="width:1600px;max-height:92vh;display:flex;flex-direction:column">
         <div class="batch-image-modal-header">
-          <span>扫码打印</span>
-          <button class="modal-close-btn" @click="showScanPrintModal = false"><X :size="16" /></button>
+          <span style="font-size:28px;font-weight:700">扫码打印</span>
+          <button class="modal-close-btn" @click="showScanPrintModal = false"><X :size="28" /></button>
         </div>
-        <div class="batch-image-modal-body" style="flex:1;overflow-y:auto;padding:16px 20px">
-          <div style="display:flex;gap:20px;margin-bottom:16px">
-            <div style="flex-shrink:0;width:320px">
-              <label style="font-size:13px;font-weight:600;color:#1d1d1f;display:block;margin-bottom:6px">公司编号</label>
-              <div style="display:flex;gap:8px">
+        <div class="batch-image-modal-body" style="flex:1;overflow-y:auto;padding:28px 32px">
+          <div style="display:flex;gap:32px;margin-bottom:20px">
+            <div style="flex-shrink:0;width:520px">
+              <label style="font-size:28px;font-weight:600;color:#1d1d1f;display:block;margin-bottom:10px">公司编号</label>
+              <div style="display:flex;gap:12px">
                 <input type="text" ref="scanPrintInputRef" v-model="scanPrintCode" placeholder="输入或扫码公司编号..."
-                  style="flex:1;height:38px;border-radius:10px;border:1px solid rgba(0,122,255,0.2);outline:none;padding:0 12px;font-size:14px;font-weight:600;color:#1d1d1f;"
+                  style="flex:1;height:60px;border-radius:12px;border:1px solid rgba(0,122,255,0.2);outline:none;padding:0 18px;font-size:28px;font-weight:600;color:#1d1d1f;"
                   @keyup.enter="searchScanPrint" />
-                <button class="sample-btn sample-btn-blue" style="height:38px;font-size:13px" @click="searchScanPrint">查询</button>
+                <button class="sample-btn sample-btn-blue" style="height:60px;font-size:26px;padding:0 24px" @click="searchScanPrint">查询</button>
               </div>
-              <div style="margin-top:8px;display:flex;align-items:center;gap:6px">
-                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;color:rgba(29,29,31,0.6);user-select:none" @click="scanPrintContinuous = !scanPrintContinuous">
-                  <span style="width:16px;height:16px;border-radius:4px;border:2px solid;display:flex;align-items:center;justify-content:center;transition:all 0.15s"
+              <div style="margin-top:12px;display:flex;align-items:center;gap:8px">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:24px;color:rgba(29,29,31,0.6);user-select:none" @click="scanPrintContinuous = !scanPrintContinuous">
+                  <span style="width:28px;height:28px;border-radius:6px;border:2px solid;display:flex;align-items:center;justify-content:center;transition:all 0.15s"
                     :style="scanPrintContinuous ? 'background:#007aff;border-color:#007aff;color:#fff' : 'border-color:rgba(29,29,31,0.25)'">
-                    <span v-if="scanPrintContinuous" style="font-size:10px;line-height:1">✓</span>
+                    <span v-if="scanPrintContinuous" style="font-size:16px;line-height:1">✓</span>
                   </span>
                   连续打印（查询后自动打印）
                 </label>
               </div>
-              <div v-if="scanPrintResult" style="margin-top:14px;padding:14px;border-radius:12px;border:1px solid rgba(0,122,255,0.12);background:rgba(0,122,255,0.03)">
-                <div style="font-size:14px;font-weight:700;color:#1d1d1f;margin-bottom:8px">{{ scanPrintResult.sampleCode || '-' }}</div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;color:rgba(29,29,31,0.7)">
+              <div v-if="scanPrintResult" style="margin-top:20px;padding:22px;border-radius:14px;border:1px solid rgba(0,122,255,0.12);background:rgba(0,122,255,0.03)">
+                <div style="font-size:28px;font-weight:700;color:#1d1d1f;margin-bottom:12px">{{ scanPrintResult.sampleCode || '-' }}</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:24px;color:rgba(29,29,31,0.7)">
                   <div><span style="color:rgba(29,29,31,0.4)">出厂货号：</span>{{ scanPrintResult.factoryCode || scanPrintResult.packageCode || '-' }}</div>
-                  <div><span style="color:rgba(29,29,31,0.4)">摊位号：</span>{{ scanPrintResult.boothNo || '-' }}</div>
+                  <div><span style="color:rgba(29,29,31,0.4)">摊位号：</span><span style="color:#007aff;font-weight:600">{{ scanPrintResult.boothNo || '-' }}</span></div>
                   <div><span style="color:rgba(29,29,31,0.4)">中文包装：</span>{{ scanPrintResult.packagingCn || '-' }}</div>
                   <div><span style="color:rgba(29,29,31,0.4)">内盒/装箱：</span>{{ scanPrintResult.innerBoxCount != null ? scanPrintResult.innerBoxCount : '0' }}/{{ scanPrintResult.cartonCapacity || '-' }}</div>
                 </div>
-                <div style="margin-top:6px;font-size:12px;color:rgba(29,29,31,0.7)">
+                <div style="margin-top:10px;font-size:24px;color:rgba(29,29,31,0.7)">
                   <span style="color:rgba(29,29,31,0.4)">样品名称：</span>{{ scanPrintResult.sampleName || '-' }}
                 </div>
               </div>
-              <div v-if="scanPrintError" style="margin-top:14px;padding:10px 14px;border-radius:10px;background:rgba(255,59,48,0.06);color:#ff3b30;font-size:13px;font-weight:600">
+              <div v-if="scanPrintError" style="margin-top:20px;padding:16px 22px;border-radius:12px;background:rgba(255,59,48,0.06);color:#ff3b30;font-size:26px;font-weight:600">
                 {{ scanPrintError }}
               </div>
             </div>
-            <div style="flex:1;display:flex;align-items:center;justify-content:center;border-radius:12px;border:1px solid rgba(0,122,255,0.12);min-height:240px;background:rgba(0,0,0,0.02)">
-              <div v-if="scanPrintImageSrc" style="padding:12px">
-                <img :src="scanPrintImageSrc" style="max-width:100%;max-height:280px;object-fit:contain;border-radius:8px" />
-              </div>
-              <div v-else style="text-align:center;color:rgba(29,29,31,0.3);font-size:14px">
-                <ImageIcon :size="48" style="margin-bottom:8px;opacity:0.3" />
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;border-radius:14px;border:1px solid rgba(0,122,255,0.12);min-height:600px;background:rgba(0,0,0,0.02);padding:20px;box-sizing:border-box">
+              <img v-if="scanPrintImageSrc" :src="scanPrintImageSrc" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:10px" />
+              <div v-else style="text-align:center;color:rgba(29,29,31,0.3);font-size:26px">
+                <ImageIcon :size="80" style="margin-bottom:12px;opacity:0.3" />
                 <div>输入公司编号查询后显示图片</div>
               </div>
             </div>
           </div>
 
-          <div v-if="scanPrintResult || scanPrintContinuous" style="border-top:1px solid rgba(0,122,255,0.08);padding-top:14px;display:flex;align-items:center;justify-content:space-between">
-            <div style="display:flex;align-items:center;gap:16px">
+          <div v-if="scanPrintResult || scanPrintContinuous" style="border-top:1px solid rgba(0,122,255,0.08);padding-top:20px;display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:20px">
               <label class="radio-item-mp" :class="{active:scanPrintType==='barcode'}" @click="scanPrintType='barcode'">
                 <span class="radio-dot"></span> 大条码 (50×40mm)
               </label>
               <label class="radio-item-mp" :class="{active:scanPrintType==='quarter'}" @click="scanPrintType='quarter'">
                 <span class="radio-dot"></span> 小条码 (25×25mm)
               </label>
-              <div style="display:flex;align-items:center;gap:6px;margin-left:4px">
-                <label style="font-size:12px;font-weight:600;color:rgba(29,29,31,0.5);white-space:nowrap">打印张数</label>
+              <div style="display:flex;align-items:center;gap:10px;margin-left:4px">
+                <label style="font-size:26px;font-weight:600;color:rgba(29,29,31,0.5);white-space:nowrap">打印张数</label>
                 <input type="number" v-model.number="scanPrintCount" min="1" max="99"
-                  style="width:60px;height:32px;border-radius:8px;border:1px solid rgba(0,122,255,0.2);outline:none;text-align:center;font-size:13px;font-weight:600;color:#007aff;padding:0 4px" />
+                  style="width:100px;height:56px;border-radius:10px;border:1px solid rgba(0,122,255,0.2);outline:none;text-align:center;font-size:28px;font-weight:600;color:#007aff;padding:0 8px" />
               </div>
             </div>
-            <button class="sample-btn sample-btn-primary" @click="doScanPrint">立即打印</button>
+            <button class="sample-btn sample-btn-primary" style="font-size:24px;height:56px;padding:0 32px" @click="doScanPrint">立即打印</button>
           </div>
         </div>
       </div>
@@ -680,11 +669,11 @@
     </Teleport>
 
     <Teleport to="body">
-    <div v-if="showBatchVideoModal" class="batch-image-modal-overlay" @click.self="closeBatchVideoModal">
-      <div class="batch-image-modal">
+    <div v-if="showBatchVideoModal" class="batch-image-modal-overlay import-modal-overlay">
+       <div class="batch-image-modal" style="width:1400px">
         <div class="batch-image-modal-header">
           <strong>批量导入视频</strong>
-          <button class="modal-close-btn" @click="closeBatchVideoModal"><X :size="16" /></button>
+          <button class="modal-close-btn" @click="closeBatchVideoModal"><X :size="22" /></button>
         </div>
         <div class="batch-image-modal-body">
           <div class="upload-type-group">
@@ -736,33 +725,33 @@
             @dragleave="onDragLeave"
             @drop.prevent="onVideoDrop"
           >
-            <div class="upload-icon"><VideoIcon :size="48" /></div>
+            <div class="upload-icon"><VideoIcon :size="64" /></div>
             <div class="upload-text">点击或拖拽上传视频文件</div>
             <div class="upload-hint" v-if="batchVideoType !== 'custom'">支持 MP4 / MOV，文件名需包含编号</div>
             <div class="upload-hint" v-else>支持 MP4 / MOV，视频将按顺序与输入的编号匹配</div>
             <input ref="batchVideoFileInput" type="file" accept=".mp4,.mov,.MP4,.MOV" multiple hidden @change="onVideoFileChange" />
           </div>
 
-          <div v-if="videoMatchLoading" style="text-align:center;padding:20px;color:#999">正在匹配样品...</div>
+          <div v-if="videoMatchLoading" style="text-align:center;padding:24px;color:#999;font-size:20px">正在匹配样品...</div>
 
           <div v-else-if="batchVideoMatched.length > 0" class="batch-match-results">
             <div class="batch-nav">
               <button class="batch-nav-btn" :disabled="videoCurrentIndex === 0" @click="goToVideoPrev">
-                <ChevronLeft :size="18" />
+                <ChevronLeft :size="22" />
               </button>
               <span class="batch-nav-counter">第 {{ videoCurrentIndex + 1 }} / {{ batchVideoMatched.length }} 项</span>
               <button class="batch-nav-btn" :disabled="videoCurrentIndex >= batchVideoMatched.length - 1" @click="goToVideoNext">
-                <ChevronRight :size="18" />
+                <ChevronRight :size="22" />
               </button>
             </div>
 
             <div class="batch-match-card-single">
               <template v-if="batchVideoMatched[videoCurrentIndex].matched">
-                <div style="width:100%;max-height:240px;background:#000;border-radius:8px;overflow:hidden;margin-bottom:12px">
+                <div style="width:100%;max-height:420px;background:#000;border-radius:8px;overflow:hidden;margin-bottom:12px">
                   <video
                     :src="batchVideoMatched[videoCurrentIndex].previewUrl"
                     controls
-                    style="width:100%;max-height:240px;display:block"
+                    style="width:100%;max-height:420px;display:block"
                     preload="metadata"
                   ></video>
                 </div>
@@ -776,14 +765,14 @@
                   <button class="sample-btn sample-btn-ghost bmc-btn" :class="{ active: batchVideoMatched[videoCurrentIndex].action === 'skip' }" @click="batchVideoMatched[videoCurrentIndex].action = 'skip'">跳过</button>
                   <button class="sample-btn sample-btn-ghost bmc-btn" :class="{ active: batchVideoMatched[videoCurrentIndex].action === 'cover' }" @click="batchVideoMatched[videoCurrentIndex].action = 'cover'">覆盖</button>
                   <button class="sample-btn sample-btn-ghost bmc-btn" :class="{ active: batchVideoMatched[videoCurrentIndex].action === 'append' }" @click="batchVideoMatched[videoCurrentIndex].action = 'append'">追加</button>
-                  <span class="bmc-remove" @click="removeVideoFile(videoCurrentIndex)"><X :size="14" /></span>
+                  <span class="bmc-remove" @click="removeVideoFile(videoCurrentIndex)"><X :size="18" /></span>
                 </div>
               </template>
               <template v-else>
                 <div class="bmc-unmatched">
-                  <ImageIcon :size="20" />
+                  <ImageIcon :size="28" />
                   <span>{{ batchVideoMatched[videoCurrentIndex].file.name }} — 未匹配到样品</span>
-                  <span class="bmc-remove" @click="removeVideoFile(videoCurrentIndex)"><X :size="14" /></span>
+                  <span class="bmc-remove" @click="removeVideoFile(videoCurrentIndex)"><X :size="18" /></span>
                 </div>
               </template>
             </div>
@@ -803,7 +792,7 @@
         <div class="modal-footer">
           <button class="sample-btn sample-btn-ghost" @click="closeBatchVideoModal">取消</button>
           <button class="sample-btn sample-btn-primary" :disabled="batchVideoMatched.filter(m => m.matched && m.action !== 'skip').length === 0 || videoUploading" @click="doBatchVideoUpload">
-            <Upload :size="14" /> {{ videoUploading ? `上传中 ${videoUploadProgress.done}/${videoUploadProgress.total} (成功${videoUploadProgress.success} 失败${videoUploadProgress.fail})` : `开始上传 (${batchVideoMatched.filter(m => m.matched && m.action !== 'skip').length})` }}
+            <Upload :size="18" /> {{ videoUploading ? `上传中 ${videoUploadProgress.done}/${videoUploadProgress.total} (成功${videoUploadProgress.success} 失败${videoUploadProgress.fail})` : `开始上传 (${batchVideoMatched.filter(m => m.matched && m.action !== 'skip').length})` }}
           </button>
         </div>
         <div v-if="videoUploading" class="video-upload-progress-bar">
@@ -872,8 +861,8 @@
 
     <Teleport to="body">
     <div v-if="showImagePreview" class="image-preview-overlay" @click.self="showImagePreview = false">
-      <div class="image-preview-dialog" :class="{ 'ip-dragover': ipDragOver }" @dragenter.prevent="ipDragOver = true" @dragover.prevent="handlePreviewDragOver" @dragleave="handlePreviewDragLeave" @drop="handlePreviewDrop">
-        <div v-if="ipDragOver" class="ip-drag-hint">
+      <div class="image-preview-dialog" :class="{ 'ip-dragover': ipDragOver && !ipUploadLocked }" @dragenter.prevent="onIpDragEnter" @dragover.prevent="onIpDragOver" @dragleave="handlePreviewDragLeave" @drop="onIpDrop">
+        <div v-if="ipDragOver && !ipUploadLocked" class="ip-drag-hint">
           <div class="ip-drag-hint-icon"><ImagePlus :size="48" /></div>
           <div class="ip-drag-hint-text">释放鼠标以上传图片</div>
         </div>
@@ -884,6 +873,11 @@
             <span class="ip-count" v-if="imagePreviewList.length > 1">{{ imagePreviewIndex + 1 }} / {{ imagePreviewList.length }}</span>
           </div>
           <div class="ip-header-right">
+            <!-- 上传锁 -->
+            <button class="ip-lock-btn" :class="{ locked: ipUploadLocked }" @click="ipUploadLocked = !ipUploadLocked" :title="ipUploadLocked ? '点击解锁拖拽上传' : '点击锁定拖拽上传'">
+              <Lock v-if="ipUploadLocked" :size="14" />
+              <Unlock v-else :size="14" />
+            </button>
             <label class="ip-upload-btn" :class="{ disabled: ipUploading }" :title="ipUploading ? '上传中...' : '上传图片'">
               <ImagePlus :size="15" /> {{ ipUploading ? `上传中 ${ipUploadDone}/${ipUploadTotal}` : '上传' }}
               <input type="file" accept="image/*" multiple hidden @change="onPreviewUpload" :disabled="ipUploading" />
@@ -900,8 +894,13 @@
           </div>
         </div>
         <div class="ip-body">
-          <div class="ip-main">
-            <img :src="currentPreviewSrc" />
+          <div class="ip-main" @wheel.prevent="onIpWheel" @mousemove="onIpMouseMove" @mouseup="onIpMouseUp" @mouseleave="onIpMouseUp">
+            <img :src="currentPreviewSrc"
+                 draggable="false"
+                 @dragstart.prevent
+                 @mousedown="onIpMouseDown"
+                 @click.stop
+                 :style="{ transform: `translate(${ipPanX}px, ${ipPanY}px) scale(${ipZoom})`, cursor: ipZoom <= 1 ? 'pointer' : 'grab' }" />
             <button v-if="imagePreviewList.length > 1" class="ip-nav ip-prev" @click="imagePreviewIndex = imagePreviewIndex > 0 ? imagePreviewIndex - 1 : imagePreviewList.length - 1"><ChevronLeft :size="24" /></button>
             <button v-if="imagePreviewList.length > 1" class="ip-nav ip-next" @click="imagePreviewIndex = imagePreviewIndex < imagePreviewList.length - 1 ? imagePreviewIndex + 1 : 0"><ChevronRight :size="24" /></button>
           </div>
@@ -929,6 +928,13 @@
         <div class="ip-footer">
           <span class="ip-name">{{ imagePreviewList[imagePreviewIndex]?.originalName || '图片' }}</span>
           <span class="ip-info" v-if="imagePreviewList[imagePreviewIndex]?.fileSize">{{ formatFileSize(imagePreviewList[imagePreviewIndex].fileSize) }}</span>
+          <!-- 缩放工具栏 -->
+          <div class="ip-zoom-bar" v-if="imagePreviewList.length > 0">
+            <span class="ip-zoom-label">{{ Math.round(ipZoom * 100) }}%</span>
+            <button class="ip-zoom-btn" @click="ipZoom = Math.min(5, +(ipZoom + 0.25).toFixed(2))">＋</button>
+            <button class="ip-zoom-btn" @click="ipZoom = Math.max(0.3, +(ipZoom - 0.25).toFixed(2))">－</button>
+            <button class="ip-zoom-btn" @click="ipZoom = 1; ipPanX = 0; ipPanY = 0">1:1</button>
+          </div>
         </div>
       </div>
     </div>
@@ -937,10 +943,17 @@
     <Teleport to="body">
     <div v-if="showPhotoModal" class="sample-photo-modal" :style="photoModalStyle">
       <div class="spm-header" @mousedown="startDragModal">
-        <span class="spm-header-title">照片预览</span>
+        <span class="spm-header-title">样品信息预览</span>
         <button class="spm-header-close" @click="closePhotoModal">&times;</button>
       </div>
       <div class="spm-body">
+        <div class="spm-top-card" v-if="photoModalSample" style="display:none">
+          <div class="spm-top-card-field"><span>样品名称</span><strong>{{ photoModalSample.sampleName || '-' }}</strong></div>
+          <div class="spm-top-card-field"><span>公司编号</span><strong>{{ photoModalSample.sampleCode || '-' }}</strong></div>
+          <div class="spm-top-card-field"><span>出厂货号</span><strong>{{ photoModalSample.factoryCode || '-' }}</strong></div>
+          <div class="spm-top-card-field" v-if="!hideFactoryPrice"><span>出厂价</span><strong class="spm-price">{{ photoModalSample.factoryPrice || '-' }}</strong></div>
+        </div>
+        <div class="spm-body-main">
         <div class="spm-body-left">
           <div class="spm-main-img-wrap">
             <img v-if="photoModalImages.length > 0"
@@ -948,7 +961,8 @@
                  :data-thumb="photoModalImages[photoModalIndex]?.thumbnailPath"
                  @error="onModalImgError"
                  @click="openFullPreview"
-                 style="cursor:pointer" />
+                 draggable="true" @dragstart="onSampleImgDragStart"
+                 style="cursor:pointer;-webkit-user-drag:element" />
             <span v-else class="spm-no-img">无图片</span>
             <button v-if="photoModalImages.length > 1" class="spm-main-img-nav spm-main-img-prev" @click="photoModalPrev">&#10094;</button>
             <button v-if="photoModalImages.length > 1" class="spm-main-img-nav spm-main-img-next" @click="photoModalNext">&#10095;</button>
@@ -961,7 +975,7 @@
               :class="{ active: idx === photoModalIndex }"
               @click="photoModalIndex = idx"
             >
-              <img :src="img.thumbnailPath ? '/thumbnails/' + img.thumbnailPath : ''" />
+              <img :src="img.thumbnailPath ? '/thumbnails/' + img.thumbnailPath : ''" draggable="true" @dragstart="onSampleImgDragStart" style="-webkit-user-drag:element" />
             </div>
           </div>
         </div>
@@ -973,16 +987,13 @@
               <div class="spm-field"><span class="spm-field-label">出厂货号</span><span class="spm-field-value" :title="photoModalSample.factoryCode || '-'">{{ photoModalSample.factoryCode || '-' }}</span></div>
             </div>
             <div class="spm-field-row" :class="{ 'spm-hidden': hideFactoryPrice }">
-              <div class="spm-field" v-if="!hideTaxPrice || !hideFactoryPrice"><span class="spm-field-label">出厂价</span><span class="spm-field-value spm-price" :title="photoModalSample.factoryPrice || '-'">{{ photoModalSample.factoryPrice || '-' }}</span></div>
-              <div class="spm-field" v-if="!hideTaxPrice"><span class="spm-field-label">报出价</span><span class="spm-field-value spm-price" :title="photoModalSample.taxPrice || '-'">{{ photoModalSample.taxPrice || '-' }}</span></div>
-            </div>
-            <div class="spm-field-row">
+              <div class="spm-field" v-if="!hideFactoryPrice"><span class="spm-field-label">出厂价</span><span class="spm-field-value spm-price" :title="photoModalSample.factoryPrice || '-'">{{ photoModalSample.factoryPrice || '-' }}</span></div>
               <div class="spm-field"><span class="spm-field-label">包装方式</span><span class="spm-field-value" :title="photoModalSample.packagingCn || '-'">{{ photoModalSample.packagingCn || '-' }}</span></div>
               <div class="spm-field"><span class="spm-field-label">内盒/装箱量</span><span class="spm-field-value" :title="(photoModalSample.innerBoxCount != null ? photoModalSample.innerBoxCount : '0') + ' / ' + (photoModalSample.cartonCapacity||'-')">{{ (photoModalSample.innerBoxCount != null ? photoModalSample.innerBoxCount : '0') + ' / ' + (photoModalSample.cartonCapacity||'-') }}</span></div>
             </div>
             <div class="spm-field-row">
               <div class="spm-field"><span class="spm-field-label">外箱规格</span><span class="spm-field-value" :title="fmt3(photoModalSample.cartonLength,photoModalSample.cartonWidth,photoModalSample.cartonHeight)+' CM'">{{ fmt3(photoModalSample.cartonLength,photoModalSample.cartonWidth,photoModalSample.cartonHeight) }} CM</span></div>
-              <div class="spm-field"><span class="spm-field-label">外箱毛/净重</span><span class="spm-field-value" :title="(photoModalSample.cartonGrossWeight||'-')+' / '+(photoModalSample.cartonNetWeight||'-')+' KG'">{{ (photoModalSample.cartonGrossWeight||'-') + ' / ' + (photoModalSample.cartonNetWeight||'-') + ' KG' }}</span></div>
+              <div class="spm-field"><span class="spm-field-label">外箱毛/净重</span><span class="spm-field-value" :title="(photoModalSample.cartonGrossWeight||'0')+' / '+(photoModalSample.cartonNetWeight||'0')+' KG'">{{ (photoModalSample.cartonGrossWeight||'0') + ' / ' + (photoModalSample.cartonNetWeight||'0') + ' KG' }}</span></div>
             </div>
             <div class="spm-field-row">
               <div class="spm-field"><span class="spm-field-label">包装规格</span><span class="spm-field-value" :title="fmt3(photoModalSample.packageLength,photoModalSample.packageWidth,photoModalSample.packageHeight)+' CM'">{{ fmt3(photoModalSample.packageLength,photoModalSample.packageWidth,photoModalSample.packageHeight) }} CM</span></div>
@@ -990,7 +1001,7 @@
             </div>
             <div class="spm-field-row">
               <div class="spm-field"><span class="spm-field-label">产品规格</span><span class="spm-field-value" :title="fmt3(photoModalSample.sampleLength,photoModalSample.sampleWidth,photoModalSample.sampleHeight)+' CM'">{{ fmt3(photoModalSample.sampleLength,photoModalSample.sampleWidth,photoModalSample.sampleHeight) }} CM</span></div>
-              <div class="spm-field"><span class="spm-field-label">产品毛/净重</span><span class="spm-field-value" :title="(photoModalSample.sampleGrossWeight||'-')+' / '+(photoModalSample.sampleNetWeight||'-')+' KG'">{{ (photoModalSample.sampleGrossWeight||'-') + ' / ' + (photoModalSample.sampleNetWeight||'-') + ' KG' }}</span></div>
+              <div class="spm-field"><span class="spm-field-label">产品毛/净重</span><span class="spm-field-value" :title="(photoModalSample.sampleGrossWeight||'0')+' / '+(photoModalSample.sampleNetWeight||'0')+' KG'">{{ (photoModalSample.sampleGrossWeight||'0') + ' / ' + (photoModalSample.sampleNetWeight||'0') + ' KG' }}</span></div>
             </div>
             <div class="spm-field-row">
               <div class="spm-field"><span class="spm-field-label">体积/材积</span><span class="spm-field-value" :title="(photoModalSample.cartonVolume||'-')+' / '+(photoModalSample.cartonMaterialVolume||'-')">{{ (photoModalSample.cartonVolume||'-') + ' / ' + (photoModalSample.cartonMaterialVolume||'-') }}</span></div>
@@ -1003,14 +1014,14 @@
               <div class="spm-section-title">厂商信息</div>
               <div class="spm-field-row">
                 <div class="spm-field"><span class="spm-field-label">厂商编号</span><span class="spm-field-value" :title="photoModalSample.manufacturerCode || '-'">{{ photoModalSample.manufacturerCode || '-' }}</span></div>
-                <div class="spm-field"><span class="spm-field-label">厂商名称</span><span class="spm-field-value" :title="photoModalSample.supplier || '-'">{{ photoModalSample.supplier || '-' }}</span></div>
+                <div class="spm-field"><span class="spm-field-label">厂商名称</span><span class="spm-field-value" :title="photoModalSample.name || '-'">{{ photoModalSample.name || '-' }}</span></div>
               </div>
               <div class="spm-field-row">
-                <div class="spm-field"><span class="spm-field-label">联系人</span><span class="spm-field-value" :title="photoModalSample.contactPerson || '-'">{{ photoModalSample.contactPerson || '-' }}</span></div>
-                <div class="spm-field"><span class="spm-field-label">电话</span><span class="spm-field-value" :title="photoModalSample.contactPhone || '-'">{{ photoModalSample.contactPhone || '-' }}</span></div>
+                <div class="spm-field"><span class="spm-field-label">联系人</span><span class="spm-field-value" :title="photoModalSample.contact1 || '-'">{{ photoModalSample.contact1 || '-' }}</span></div>
+                <div class="spm-field"><span class="spm-field-label">电话</span><span class="spm-field-value" :title="photoModalSample.phone1 || '-'">{{ photoModalSample.phone1 || '-' }}</span></div>
               </div>
               <div class="spm-field-row">
-                <div class="spm-field"><span class="spm-field-label">手机</span><span class="spm-field-value" :title="photoModalSample.mobile || '-'">{{ photoModalSample.mobile || '-' }}</span></div>
+                <div class="spm-field"><span class="spm-field-label">手机</span><span class="spm-field-value" :title="photoModalSample.mobile1 || '-'">{{ photoModalSample.mobile1 || '-' }}</span></div>
                 <div class="spm-field"><span class="spm-field-label">QQ</span><span class="spm-field-value" :title="photoModalSample.qq || '-'">{{ photoModalSample.qq || '-' }}</span></div>
               </div>
             </template>
@@ -1019,16 +1030,15 @@
           <template v-else>
             <div class="spm-field-row"><div class="spm-field spm-field-full"><span class="spm-field-label">样品名称</span><input class="spm-input" v-model="editData.sampleName" /></div></div>
             <div class="spm-field-row">
-              <div class="spm-field"><span class="spm-field-label">公司编号</span><span class="spm-input-ro">{{ photoModalSample.sampleCode || '-' }}</span></div>
+              <div class="spm-field"><span class="spm-field-label">公司编号</span><input class="spm-input spm-input-ro" :value="photoModalSample.sampleCode || '-'" readonly /></div>
               <div class="spm-field"><span class="spm-field-label">出厂货号</span><input class="spm-input" v-model="editData.factoryCode" /></div>
             </div>
             <div class="spm-field-row">
               <div class="spm-field"><span class="spm-field-label">出厂价</span><input class="spm-input" v-model="editData.factoryPrice" /></div>
-              <div class="spm-field"><span class="spm-field-label">报出价</span><input class="spm-input" v-model="editData.taxPrice" /></div>
+              <div class="spm-field"><span class="spm-field-label">包装方式</span><input class="spm-input" v-model="editData.packagingCn" /></div>
             </div>
             <div class="spm-field-row">
-              <div class="spm-field"><span class="spm-field-label">包装方式</span><input class="spm-input" v-model="editData.packagingCn" /></div>
-              <div class="spm-field"><span class="spm-field-label">内盒</span><input class="spm-input spm-input-sm" v-model="editData.innerBoxCount" /><span class="spm-field-label">/ 装入</span><input class="spm-input spm-input-sm" v-model="editData.cartonCapacity" /></div>
+              <div class="spm-field"><span class="spm-field-label">内盒</span><input class="spm-input spm-input-sm" v-model="editData.innerBoxCount" /><span class="spm-field-label">装箱量</span><input class="spm-input spm-input-sm" v-model="editData.cartonCapacity" /></div>
             </div>
             <div class="spm-field-row">
               <div class="spm-field"><span class="spm-field-label">外箱规格</span><span class="spm-field-dim"><input class="spm-input spm-input-sm" v-model="editData.cartonLength" @input="onEditCartonInput" /> x <input class="spm-input spm-input-sm" v-model="editData.cartonWidth" @input="onEditCartonInput" /> x <input class="spm-input spm-input-sm" v-model="editData.cartonHeight" @input="onEditCartonInput" /> CM</span></div>
@@ -1043,37 +1053,37 @@
               <div class="spm-field"><span class="spm-field-label">毛/净</span><input class="spm-input spm-input-sm" v-model="editData.sampleGrossWeight" /><span class="spm-field-label">/</span><input class="spm-input spm-input-sm" v-model="editData.sampleNetWeight" /> KG</div>
             </div>
             <div class="spm-field-row">
-              <div class="spm-field"><span class="spm-field-label">体积</span><input class="spm-input spm-input-sm" v-model="editData.cartonVolume" /><span class="spm-field-label">/ 材积</span><input class="spm-input spm-input-sm" v-model="editData.cartonMaterialVolume" /></div>
+              <div class="spm-field"><span class="spm-field-label">体积</span><input class="spm-input spm-input-sm" v-model="editData.cartonVolume" /><span class="spm-field-label">材积</span><input class="spm-input spm-input-sm" v-model="editData.cartonMaterialVolume" /></div>
               <div class="spm-field"><span class="spm-field-label">电池信息</span><input class="spm-input" v-model="editData.batteryInfo" /></div>
             </div>
-            <div class="spm-field-row"><div class="spm-field spm-field-full"><span class="spm-field-label">摊位号</span><span class="spm-input-ro">{{ photoModalSample.boothNo || '-' }}</span></div></div>
+            <div class="spm-field-row"><div class="spm-field spm-field-full"><span class="spm-field-label">摊位号</span><input class="spm-input spm-input-ro" :value="photoModalSample.boothNo || '-'" readonly /></div></div>
             <div class="spm-field-row"><div class="spm-field spm-field-full"><span class="spm-field-label">产品认证</span><input class="spm-input" v-model="editData.certification" /></div></div>
             <div class="spm-field-row"><div class="spm-field spm-field-full"><span class="spm-field-label">中文备注</span><input class="spm-input" v-model="editData.remark" /></div></div>
             <template v-if="!hideSupplierInfo">
               <div class="spm-section-title">厂商信息</div>
               <div class="spm-field-row">
-                <div class="spm-field"><span class="spm-field-label">厂商编号</span><span class="spm-input-ro">{{ photoModalSample.manufacturerCode || '-' }}</span></div>
-                <div class="spm-field"><span class="spm-field-label">厂商名称</span><span class="spm-input-ro">{{ photoModalSample.supplier || '-' }}</span></div>
+                <div class="spm-field"><span class="spm-field-label">厂商编号</span><input class="spm-input spm-input-ro" :value="photoModalSample.manufacturerCode || '-'" readonly /></div>
+                <div class="spm-field"><span class="spm-field-label">厂商名称</span><input class="spm-input spm-input-ro" :value="photoModalSample.name || '-'" readonly /></div>
               </div>
               <div class="spm-field-row">
-                <div class="spm-field"><span class="spm-field-label">联系人</span><input class="spm-input" v-model="editData.contactPerson" /></div>
-                <div class="spm-field"><span class="spm-field-label">电话</span><input class="spm-input" v-model="editData.contactPhone" /></div>
+                <div class="spm-field"><span class="spm-field-label">联系人</span><input class="spm-input" v-model="editData.contact1" /></div>
+                <div class="spm-field"><span class="spm-field-label">电话</span><input class="spm-input" v-model="editData.phone1" /></div>
               </div>
               <div class="spm-field-row">
-                <div class="spm-field"><span class="spm-field-label">手机</span><input class="spm-input" v-model="editData.mobile" /></div>
+                <div class="spm-field"><span class="spm-field-label">手机</span><input class="spm-input" v-model="editData.mobile1" /></div>
                 <div class="spm-field"><span class="spm-field-label">QQ</span><input class="spm-input" v-model="editData.qq" /></div>
               </div>
             </template>
           </template>
         </div>
+        </div>
       </div>
       <div class="spm-footer">
         <div class="spm-toggle-group" v-if="!editing">
           <label class="spm-toggle"><input type="checkbox" v-model="hideFactoryPrice" /> 隐藏出厂价</label>
-          <label class="spm-toggle"><input type="checkbox" v-model="hideTaxPrice" /> 隐藏报出价</label>
           <label class="spm-toggle"><input type="checkbox" v-model="hideSupplierInfo" /> 隐藏厂商信息</label>
         </div>
-        <div class="spm-toggle-group" style="gap:8px">
+        <div class="spm-toggle-group" style="gap:8px; margin-left: auto">
           <button v-if="!editing" class="spm-btn-edit" @click="startModalEdit">编辑</button>
           <template v-else>
             <button class="spm-btn-save" @click="saveModalEdit">保存</button>
@@ -1086,12 +1096,12 @@
     </Teleport>
 
     <Teleport to="body">
-    <div v-if="showImportModal" class="batch-image-modal-overlay" @click.self="showImportModal = false">
+    <div v-if="showImportModal" class="batch-image-modal-overlay import-modal-overlay">
       <div class="batch-image-modal">
         <div class="batch-image-modal-header">
           <strong>导入样品数据</strong>
           <button class="modal-close-btn" @click="showImportModal = false">
-            <X :size="16" />
+            <X :size="22" />
           </button>
         </div>
         <div class="batch-image-modal-body">
@@ -1118,11 +1128,11 @@
             </div>
             <div class="file-list-items">
               <div class="file-item">
-                <span class="file-item-icon"><FileSpreadsheet :size="14" /></span>
+                <span class="file-item-icon"><FileSpreadsheet :size="22" /></span>
                 <span class="file-item-name">{{ importFile.name }}</span>
                 <span class="file-item-size">{{ formatFileSize(importFile.size) }}</span>
                 <span class="file-item-remove" @click="importFile = null">
-                  <X :size="14" />
+                  <X :size="20" />
                 </span>
               </div>
             </div>
@@ -1136,7 +1146,7 @@
     </Teleport>
 
     <Teleport to="body">
-    <div v-if="showImportPreview" class="batch-image-modal-overlay" @click.self="cancelImportPreview">
+    <div v-if="showImportPreview" class="batch-image-modal-overlay import-preview-overlay">
       <div class="batch-image-modal import-preview-modal">
         <div class="batch-image-modal-header">
           <strong>导入预览 - {{ importFile?.name || 'Excel数据' }}</strong>
@@ -1149,8 +1159,8 @@
             <span class="import-stat">共 <strong>{{ importPreviewAllRows.length }}</strong> 条数据</span>
             <span class="import-stat">筛选后 <strong>{{ importPreviewFilteredCount }}</strong> 条</span>
             <span class="import-stat">已选 <strong>{{ importSelectedRows.length }}</strong> 条</span>
-            <button class="sample-btn sample-btn-ghost" style="font-size:11px;padding:2px 10px;height:26px" :disabled="importSelectedRows.length === 0" @click="deleteSelectedPreviewRows">
-              <Trash2 :size="13" /> 批量删除
+            <button class="sample-btn sample-btn-ghost" style="font-size:18px;padding:4px 14px;height:40px" :disabled="importSelectedRows.length === 0" @click="deleteSelectedPreviewRows">
+              <Trash2 :size="18" /> 批量删除
             </button>
           </div>
 
@@ -1159,7 +1169,7 @@
               ref="importPreviewGridRef"
               :columns="IMPORT_PREVIEW_ALL_COLUMNS"
               :data="importPreviewDisplayData"
-              :height="380"
+              :height="700"
               :auto-resize="false"
               :toolbar-config="{ custom: true, refresh: false, zoom: true, slots: { buttons: 'importPreviewToolbarBtns' } }"
               :column-config="{ resizable: true }"
@@ -1207,7 +1217,7 @@
                   />
                   <button
                     class="sample-btn sample-btn-ghost"
-                    style="font-size:12px;padding:4px 12px;height:30px"
+                    style="font-size:18px;padding:4px 14px;height:40px"
                     :disabled="importSelectedRows.length === 0 || !batchEditValue.trim()"
                     @click="batchEditRun"
                   >
@@ -1215,7 +1225,7 @@
                   </button>
                   <button
                     class="sample-btn sample-btn-ghost"
-                    style="font-size:12px;padding:4px 12px;height:30px;margin-left:4px"
+                    style="font-size:18px;padding:4px 14px;height:40px;margin-left:4px"
                     :disabled="importSelectedRows.length === 0"
                     @click="batchTranslateSelected"
                   >
@@ -1223,34 +1233,34 @@
                   </button>
                   <button
                     class="sample-btn sample-btn-ghost"
-                    style="font-size:12px;padding:4px 12px;height:30px;margin-left:4px"
+                    style="font-size:18px;padding:4px 14px;height:40px;margin-left:4px"
                     @click="batchAbandonUpdate"
                   >
                     批量放弃更新
                   </button>
-                  <span style="margin-left:12px;width:1px;height:22px;background:rgba(0,0,0,0.1)"></span>
-                  <button class="sample-btn sample-btn-ghost import-filter-btn import-filter-cat" :class="{ active: importPreviewCatFilter }" style="font-size:11px;padding:2px 10px;height:26px" @click="onTogglePreviewFilter('cat')">
-                    <AlertTriangle :size="12" /> 种类不符
+                  <span style="margin-left:12px;width:1px;height:28px;background:rgba(0,0,0,0.1)"></span>
+                  <button class="sample-btn sample-btn-ghost import-filter-btn import-filter-cat" :class="{ active: importPreviewCatFilter }" style="font-size:16px;padding:4px 14px;height:40px" @click="onTogglePreviewFilter('cat')">
+                    <AlertTriangle :size="16" /> 种类不符
                   </button>
-                  <button class="sample-btn sample-btn-ghost import-filter-btn import-filter-pkg" :class="{ active: importPreviewPkgFilter }" style="font-size:11px;padding:2px 10px;height:26px" @click="onTogglePreviewFilter('pkg')">
-                    <AlertTriangle :size="12" /> 包装不符
+                  <button class="sample-btn sample-btn-ghost import-filter-btn import-filter-pkg" :class="{ active: importPreviewPkgFilter }" style="font-size:16px;padding:4px 14px;height:40px" @click="onTogglePreviewFilter('pkg')">
+                    <AlertTriangle :size="16" /> 包装不符
                   </button>
-                  <button class="sample-btn sample-btn-ghost import-filter-btn import-filter-dup" :class="{ active: importPreviewDupFilter }" style="font-size:11px;padding:2px 10px;height:26px" @click="onTogglePreviewFilter('dup')">
-                    <ShieldAlert :size="12" /> 货号重复
+                  <button class="sample-btn sample-btn-ghost import-filter-btn import-filter-dup" :class="{ active: importPreviewDupFilter }" style="font-size:16px;padding:4px 14px;height:40px" @click="onTogglePreviewFilter('dup')">
+                    <ShieldAlert :size="16" /> 货号重复
                   </button>
                 </div>
               </template>
               <template #import_warnings="{ row }">
                 <div v-if="row._warnings && row._warnings.length > 0" style="display:flex;flex-direction:column;gap:2px;align-items:center">
-                  <span v-for="(w, wi) in row._warnings" :key="wi" style="color:#e67e22;font-size:11px;">{{ w }}</span>
+                  <span v-for="(w, wi) in row._warnings" :key="wi" style="color:#e67e22;font-size:16px;">{{ w }}</span>
                 </div>
-                <span v-else style="color:#27ae60;font-size:11px;">正常</span>
+                <span v-else style="color:#27ae60;font-size:16px;">正常</span>
               </template>
               <template #import_action="{ row }">
                 <div style="display:flex;gap:4px;justify-content:center;flex-wrap:nowrap">
-                  <button v-if="row._status === 'dup_warning'" class="sample-table-action" style="color:#27ae60;font-size:11px;padding:2px 8px;height:24px;white-space:nowrap" @click.stop="openDupDetail(row)">查看</button>
-                  <button class="sample-table-action" style="color:#007aff;font-size:11px;padding:2px 8px;height:24px;white-space:nowrap" @click.stop="restorePreviewRow(row)">还原</button>
-                  <button class="sample-table-action" style="color:#ff3b30;font-size:11px;padding:2px 8px;height:24px;white-space:nowrap" @click.stop="deletePreviewRow(row)">删除</button>
+                  <button v-if="row._status === 'dup_warning'" class="sample-table-action" style="color:#27ae60;font-size:16px;padding:4px 12px;height:36px;white-space:nowrap" @click.stop="openDupDetail(row)">查看</button>
+                  <button class="sample-table-action" style="color:#007aff;font-size:16px;padding:4px 12px;height:36px;white-space:nowrap" @click.stop="restorePreviewRow(row)">还原</button>
+                  <button class="sample-table-action" style="color:#ff3b30;font-size:16px;padding:4px 12px;height:36px;white-space:nowrap" @click.stop="deletePreviewRow(row)">删除</button>
                 </div>
               </template>
             </vxe-grid>
@@ -1258,11 +1268,11 @@
 
           <!-- 分页控件 -->
           <div class="import-preview-pager" v-if="importPreviewFilteredCount > importPreviewPageSize">
-            <button class="sample-btn sample-btn-ghost" style="font-size:11px;padding:2px 10px;height:26px" :disabled="importPreviewPage <= 1" @click="onPreviewPageChange(1)">首页</button>
-            <button class="sample-btn sample-btn-ghost" style="font-size:11px;padding:2px 10px;height:26px" :disabled="importPreviewPage <= 1" @click="onPreviewPageChange(importPreviewPage - 1)">上一页</button>
-            <span style="font-size:12px;color:#64748b;margin:0 8px">第 {{ importPreviewPage }} / {{ importPreviewTotalPages }} 页</span>
-            <button class="sample-btn sample-btn-ghost" style="font-size:11px;padding:2px 10px;height:26px" :disabled="importPreviewPage >= importPreviewTotalPages" @click="onPreviewPageChange(importPreviewPage + 1)">下一页</button>
-            <button class="sample-btn sample-btn-ghost" style="font-size:11px;padding:2px 10px;height:26px" :disabled="importPreviewPage >= importPreviewTotalPages" @click="onPreviewPageChange(importPreviewTotalPages)">末页</button>
+            <button class="sample-btn sample-btn-ghost" style="font-size:18px;padding:4px 14px;height:40px" :disabled="importPreviewPage <= 1" @click="onPreviewPageChange(1)">首页</button>
+            <button class="sample-btn sample-btn-ghost" style="font-size:18px;padding:4px 14px;height:40px" :disabled="importPreviewPage <= 1" @click="onPreviewPageChange(importPreviewPage - 1)">上一页</button>
+            <span style="font-size:20px;color:#64748b;margin:0 8px">第 {{ importPreviewPage }} / {{ importPreviewTotalPages }} 页</span>
+            <button class="sample-btn sample-btn-ghost" style="font-size:18px;padding:4px 14px;height:40px" :disabled="importPreviewPage >= importPreviewTotalPages" @click="onPreviewPageChange(importPreviewPage + 1)">下一页</button>
+            <button class="sample-btn sample-btn-ghost" style="font-size:18px;padding:4px 14px;height:40px" :disabled="importPreviewPage >= importPreviewTotalPages" @click="onPreviewPageChange(importPreviewTotalPages)">末页</button>
             <select class="import-preview-size-select" :value="importPreviewPageSize" @change="onPreviewPageSizeChange(Number($event.target.value))">
               <option :value="50">50条/页</option>
               <option :value="100">100条/页</option>
@@ -1370,8 +1380,8 @@
     </Teleport>
 
     <Teleport to="body">
-    <div v-if="showBatchImageModal" class="batch-image-modal-overlay" @click.self="closeBatchModal">
-      <div class="batch-image-modal">
+    <div v-if="showBatchImageModal" class="batch-image-modal-overlay import-modal-overlay">
+      <div class="batch-image-modal" style="width:1400px">
         <div class="batch-image-modal-header">
           <strong>批量导入图片</strong>
           <button class="modal-close-btn" @click="closeBatchModal">
@@ -1395,9 +1405,9 @@
           <div v-if="batchImageType === 'factory-code' && (manufacturerCode || (currentSample && currentSample.manufacturerCode))" class="batch-manufacturer-info">
             <span class="bm-info-label">关联厂商</span>
             <span class="bm-info-value">编号: <strong>{{ manufacturerCode || (currentSample && currentSample.manufacturerCode) }}</strong></span>
-            <span v-if="currentSample && currentSample.supplier" class="bm-info-value">名称: <strong>{{ currentSample.supplier }}</strong></span>
+            <span v-if="currentSample && currentSample.name" class="bm-info-value">名称: <strong>{{ currentSample.name }}</strong></span>
             <span v-if="currentSample && currentSample.boothNo" class="bm-info-value">摊位号: <strong>{{ currentSample.boothNo }}</strong></span>
-            <div v-if="!currentSample || !currentSample.supplier" class="bm-info-hint">请先在表格中选中一行样品以显示完整厂商信息</div>
+            <div v-if="!currentSample || !currentSample.name" class="bm-info-hint">请先在表格中选中一行样品以显示完整厂商信息</div>
           </div>
           <div v-if="batchMatched.length === 0"
             class="upload-area"
@@ -1406,7 +1416,7 @@
             @dragleave="onDragLeave"
             @drop.prevent="onBatchDrop"
           >
-            <div class="upload-icon"><ImagePlus :size="48" /></div>
+            <div class="upload-icon"><ImagePlus :size="64" /></div>
             <div class="upload-text">点击或拖拽上传图片文件</div>
             <div class="upload-hint">支持 JPG / PNG，文件名需包含编号</div>
             <input ref="batchFileInput" type="file" accept="image/*" multiple hidden @change="onBatchFileChange" />
@@ -1446,7 +1456,7 @@
                       </div>
                     </template>
                     <div v-else class="bmc-no-image">
-                      <ImageIcon :size="24" /> 暂无图片
+                      <ImageIcon :size="36" /> 暂无图片
                     </div>
                   </div>
                 </div>
@@ -1455,21 +1465,21 @@
                   <span>样品名称: <strong>{{ batchMatched[batchCurrentIndex].sampleName || '-' }}</strong></span>
                   <span>出厂货号: <strong>{{ batchMatched[batchCurrentIndex].factoryCode || '-' }}</strong></span>
                   <span>厂商编号: <strong>{{ batchMatched[batchCurrentIndex].manufacturerCode || '-' }}</strong></span>
-                  <span>厂商名称: <strong>{{ batchMatched[batchCurrentIndex].supplier || '-' }}</strong></span>
+                  <span>厂商名称: <strong>{{ batchMatched[batchCurrentIndex].name || '-' }}</strong></span>
                   <span>摊位号: <strong>{{ batchMatched[batchCurrentIndex].boothNo || '-' }}</strong></span>
                 </div>
                 <div class="bmc-actions">
                   <button class="sample-btn sample-btn-ghost bmc-btn" :class="{ active: batchMatched[batchCurrentIndex].action === 'skip' }" @click="batchMatched[batchCurrentIndex].action = 'skip'">跳过</button>
                   <button class="sample-btn sample-btn-ghost bmc-btn" :class="{ active: batchMatched[batchCurrentIndex].action === 'cover' }" @click="batchMatched[batchCurrentIndex].action = 'cover'">覆盖</button>
                   <button class="sample-btn sample-btn-ghost bmc-btn" :class="{ active: batchMatched[batchCurrentIndex].action === 'append' }" @click="batchMatched[batchCurrentIndex].action = 'append'">追加</button>
-                  <span class="bmc-remove" @click="removeBatchFile(batchCurrentIndex)"><X :size="14" /></span>
+                  <span class="bmc-remove" @click="removeBatchFile(batchCurrentIndex)"><X :size="18" /></span>
                 </div>
               </template>
               <template v-else>
                 <div class="bmc-unmatched">
-                  <ImageIcon :size="20" />
+                  <ImageIcon :size="28" />
                   <span>{{ batchMatched[batchCurrentIndex].file.name }} — 未匹配到样品</span>
-                  <span class="bmc-remove" @click="removeBatchFile(batchCurrentIndex)"><X :size="14" /></span>
+                  <span class="bmc-remove" @click="removeBatchFile(batchCurrentIndex)"><X :size="18" /></span>
                 </div>
               </template>
             </div>
@@ -1489,7 +1499,7 @@
         <div class="modal-footer">
           <button class="sample-btn sample-btn-ghost" @click="closeBatchModal">取消</button>
           <button class="sample-btn sample-btn-primary" :disabled="batchMatched.filter(m => m.matched && m.action !== 'skip').length === 0 || batchUploading" @click="doBatchImageUpload">
-            <Upload :size="14" /> {{ batchUploading ? `上传中 ${batchUploadProgress.done}/${batchUploadProgress.total} (成功${batchUploadProgress.success} 失败${batchUploadProgress.fail})` : `开始上传 (${batchMatched.filter(m => m.matched && m.action !== 'skip').length})` }}
+            <Upload :size="18" /> {{ batchUploading ? `上传中 ${batchUploadProgress.done}/${batchUploadProgress.total} (成功${batchUploadProgress.success} 失败${batchUploadProgress.fail})` : `开始上传 (${batchMatched.filter(m => m.matched && m.action !== 'skip').length})` }}
           </button>
         </div>
       </div>
@@ -1497,16 +1507,16 @@
     </Teleport>
 
     <Teleport to="body">
-    <div v-if="showAdvancedSearch" class="adv-search-overlay" @click.self="showAdvancedSearch = false">
+    <div v-if="showAdvancedSearch" class="adv-search-overlay">
       <div class="adv-search-panel">
         <div class="adv-search-body">
           <!-- Row 1 -->
           <div class="adv-field"><label>厂商编号</label><input v-model="advForm.manufacturerCode" placeholder="请输入厂商编号" /></div>
-          <div class="adv-field"><label>厂商名称</label><input v-model="advForm.supplier" placeholder="请输入厂商名称" /></div>
-          <div class="adv-field"><label>联系人</label><input v-model="advForm.contactPerson" placeholder="请输入联系人" /></div>
+          <div class="adv-field"><label>厂商名称</label><input v-model="advForm.name" placeholder="请输入厂商名称" /></div>
+          <div class="adv-field"><label>联系人</label><input v-model="advForm.contact1" placeholder="请输入联系人" /></div>
           <!-- Row 2 -->
-          <div class="adv-field"><label>电话号码</label><input v-model="advForm.contactPhone" placeholder="请输入电话号码" /></div>
-          <div class="adv-field"><label>手机号码</label><input v-model="advForm.mobile" placeholder="请输入手机号码" /></div>
+          <div class="adv-field"><label>电话号码</label><input v-model="advForm.phone1" placeholder="请输入电话号码" /></div>
+          <div class="adv-field"><label>手机号码</label><input v-model="advForm.mobile1" placeholder="请输入手机号码" /></div>
           <div class="adv-field"><label>样品名称</label><input v-model="advForm.sampleName" placeholder="请输入样品名称" /></div>
           <!-- Row 3 -->
           <div class="adv-field"><label>公司编号</label><input v-model="advForm.sampleCode" placeholder="请输入公司编号" /></div>
@@ -1598,17 +1608,17 @@
           <div class="adv-field adv-field-range">
             <label>登记日期</label>
             <div class="range-inputs">
-              <VxeDatePicker v-model="advForm.createTimeMin" type="date" placeholder="开始日期" clearable />
+              <SimpleDatePicker v-model="advForm.createTimeMin" placeholder="开始日期" />
               <span>至</span>
-              <VxeDatePicker v-model="advForm.createTimeMax" type="date" placeholder="结束日期" clearable />
+              <SimpleDatePicker v-model="advForm.createTimeMax" placeholder="结束日期" />
             </div>
           </div>
           <div class="adv-field adv-field-range">
             <label>修改日期</label>
             <div class="range-inputs">
-              <VxeDatePicker v-model="advForm.updateTimeMin" type="date" placeholder="开始日期" clearable />
+              <SimpleDatePicker v-model="advForm.updateTimeMin" placeholder="开始日期" />
               <span>至</span>
-              <VxeDatePicker v-model="advForm.updateTimeMax" type="date" placeholder="结束日期" clearable />
+              <SimpleDatePicker v-model="advForm.updateTimeMax" placeholder="结束日期" />
             </div>
           </div>
           <!-- Row 12 -->
@@ -1628,30 +1638,30 @@
     <Teleport to="body">
     <div v-if="showPrintDropdown" class="sample-more-dropdown-panel" :style="printDropdownStyle">
       <div class="sample-more-item" @click="doPrintMultiCopies">
-        <Printer :size="16" /> 多款打印
+        <Printer :size="18" /> 多款打印
       </div>
       <div class="sample-more-item" @click="doPrintQuarterTable">
-        <Printer :size="16" /> 小条码打印
+        <Printer :size="18" /> 小条码打印
       </div>
       <div class="sample-more-item" @click="openScanPrintModal">
-        <Crosshair :size="16" /> 扫码打印
+        <Crosshair :size="18" /> 扫码打印
       </div>
     </div>
 
-    <div v-if="showMultiPrintModal" class="batch-image-modal-overlay" @click.self="showMultiPrintModal = false">
-      <div class="batch-image-modal multi-print-modal" style="width:820px;max-height:75vh;display:flex;flex-direction:column">
+    <div v-if="showMultiPrintModal" class="batch-image-modal-overlay import-modal-overlay" style="background:transparent">
+      <div class="batch-image-modal multi-print-modal" style="width:1500px;max-height:90vh;display:flex;flex-direction:column">
         <div class="batch-image-modal-header">
-          <span>多款打印设置</span>
-          <button class="modal-close-btn" @click="showMultiPrintModal = false"><X :size="16" /></button>
+          <span style="font-size:22px;font-weight:700">多款打印设置</span>
+          <button class="modal-close-btn" @click="showMultiPrintModal = false"><X :size="22" /></button>
         </div>
-        <div class="batch-image-modal-body" style="flex:1;overflow:hidden;display:flex;flex-direction:column;padding:16px 20px">
-          <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;flex-shrink:0">
-            <div style="display:flex;align-items:center;gap:8px">
-              <label style="font-size:13px;font-weight:600;color:#1d1d1f;white-space:nowrap">批量设置张数</label>
+        <div class="batch-image-modal-body" style="flex:1;overflow:hidden;display:flex;flex-direction:column;padding:20px 24px">
+          <div style="display:flex;align-items:center;gap:20px;margin-bottom:14px;flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:10px">
+              <label style="font-size:22px;font-weight:600;color:#1d1d1f;white-space:nowrap">批量设置张数</label>
               <input type="number" v-model.number="multiPrintBatchCopies" min="1" max="99"
-                style="width:64px;height:34px;border-radius:10px;border:1px solid rgba(0,122,255,0.15);outline:none;font-size:14px;font-weight:600;text-align:center;color:#007aff;background:rgba(0,122,255,0.04);padding:0 6px"
+                style="width:80px;height:44px;border-radius:10px;border:1px solid rgba(0,122,255,0.15);outline:none;font-size:22px;font-weight:600;text-align:center;color:#007aff;background:rgba(0,122,255,0.04);padding:0 8px"
                 placeholder="1" />
-              <button class="sample-btn sample-btn-blue" style="height:34px;font-size:12px" @click="batchSetCopies">应用</button>
+              <button class="sample-btn sample-btn-blue" style="height:44px;font-size:20px;padding:0 18px" @click="batchSetCopies">应用</button>
             </div>
             <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
               <label class="radio-item-mp" :class="{active:multiPrintType==='barcode'}" @click="multiPrintType='barcode'">
@@ -1667,29 +1677,29 @@
               ref="mpGridRef"
               :columns="mpColumns"
               :data="multiPrintRecords"
-              :max-height="480"
+              :max-height="700"
               :row-config="{ isHover: true, keyField: 'sampleCode' }"
-              :cell-config="{ height: 42 }"
-              :header-cell-style="{ background: '#f0f7ff', borderColor: 'rgba(0,122,255,0.12)', color: 'rgba(29,29,31,0.5)', fontWeight: 700, fontSize: '12px', textAlign: 'center' }"
-              :cell-style="{ textAlign: 'center' }"
+              :cell-config="{ height: 72 }"
+              :header-cell-style="{ background: '#f0f7ff', borderColor: 'rgba(0,122,255,0.12)', color: 'rgba(29,29,31,0.5)', fontWeight: 700, fontSize: '20px', textAlign: 'center' }"
+              :cell-style="{ textAlign: 'center', fontSize: '18px' }"
               :border="true"
               :toolbar-config="{ custom: true, refresh: true, zoom: true }"
               :optimization="{ animat: false }"
             >
               <template #copies_edit="{ row }">
                 <input type="number" v-model.number="row.copies" min="1" max="99"
-                  style="width:56px;height:30px;border-radius:6px;border:1px solid rgba(0,122,255,0.2);text-align:center;font-size:13px;font-weight:600;color:#007aff;outline:none;padding:0 4px"
+                  style="width:72px;height:40px;border-radius:8px;border:1px solid rgba(0,122,255,0.2);text-align:center;font-size:22px;font-weight:600;color:#007aff;outline:none;padding:0 6px"
                   @click.stop />
               </template>
             </vxe-grid>
           </div>
-          <div style="flex-shrink:0;text-align:right;font-size:13px;font-weight:700;color:#007aff">
+          <div style="flex-shrink:0;text-align:right;font-size:22px;font-weight:700;color:#007aff">
             共 {{ totalPrintPages }} 张标签
           </div>
         </div>
-        <div class="modal-footer" style="border-top:1px solid rgba(0,122,255,0.08);padding:12px 20px">
-          <button class="sample-btn sample-btn-ghost" @click="showMultiPrintModal = false">取消</button>
-          <button class="sample-btn sample-btn-primary" @click="confirmMultiPrint">确定打印</button>
+        <div class="modal-footer" style="border-top:1px solid rgba(0,122,255,0.08);padding:14px 24px">
+          <button class="sample-btn sample-btn-ghost" style="font-size:18px;height:44px;padding:0 24px" @click="showMultiPrintModal = false">取消</button>
+          <button class="sample-btn sample-btn-primary" style="font-size:18px;height:44px;padding:0 24px" @click="confirmMultiPrint">确定打印</button>
         </div>
       </div>
     </div>
@@ -1716,19 +1726,19 @@
 
     <Teleport to="body">
     <div v-if="showAlert" class="batch-image-modal-overlay" @click.self="onAlertClose">
-      <div class="batch-result-modal" style="max-width:420px">
+      <div class="batch-result-modal" style="max-width:640px">
         <div class="batch-result-header">
           <strong>提示</strong>
-          <button class="modal-close-btn" @click="onAlertClose"><X :size="16" /></button>
+          <button class="modal-close-btn" @click="onAlertClose"><X :size="24" /></button>
         </div>
-        <div class="batch-result-body" style="text-align:center;padding:24px 20px">
-          <CheckCircle :size="40" style="color:#34c759;margin-bottom:12px" v-if="alertType === 'success'" />
-          <AlertCircle :size="40" style="color:#ff3b30;margin-bottom:12px" v-else-if="alertType === 'error'" />
-          <AlertTriangle :size="40" style="color:#ff9500;margin-bottom:12px" v-else />
-          <p style="font-size:14px;color:#1d1d1f;line-height:1.6;white-space:pre-wrap">{{ alertMessage }}</p>
+        <div class="batch-result-body" style="text-align:center;padding:36px 32px">
+          <CheckCircle :size="48" style="color:#34c759;margin-bottom:16px" v-if="alertType === 'success'" />
+          <AlertCircle :size="48" style="color:#ff3b30;margin-bottom:16px" v-else-if="alertType === 'error'" />
+          <AlertTriangle :size="48" style="color:#ff9500;margin-bottom:16px" v-else />
+          <p style="font-size:22px;color:#1d1d1f;line-height:1.7;white-space:pre-wrap">{{ alertMessage }}</p>
         </div>
         <div class="modal-footer" style="justify-content:center">
-          <button class="sample-btn sample-btn-primary" @click="onAlertClose">知道了</button>
+          <button class="sample-btn sample-btn-primary" style="font-size:20px;padding:14px 40px" @click="onAlertClose">知道了</button>
         </div>
       </div>
     </div>
@@ -1893,15 +1903,15 @@
     <!-- 选择报表模板弹窗 -->
     <Teleport to="body">
     <div v-if="showTemplateSelect" class="batch-image-modal-overlay" @click.self="showTemplateSelect = false">
-      <div class="batch-image-modal" style="width:420px">
+      <div class="batch-image-modal" style="width:680px">
         <div class="batch-image-modal-header">
-          <span>选择报表模板</span>
-          <button class="modal-close-btn" @click="showTemplateSelect = false"><X :size="16" /></button>
+          <strong>选择报价模板</strong>
+          <button class="modal-close-btn" @click="showTemplateSelect = false"><X :size="24" /></button>
         </div>
-        <div class="batch-image-modal-body" style="padding:16px 20px;max-height:360px;overflow-y:auto">
+        <div class="batch-image-modal-body" style="padding:24px 28px;max-height:500px;overflow-y:auto">
           <input class="sr-input" v-model="templateSearchKeyword" placeholder="搜索模板..."
-            style="width:100%;box-sizing:border-box;height:36px;font-size:13px;border-radius:6px;margin-bottom:12px;" />
-          <div v-if="filteredTemplates.length === 0" style="text-align:center;color:#999;padding:24px 0">{{ templateSearchKeyword ? '无匹配模板' : '暂无模板' }}</div>
+            style="width:100%;box-sizing:border-box;height:60px;font-size:24px;border-radius:12px;margin-bottom:24px;padding:0 18px;" />
+          <div v-if="filteredTemplates.length === 0" style="text-align:center;color:#999;padding:28px 0;font-size:18px">{{ templateSearchKeyword ? '无匹配模板' : '暂无模板' }}</div>
           <div
             v-for="tpl in filteredTemplates"
             :key="tpl.id"
@@ -1913,9 +1923,9 @@
             <div class="tpl-select-date">{{ tpl.createTime || '' }}</div>
           </div>
         </div>
-        <div style="padding:0 20px 16px;display:flex;gap:8px;justify-content:flex-end">
-          <button class="sample-btn sample-btn-ghost" @click="showTemplateSelect = false">取消</button>
-          <button class="sample-btn sample-btn-primary" :disabled="!selectedTemplateId || vcSessionLoading" @click="confirmTemplateAndOpen">
+        <div style="padding:0 28px 20px;display:flex;gap:16px;justify-content:flex-end">
+          <button class="sample-btn sample-btn-ghost" style="font-size:20px;padding:14px 32px" @click="showTemplateSelect = false">取消</button>
+          <button class="sample-btn sample-btn-primary" style="font-size:20px;padding:14px 32px" :disabled="!selectedTemplateId || vcSessionLoading" @click="confirmTemplateAndOpen">
             {{ vcSessionLoading ? '加载中...' : '确认并预览' }}
           </button>
         </div>
@@ -2100,7 +2110,7 @@
 
     <!-- 对照资料管理弹窗 -->
     <Teleport to="body">
-      <div v-if="showRefDataModal" class="batch-image-modal-overlay" @click.self="showRefDataModal = false">
+      <div v-if="showRefDataModal" class="batch-image-modal-overlay import-modal-overlay" style="background:transparent">
         <div class="ref-modal">
           <div class="ref-modal-header">
             <strong>对照资料管理</strong>
@@ -2108,41 +2118,45 @@
               <button :class="['ref-tab', { active: refActiveTab === 'category' }]" @click="refActiveTab = 'category'">产品种类</button>
               <button :class="['ref-tab', { active: refActiveTab === 'packaging' }]" @click="refActiveTab = 'packaging'">包装方式</button>
             </div>
-            <X :size="16" class="cursor-pointer" @click="showRefDataModal = false" />
+            <X :size="22" class="cursor-pointer" @click="showRefDataModal = false" />
           </div>
           <div class="ref-modal-body">
             <!-- 种类管理 - 树形展开 -->
             <div v-if="refActiveTab === 'category'" class="ref-panel">
               <div class="ref-panel-toolbar">
-                <button class="sample-btn sample-btn-primary" style="font-size:11px;height:28px;padding:0 10px" @click="openRefCategoryAdd"><Plus :size="12" /> 新增</button>
-                <button class="sample-btn sample-btn-ghost" style="font-size:11px;height:28px;padding:0 10px" @click="refExpandAllCat"><ChevronsDownUp :size="12" /> 展开/折叠全部</button>
-                <button class="sample-btn sample-btn-ghost" style="font-size:11px;height:28px;padding:0 10px" :disabled="refSelectedCatIds.length === 0" @click="refDeleteSelectedCats"><Trash2 :size="12" /> 删除选中</button>
+                <button class="sample-btn sample-btn-primary" style="font-size:18px;height:44px;padding:0 18px" @click="openRefCategoryAdd"><Plus :size="18" /> 新增</button>
+                <button class="sample-btn sample-btn-ghost" style="font-size:18px;height:44px;padding:0 18px" @click="refExpandAllCat"><ChevronsDownUp :size="18" /> 展开/折叠全部</button>
+                <button class="sample-btn sample-btn-ghost" style="font-size:18px;height:44px;padding:0 18px" :disabled="refSelectedCatIds.length === 0" @click="refDeleteSelectedCats"><Trash2 :size="18" /> 删除选中</button>
                 <div class="ref-search-box">
-                  <Search :size="12" />
+                  <Search :size="18" />
                   <input v-model="refCatKeyword" placeholder="搜索编号或名称..." @input="refFilterCategories" />
                 </div>
               </div>
               <vxe-table ref="refCatGridRef" :data="refCatTreeData" :tree-config="{ transform: true, rowField: 'id', parentField: '_parentId', expandAll: true, line: false }"
-                :checkbox-config="{ checkField: '_ck' }" height="360" stripe border size="small"
+                :checkbox-config="{ checkField: '_ck' }" height="720" stripe border size="small"
                 :virtual-y-config="{ enabled: true, gt: 10 }"
+                :header-cell-style="{ textAlign:'center', fontSize:'22px' }"
+                :cell-style="{ textAlign:'center', fontSize:'20px' }"
                 @checkbox-change="refCatGridRef && (refSelectedCatIds = refCatGridRef.getCheckboxRecords().map(r => r.id))"
                 @checkbox-all="refCatGridRef && (refSelectedCatIds = refCatGridRef.getCheckboxRecords().map(r => r.id))">
-                <vxe-column type="checkbox" width="38" />
-                <vxe-column field="code" title="编号" width="100" tree-node show-overflow />
-                <vxe-column field="name" title="名称" min-width="180" show-overflow />
-                <vxe-column field="keywords" title="关键词(逗号分隔)" min-width="150" show-overflow>
+                <vxe-column type="checkbox" width="50" />
+                <vxe-column field="code" title="编号" width="140" tree-node show-overflow />
+                <vxe-column field="name" title="名称" min-width="220" show-overflow />
+                <vxe-column field="keywords" title="关键词(逗号分隔)" min-width="200" show-overflow>
                   <template #default="{ row }">
                     <input class="ref-inline-input" :value="row.keywords || ''" placeholder="合金,滑行,回力"
                       @blur="saveRefCatKeywords(row, $event.target.value)" />
                   </template>
                 </vxe-column>
-                <vxe-column field="_childCount" title="子项数" width="60" align="center">
+                <vxe-column field="_childCount" title="子项数" width="100" align="center">
                   <template #default="{ row }">{{ row._childCount || '' }}</template>
                 </vxe-column>
-                <vxe-column title="操作" width="80" fixed="right">
+                <vxe-column title="操作" width="160" fixed="right">
                   <template #default="{ row }">
-                    <button class="ref-action-btn" @click="refEditCategory(row)"><Pencil :size="11" /></button>
-                    <button class="ref-action-btn danger" @click="refDeleteCategory(row)"><Trash2 :size="11" /></button>
+                    <div style="display:flex;gap:6px;justify-content:center">
+                    <button class="ref-action-btn" @click="refEditCategory(row)"><Pencil :size="16" /></button>
+                    <button class="ref-action-btn danger" @click="refDeleteCategory(row)"><Trash2 :size="16" /></button>
+                    </div>
                   </template>
                 </vxe-column>
               </vxe-table>
@@ -2151,25 +2165,29 @@
             <!-- 包装管理 -->
             <div v-if="refActiveTab === 'packaging'" class="ref-panel">
               <div class="ref-panel-toolbar">
-                <button class="sample-btn sample-btn-primary" style="font-size:11px;height:28px;padding:0 10px" @click="openRefPackagingAdd"><Plus :size="12" /> 新增</button>
-                <button class="sample-btn sample-btn-ghost" style="font-size:11px;height:28px;padding:0 10px" :disabled="refSelectedPkgIds.length === 0" @click="refDeleteSelectedPkgs"><Trash2 :size="12" /> 删除选中</button>
+                <button class="sample-btn sample-btn-primary" style="font-size:18px;height:44px;padding:0 18px" @click="openRefPackagingAdd"><Plus :size="18" /> 新增</button>
+                <button class="sample-btn sample-btn-ghost" style="font-size:18px;height:44px;padding:0 18px" :disabled="refSelectedPkgIds.length === 0" @click="refDeleteSelectedPkgs"><Trash2 :size="18" /> 删除选中</button>
                 <div class="ref-search-box">
-                  <Search :size="12" />
+                  <Search :size="18" />
                   <input v-model="refPkgKeyword" placeholder="搜索..." @keyup.enter="refLoadPackagings" />
                 </div>
               </div>
-              <vxe-table ref="refPkgGridRef" :data="refPackagings" :checkbox-config="{ checkField: '_ck' }" height="320" stripe border size="small"
+              <vxe-table ref="refPkgGridRef" :data="refPackagings" :checkbox-config="{ checkField: '_ck' }" height="720" stripe border size="small"
                 :virtual-y-config="{ enabled: true, gt: 10 }"
+                :header-cell-style="{ textAlign:'center', fontSize:'22px' }"
+                :cell-style="{ textAlign:'center', fontSize:'20px' }"
                 @checkbox-change="refPkgGridRef && (refSelectedPkgIds = refPkgGridRef.getCheckboxRecords().map(r => r.id))"
                 @checkbox-all="refPkgGridRef && (refSelectedPkgIds = refPkgGridRef.getCheckboxRecords().map(r => r.id))">
-                <vxe-column type="checkbox" width="40" />
-                <vxe-column field="code" title="编号" width="90" />
-                <vxe-column field="name" title="中文包装" min-width="150" show-overflow />
-                <vxe-column field="nameEn" title="英文包装" min-width="150" show-overflow />
-                <vxe-column title="操作" width="70" fixed="right">
+                <vxe-column type="checkbox" width="50" />
+                <vxe-column field="code" title="编号" width="120" />
+                <vxe-column field="name" title="中文包装" min-width="200" show-overflow />
+                <vxe-column field="nameEn" title="英文包装" min-width="200" show-overflow />
+                <vxe-column title="操作" width="160" fixed="right">
                   <template #default="{ row }">
-                    <button class="ref-action-btn" @click="refEditPackaging(row)"><Pencil :size="11" /></button>
-                    <button class="ref-action-btn danger" @click="refDeletePackaging(row)"><Trash2 :size="11" /></button>
+                    <div style="display:flex;gap:6px;justify-content:center">
+                    <button class="ref-action-btn" @click="refEditPackaging(row)"><Pencil :size="16" /></button>
+                    <button class="ref-action-btn danger" @click="refDeletePackaging(row)"><Trash2 :size="16" /></button>
+                    </div>
                   </template>
                 </vxe-column>
               </vxe-table>
@@ -2181,11 +2199,11 @@
 
     <!-- 种类新增/编辑小弹窗 -->
     <Teleport to="body">
-      <div v-if="showRefCatForm" class="batch-image-modal-overlay" @click.self="showRefCatForm = false">
+      <div v-if="showRefCatForm" class="batch-image-modal-overlay import-modal-overlay" style="background:transparent">
         <div class="ref-form-modal">
           <div class="ref-modal-header">
             <strong>{{ refEditingCat ? '编辑种类' : '新增种类' }}</strong>
-            <X :size="16" class="cursor-pointer" @click="showRefCatForm = false" />
+            <X :size="22" class="cursor-pointer" @click="showRefCatForm = false" />
           </div>
           <div class="ref-modal-body">
             <div class="ref-form-row">
@@ -2225,11 +2243,11 @@
 
     <!-- 包装新增/编辑小弹窗 -->
     <Teleport to="body">
-      <div v-if="showRefPkgForm" class="batch-image-modal-overlay" @click.self="showRefPkgForm = false">
+      <div v-if="showRefPkgForm" class="batch-image-modal-overlay import-modal-overlay" style="background:transparent">
         <div class="ref-form-modal">
           <div class="ref-modal-header">
             <strong>{{ refEditingPkg ? '编辑包装方式' : '新增包装方式' }}</strong>
-            <X :size="16" class="cursor-pointer" @click="showRefPkgForm = false" />
+            <X :size="22" class="cursor-pointer" @click="showRefPkgForm = false" />
           </div>
           <div class="ref-modal-body">
             <div class="ref-form-row">
@@ -2269,20 +2287,23 @@ import { useSampleForm } from '@/composables/useSampleForm'
 import { useImport } from '@/composables/useImport'
 import { useDeletedRestore } from '@/composables/useDeletedRestore'
 import { useAuth } from '@/stores/auth'
+import SimpleDatePicker from '@/components/SimpleDatePicker.vue'
 import { useBatchImage } from '@/composables/useBatchImage'
 import { useBatchVideo } from '@/composables/useBatchVideo'
 import { useScanPrint } from '@/composables/useScanPrint'
 import { useExport } from '@/composables/useExport'
 import { useRefData } from '@/composables/useRefData'
 import { useAdvancedSearch } from '@/composables/useAdvancedSearch'
+import { useGridPrefSync } from '@/composables/useGridPrefSync'
 import '@/styles/sample.css'
 import '@/styles/sample-form.css'
+import '@/styles/client-sample-detail.css'
 import {
   Database, Search, Plus, Pencil, Trash2, Save, X, Upload, Download,
   FileUp, FileDown, FileSpreadsheet, FileOutput, MoreHorizontal, Settings,
   ChevronsUp, ChevronsDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
   MapPin, Crosshair, Filter, Columns3, ImagePlus, Coins, Package, PackageOpen, DollarSign, Printer, Loader2,
-  Image as ImageIcon, RotateCcw, AlertTriangle, AlertCircle, Check, CheckCircle, CheckCircle as CheckCircleIcon, Info, Video as VideoIcon, List, ListChecks, LayoutGrid, Copy, GripVertical, RotateCw, ChevronDown, Eye, EyeOff, ChevronsDownUp, ShieldAlert
+  Image as ImageIcon, RotateCcw, AlertTriangle, AlertCircle, Check, CheckCircle, CheckCircle as CheckCircleIcon, Info, Video as VideoIcon, List, ListChecks, LayoutGrid, Copy, GripVertical, RotateCw, ChevronDown, Eye, EyeOff, ChevronsDownUp, ShieldAlert, Lock, Unlock
 } from 'lucide-vue-next'
 
 // 批量翻译：通过后端代理调用百度翻译 API
@@ -2330,11 +2351,11 @@ const thumbGridRef = ref(null)
 const { cropEditorRef, cropImgRef, cropSelecting, cropDone, cropX, cropY, cropW, cropH, cropOverlayStyle, cropBoxStyle, cropDisplayScale, resetCropState, resetCrop, onCropImgLoad, onCropMouseDown, onCropMouseMove, onCropMouseUp, onHandleDown } = useCrop()
 
 const mpColumns = [
-  { type: 'seq', width: 60, title: '序号' },
-  { field: 'sampleCode', title: '公司编号', width: 130, showOverflow: true },
-  { field: 'factoryCode', title: '出厂货号', width: 150, showOverflow: true },
-  { field: 'sampleName', title: '样品名称', minWidth: 180, showOverflow: true, ellipsis: true },
-  { field: 'copies', title: '打印张数', width: 100, slots: { default: 'copies_edit' } }
+  { type: 'seq', width: 80, title: '序号' },
+  { field: 'sampleCode', title: '公司编号', width: 200, showOverflow: true },
+  { field: 'factoryCode', title: '出厂货号', width: 300, showOverflow: true },
+  { field: 'sampleName', title: '样品名称', minWidth: 600, showOverflow: true, ellipsis: true },
+  { field: 'copies', title: '打印张数', width: 300, slots: { default: 'copies_edit' } }
 ]
 
 const { allFormFields, fieldVisible, visibleFormFields, showFieldSettings, toggleFieldSettings, formExpanded, formVisible, formMode, formData } = useSampleForm()
@@ -2364,7 +2385,7 @@ const pageSize = ref(2000)
 const pageSizeOptions = [500, 1000, 2000, 4000, 5000]
 const totalRecords = ref(0)
 const totalPages = computed(() => Math.max(1, Math.ceil(totalRecords.value / pageSize.value)))
-const currentSortField = ref('recent')
+const currentSortField = ref('create_time')
 const currentSortOrder = ref('desc')
 const selectedIds = ref([])
 const lastCheckboxIndex = ref(-1)
@@ -2382,7 +2403,9 @@ const areaSelectedStartRowId = ref(null)  // 已确认的选区起行
 const areaSelectedEndRowId = ref(null)    // 已确认的选区止行
 const areaRenderTick = ref(0)
 const extDragging = ref(false)    // 是否正在拖拽把手延伸选区
+const isColumnDragging = ref(false) // 是否正在拖拽列排序（期间跳过 cell-style 重渲染）
 let areaHandleEl = null           // 选区右下角把手元素
+let _areaRaf = null                // RAF 节流：合并同一帧内的多次 areaRenderTick 更新
 const areaSelectedCount = computed(() => {
   if (!areaSelectedColumn.value) return 0
   const data = tableData.value
@@ -2391,8 +2414,40 @@ const areaSelectedCount = computed(() => {
   if (sIdx === -1 || eIdx === -1) return 0
   return Math.abs(eIdx - sIdx) + 1
 })
+
+// ── 拖拽选区预计算 Set（O(1) 查找代替 O(n) findIndex）──
+const areaDragRowIdSet = computed(() => {
+  if (!areaDragging.value || !areaDragField.value) return null
+  const data = tableData.value
+  const sIdx = data.findIndex(r => String(r.id) === String(areaDragStartRowId.value))
+  const eIdx = data.findIndex(r => String(r.id) === String(areaDragEndRowId.value))
+  if (sIdx === -1 || eIdx === -1) return null
+  const min = Math.min(sIdx, eIdx)
+  const max = Math.max(sIdx, eIdx)
+  const set = new Set()
+  for (let i = min; i <= max; i++) {
+    set.add(data[i].id)
+  }
+  return set
+})
+
+const areaSelectedRowIdSet = computed(() => {
+  if (!areaSelectedColumn.value) return null
+  const data = tableData.value
+  const sIdx = data.findIndex(r => String(r.id) === String(areaSelectedStartRowId.value))
+  const eIdx = data.findIndex(r => String(r.id) === String(areaSelectedEndRowId.value))
+  if (sIdx === -1 || eIdx === -1) return null
+  const min = Math.min(sIdx, eIdx)
+  const max = Math.max(sIdx, eIdx)
+  const set = new Set()
+  for (let i = min; i <= max; i++) {
+    set.add(data[i].id)
+  }
+  return set
+})
 const searchKeyword = ref('')
 const locateKeyword = ref('')
+const locateCursor = ref(-1)
 const manufacturerCode = ref('')
 
 const rowSelectFrom = ref(null)
@@ -2425,6 +2480,12 @@ const showImagePreview = ref(false)
 const imagePreviewList = ref([])
 const imagePreviewIndex = ref(0)
 const imagePreviewSelected = ref(new Set())
+// ── 大图预览缩放 ──
+const ipZoom = ref(1)
+const ipPanX = ref(0)
+const ipPanY = ref(0)
+const ipDragging = ref(false)
+const ipDragStart = ref({ x: 0, y: 0, px: 0, py: 0 })
 const showReportModal = ref(false)
 const reportModalUrl = ref('')
 const reportModalLoading = ref(false)
@@ -2434,6 +2495,7 @@ const ipUploading = ref(false)
 const ipUploadDone = ref(0)
 const ipUploadTotal = ref(0)
 const ipDragOver = ref(false)
+const ipUploadLocked = ref(true)
 const thumbDragIdx = ref(-1)
 const thumbDragOverIdx = ref(-1)
 const thumbDragDone = ref(false)
@@ -2451,8 +2513,8 @@ const currentPreviewSrc = computed(() => {
 const photoModalStyle = computed(() => ({
   display: showPhotoModal.value ? 'flex' : 'none',
   flexDirection: 'column',
-  width: photoModalW.value + 'px',
-  maxHeight: photoModalH.value + 'px',
+  width: '2300px',
+  height: '1200px',
   top: photoModalPos.y + 'px',
   left: photoModalPos.x + 'px',
   position: 'fixed'
@@ -2499,7 +2561,7 @@ const allColumns = [
   { field: 'colorEn', title: '英文颜色', width: 90, showOverflow: true, visible: false },
   { field: 'size', title: '规格尺寸', width: 100, showOverflow: true, visible: false },
   { field: 'origin', title: '产地', width: 80, showOverflow: true, visible: false },
-  { field: 'factoryPrice', title: '出厂价', width: 100, showOverflow: true, cellStyle: { color: '#ff3b30' }, sortable: true },
+  { field: 'factoryPrice', title: '出厂价', width: 100, showOverflow: true, className: 'sample-cell-price', headerClassName: 'sample-header-red', sortable: true },
   { field: 'taxPrice', title: '税点价', width: 100, showOverflow: true, visible: false },
   { field: 'sampleLength', title: '样品长', width: 120, showOverflow: true, sortable: true },
   { field: 'sampleWidth', title: '样品宽', width: 120, showOverflow: true, sortable: true },
@@ -2519,11 +2581,11 @@ const allColumns = [
   { field: 'packageHeight', title: '包装高', width: 120, showOverflow: true, sortable: true },
   { field: 'cartonGrossWeight', title: '外箱毛重', width: 120, showOverflow: true, sortable: true },
   { field: 'cartonNetWeight', title: '外箱净重', width: 120, showOverflow: true, sortable: true },
-  { field: 'supplier', title: '厂商名称', minWidth: 140, showOverflow: true, visible: false },
+  { field: 'name', title: '厂商名称', minWidth: 140, showOverflow: true, visible: false },
   { field: 'boothNo', title: '摊位号', width: 80, showOverflow: true, visible: false },
-  { field: 'contactPerson', title: '联系人', width: 90, showOverflow: true, visible: false },
-  { field: 'contactPhone', title: '电话', width: 120, showOverflow: true, visible: false },
-  { field: 'mobile', title: '手机', width: 120, showOverflow: true, visible: false },
+  { field: 'contact1', title: '联系人', width: 90, showOverflow: true, visible: false },
+  { field: 'phone1', title: '电话', width: 120, showOverflow: true, visible: false },
+  { field: 'mobile1', title: '手机', width: 120, showOverflow: true, visible: false },
   { field: 'fax', title: '传真', width: 120, showOverflow: true, visible: false },
   { field: 'qq', title: 'QQ', width: 90, showOverflow: true, visible: false },
   { field: 'certification', title: '产品认证', width: 800, showOverflow: true, sortable: true },
@@ -2538,6 +2600,9 @@ const allColumns = [
   { field: 'createTime', title: '登记时间', width: 300, sortable: true, showOverflow: true, formatter: ({ cellValue }) => cellValue ? String(cellValue).replace('T', ' ') : '' },
   { field: 'action', title: '操作', width: 82, fixed: 'right', slots: { default: 'action_default' }, visible: false }
 ]
+
+// 表格列设置跨设备同步
+const { fullKey: gridStorageKey, saveToBackend: saveGridPrefs, ready: prefReady } = useGridPrefSync(gridRef, 'sample', allColumns)
 
 const loadTableData = async () => {
   tableLoading.value = true
@@ -2679,7 +2744,7 @@ const {
 } = useScanPrint(
   showScanPrintModal, showMultiPrintModal, showPrintDropdown,
   gridRef, tableData, totalRecords, currentPage, pageSize, loadTableData,
-  showToast, showConfirmDialog
+  showToast, showConfirmDialog, showAlertDialog
 )
 
 const {
@@ -2714,7 +2779,7 @@ const {
 } = useRefData(showMoreDropdown, showToast)
 
 const {
-  showAdvancedSearch, advForm,
+  showAdvancedSearch, advForm, searchElapsed,
   saveAdvForm, restoreAdvForm, clearAdvForm, openAdvancedSearch, doAdvancedSearch: _doAdvancedSearch,
 } = useAdvancedSearch(tableData, totalRecords, currentPage, pageSize, currentSortField, currentSortOrder, activeSearchConditions, manufacturerCode)
 
@@ -3005,19 +3070,27 @@ const onPreviewUpload = async (e) => {
   }
 }
 
-const handlePreviewDragOver = (e) => {
-  e.preventDefault()
-  e.dataTransfer.dropEffect = 'copy'
+// ── 拖拽上传锁控制 ──
+const onIpDragEnter = () => {
   ipDragOver.value = true
+}
+const onIpDragOver = (e) => {
+  e.preventDefault()
+  if (!ipUploadLocked.value) {
+    e.dataTransfer.dropEffect = 'copy'
+  } else {
+    e.dataTransfer.dropEffect = 'none'
+  }
 }
 const handlePreviewDragLeave = (e) => {
   if (e.currentTarget === e.target) {
     ipDragOver.value = false
   }
 }
-const handlePreviewDrop = async (e) => {
+const onIpDrop = async (e) => {
   e.preventDefault()
   ipDragOver.value = false
+  if (ipUploadLocked.value) return
   const files = e.dataTransfer?.files
   if (!files || files.length === 0) return
   const sampleId = currentSample.value?.id
@@ -3075,8 +3148,18 @@ const openFullPreview = () => {
 
 // 关闭图片预览时恢复照片模态框
 watch(showImagePreview, (v) => {
-  if (!v && photoModalImages.value.length > 0) {
-    showPhotoModal.value = true
+  if (!v) {
+    ipZoom.value = 1
+    ipPanX.value = 0
+    ipPanY.value = 0
+    if (photoModalImages.value.length > 0) {
+      photoModalInit()
+      showPhotoModal.value = true
+    }
+  } else {
+    ipZoom.value = 1
+    ipPanX.value = 0
+    ipPanY.value = 0
   }
 })
 
@@ -3124,15 +3207,28 @@ const onSearch = async () => {
 const onLocate = () => {
   const keyword = locateKeyword.value.trim()
   if (!keyword) return
-  const idx = tableData.value.findIndex(r =>
-    Object.values(r).some(v => String(v).toLowerCase().includes(keyword.toLowerCase()))
-  )
-  if (idx >= 0 && gridRef.value) {
-    gridRef.value.setCurrentRow(tableData.value[idx])
-    selectSample(tableData.value[idx])
-    gridRef.value.scrollToRow(tableData.value[idx])
+  const lower = keyword.toLowerCase()
+  const data = tableData.value
+  // 只按出厂货号定位
+  const matches = data.reduce((acc, item, i) => {
+    if (item.factoryCode != null && String(item.factoryCode).toLowerCase().includes(lower)) acc.push(i)
+    return acc
+  }, [])
+  if (matches.length === 0) return
+  // 每次点击跳到下一个匹配项
+  let nextCursor = locateCursor.value + 1
+  if (nextCursor >= matches.length) nextCursor = 0
+  locateCursor.value = nextCursor
+  const idx = matches[nextCursor]
+  if (gridRef.value) {
+    gridRef.value.setCurrentRow(data[idx])
+    selectSample(data[idx])
+    gridRef.value.scrollToRow(data[idx])
   }
 }
+
+// 输入变化时重置游标
+watch(locateKeyword, () => { locateCursor.value = -1 })
 
 const clearSearch = () => {
   mainBatchQueryActive.value = false
@@ -3162,7 +3258,14 @@ const onSortChange = ({ property, order }) => {
   }
   currentSortOrder.value = order || 'desc'
   currentPage.value = 1
-  loadTableData()
+  loadTableData().then(() => {
+    nextTick(() => {
+      if (tableData.value.length > 0 && gridRef.value) {
+        gridRef.value.setCurrentRow(tableData.value[0])
+        selectSample(tableData.value[0])
+      }
+    })
+  })
 }
 
 const onCheckboxChange = ({ checked, row, rowIndex, $event }) => {
@@ -3238,38 +3341,49 @@ const onTableWrapMouseDown = (e) => {
   e.preventDefault()
 }
 
-const cellAreaStyle = ({ row, column }) => {
-  void areaRenderTick.value // 强制重新求值
+// ── 预定义的样式常量（避免每次调用创建新对象）──
+const STYLE_PRICE_CELL = { textAlign: 'center', fontSize: '26px', color: '#dc2626', fontWeight: 600 }
+const STYLE_DEFAULT_CELL = { textAlign: 'center', fontSize: '26px' }
+const STYLE_DRAG_HIGHLIGHT = { textAlign: 'center', fontSize: '26px', background: '#e3f2fd', outline: '2px solid #4285f4', outlineOffset: '-2px' }
+const STYLE_SELECTED_HIGHLIGHT = { textAlign: 'center', fontSize: '26px', background: '#dceefb', outline: '2px solid #4285f4', outlineOffset: '-2px' }
+const STYLE_HEADER_DEFAULT = { background: '#ffffff', borderColor: '#a0bddb', color: '#1d1d1f', fontWeight: 600, textAlign: 'center' }
+const STYLE_HEADER_PRICE = { background: '#ffffff', borderColor: '#a0bddb', color: '#dc2626', fontWeight: 600, textAlign: 'center' }
+
+const headerCellStyleFn = ({ column }) => {
   const field = (column && (column.field || column.type)) || ''
-  // 拖拽中的高亮
+  return field === 'factoryPrice' ? STYLE_HEADER_PRICE : STYLE_HEADER_DEFAULT
+}
+
+const cellAreaStyle = ({ row, column }) => {
+  // 列拖拽排序期间完全短路，避免 vxe-grid 频繁重渲染触发响应式追踪
+  if (isColumnDragging.value) {
+    const f = (column && (column.field || column.type)) || ''
+    return f === 'factoryPrice' ? STYLE_PRICE_CELL : STYLE_DEFAULT_CELL
+  }
+  const field = (column && (column.field || column.type)) || ''
+  // 没有区域选区激活时，直接返回默认样式，不访问 areaRenderTick（避免 vxe-grid 内部渲染触发响应式追踪）
+  if (!areaDragging.value && !areaSelectedColumn.value) {
+    return field === 'factoryPrice' ? STYLE_PRICE_CELL : STYLE_DEFAULT_CELL
+  }
+  void areaRenderTick.value // 强制重新求值（仅选区激活时）
+  if (field === 'factoryPrice') {
+    return STYLE_PRICE_CELL
+  }
+  // 拖拽中的高亮 — O(1) Set 查找
   if (areaDragging.value && field === areaDragField.value) {
-    const data = tableData.value
-    const sIdx = data.findIndex(r => String(r.id) === String(areaDragStartRowId.value))
-    const eIdx = data.findIndex(r => String(r.id) === String(areaDragEndRowId.value))
-    if (sIdx !== -1 && eIdx !== -1) {
-      const min = Math.min(sIdx, eIdx)
-      const max = Math.max(sIdx, eIdx)
-      const rIdx = data.findIndex(r => r.id === row.id)
-      if (rIdx >= min && rIdx <= max) {
-        return { textAlign: 'center', background: '#e3f2fd', outline: '2px solid #4285f4', outlineOffset: '-2px' }
-      }
+    const set = areaDragRowIdSet.value
+    if (set && row && set.has(row.id)) {
+      return STYLE_DRAG_HIGHLIGHT
     }
   }
-  // 已确认选区高亮
+  // 已确认选区高亮 — O(1) Set 查找
   if (areaSelectedColumn.value && field === areaSelectedColumn.value) {
-    const data = tableData.value
-    const sIdx = data.findIndex(r => String(r.id) === String(areaSelectedStartRowId.value))
-    const eIdx = data.findIndex(r => String(r.id) === String(areaSelectedEndRowId.value))
-    if (sIdx !== -1 && eIdx !== -1) {
-      const min = Math.min(sIdx, eIdx)
-      const max = Math.max(sIdx, eIdx)
-      const rIdx = data.findIndex(r => r.id === row.id)
-      if (rIdx >= min && rIdx <= max) {
-        return { textAlign: 'center', background: '#dceefb', outline: '2px solid #4285f4', outlineOffset: '-2px' }
-      }
+    const set = areaSelectedRowIdSet.value
+    if (set && row && set.has(row.id)) {
+      return STYLE_SELECTED_HIGHLIGHT
     }
   }
-  return { textAlign: 'center' }
+  return STYLE_DEFAULT_CELL
 }
 
 const onDocMouseMove = (e) => {
@@ -3285,13 +3399,19 @@ const onDocMouseMove = (e) => {
   const info = getRowIdAndField(target)
   if (!info || info.field !== areaDragColId.value) return
   areaDragEndRowId.value = info.rowId
-  areaRenderTick.value++
+  if (!_areaRaf) {
+    _areaRaf = requestAnimationFrame(() => {
+      _areaRaf = null
+      areaRenderTick.value++
+    })
+  }
 }
 
 const onDocMouseUp = () => {
   document.removeEventListener('mousemove', onDocMouseMove)
   document.removeEventListener('mouseup', onDocMouseUp)
   document.body.classList.remove('sample-area-selecting')
+  if (_areaRaf) { cancelAnimationFrame(_areaRaf); _areaRaf = null }
   if (!areaDragging.value) {
     // 单击单个单元格 → 选中该单元格
     if (areaDragField.value) {
@@ -3321,6 +3441,7 @@ const clearAreaSelection = () => {
   areaSelectedStartRowId.value = null
   areaSelectedEndRowId.value = null
   areaDragging.value = false
+  if (_areaRaf) { cancelAnimationFrame(_areaRaf); _areaRaf = null }
   areaRenderTick.value++
 }
 
@@ -3387,7 +3508,12 @@ const onExtMouseMove = (e) => {
   const info = getRowIdAndField(target)
   if (!info) return
   areaSelectedEndRowId.value = info.rowId
-  areaRenderTick.value++
+  if (!_areaRaf) {
+    _areaRaf = requestAnimationFrame(() => {
+      _areaRaf = null
+      areaRenderTick.value++
+    })
+  }
 }
 
 const onExtMouseUp = () => {
@@ -3395,6 +3521,7 @@ const onExtMouseUp = () => {
   document.body.classList.remove('sample-area-selecting')
   document.removeEventListener('mousemove', onExtMouseMove)
   document.removeEventListener('mouseup', onExtMouseUp)
+  if (_areaRaf) { cancelAnimationFrame(_areaRaf); _areaRaf = null }
   // 重新挂把手到新的最后一行
   attachAreaHandle()
 }
@@ -3462,6 +3589,21 @@ const onCellClick = ({ row }) => {
   selectSample(row)
 }
 
+const onCustomChange = ({ type }) => {
+  if (type === 'confirm' || type === 'reset') {
+    setTimeout(() => saveGridPrefs(), 50)
+  }
+}
+
+const onColumnDragStart = () => {
+  isColumnDragging.value = true
+}
+
+const onColumnDragEnd = () => {
+  isColumnDragging.value = false
+  setTimeout(() => saveGridPrefs(), 100)
+}
+
 const isCardSelected = (item) => {
   return selectedIds.value.includes(item.id)
 }
@@ -3481,6 +3623,33 @@ const onCardImgError = (e) => {
   if (thumb && !img.src.includes('/thumbnails/')) {
     img.src = '/thumbnails/' + thumb
   }
+}
+
+// ── 大图预览滚轮缩放 ──
+const onIpWheel = (e) => {
+  const delta = e.deltaY > 0 ? -0.15 : 0.15
+  ipZoom.value = Math.max(0.3, Math.min(5, +(ipZoom.value + delta).toFixed(2)))
+}
+const onIpMouseDown = (e) => {
+  if (ipZoom.value <= 1) return
+  ipDragging.value = true
+  ipDragStart.value = { x: e.clientX, y: e.clientY, px: ipPanX.value, py: ipPanY.value }
+}
+const onIpMouseMove = (e) => {
+  if (!ipDragging.value) return
+  ipPanX.value = ipDragStart.value.px + (e.clientX - ipDragStart.value.x)
+  ipPanY.value = ipDragStart.value.py + (e.clientY - ipDragStart.value.y)
+}
+const onIpMouseUp = () => { ipDragging.value = false }
+
+// ── 图片拖拽到桌面 ──
+const onSampleImgDragStart = (e) => {
+  const src = e.target.currentSrc || e.target.src
+  if (!src) return
+  const fullUrl = src.startsWith('http') ? src : window.location.origin + src
+  const fileName = src.split('/').pop().split('?')[0] || 'image.jpg'
+  e.dataTransfer.setData('DownloadURL', `image/jpeg:${fileName}:${fullUrl}`)
+  e.dataTransfer.effectAllowed = 'copyMove'
 }
 
 const onModalImgError = (e) => {
@@ -3532,7 +3701,7 @@ const formatFormDate = (obj) => {
   })
   if (!result.infringement) result.infringement = '其他'
   // 产品规格/包装规格空值默认显示0
-  ;['sampleLength','sampleWidth','sampleHeight','packageLength','packageWidth','packageHeight','cartonLength','cartonWidth','cartonHeight'].forEach(k => {
+  ;['sampleLength','sampleWidth','sampleHeight','packageLength','packageWidth','packageHeight','cartonLength','cartonWidth','cartonHeight','sampleGrossWeight','sampleNetWeight','innerBoxCount','cartonCapacity','cartonGrossWeight','cartonNetWeight'].forEach(k => {
     if (result[k] == null || result[k] === '') result[k] = '0'
   })
   return result
@@ -3708,13 +3877,13 @@ const openPhotoModal = () => {
 
 const onThumbMouseEnter = (e, row) => {
   if (showImagePreview.value || showPhotoModal.value) return
-  if (!row.thumbnail) return
+  if (!row.thumbnail && !row.firstImageHash) return
   // 优先用原图，缩略图兜底
-  const thumbSrc = '/thumbnails/' + row.thumbnail
-  const src = row.thumbnail ? thumbSrc : (row.firstImageHash ? '/images/view/hash/' + row.firstImageHash : thumbSrc)
+  const thumbSrc = row.thumbnail ? '/thumbnails/' + row.thumbnail : ''
+  const src = row.firstImageHash ? '/images/view/hash/' + row.firstImageHash : thumbSrc
   const rect = e.target.getBoundingClientRect()
   const gap = 12
-  const previewSize = 620
+  const previewSize = 800
   let left = rect.right + gap
   let top = rect.top
   if (left + previewSize > window.innerWidth) {
@@ -3807,9 +3976,9 @@ const startModalEdit = () => {
     batteryInfo: s.batteryInfo || '',
     certification: s.certification || '',
     remark: s.remark || '',
-    contactPerson: s.contactPerson || '',
-    contactPhone: s.contactPhone || '',
-    mobile: s.mobile || '',
+    contact1: s.contact1 || '',
+    phone1: s.phone1 || '',
+    mobile1: s.mobile1 || '',
     qq: s.qq || ''
   })
   editing.value = true
@@ -4489,6 +4658,11 @@ onMounted(() => {
   }
 })
 
+watch(() => route.path, () => {
+  showPhotoModal.value = false
+  editing.value = false
+})
+
 watch(() => route.query.sampleId, (sampleId) => {
   if (sampleId && !isNaN(Number(sampleId))) {
     api('/samples/' + sampleId).then(res => {
@@ -4507,6 +4681,8 @@ watch(() => route.query.sampleCode, (sampleCode) => {
 }, { immediate: true })
 
 onBeforeUnmount(() => {
+  showPhotoModal.value = false
+  editing.value = false
   document.removeEventListener('click', closeDropdowns)
   window.removeEventListener('keydown', onReportEscKey)
   window.removeEventListener('keydown', onAreaCopyKey, true)
@@ -4540,19 +4716,50 @@ onActivated(() => {
   justify-content: center;
 }
 
+/* 主表格 body 字号 */
+:deep(.vxe-grid:not(#deletedGrid) .vxe-body--column .vxe-cell) {
+  font-size: 26px !important;
+}
+
+/* 已删除表格表头底部边框 */
+:deep(#deletedGrid .vxe-header--column) {
+  border-bottom: 2px solid #d0d5dd !important;
+}
+
+/* 已删除表格分页器字体加大 */
+:deep(#deletedGrid .vxe-pager) {
+  font-size: 18px !important;
+}
+:deep(#deletedGrid .vxe-pager .vxe-pager--goto-btn),
+:deep(#deletedGrid .vxe-pager .vxe-pager--prev-btn),
+:deep(#deletedGrid .vxe-pager .vxe-pager--next-btn),
+:deep(#deletedGrid .vxe-pager .vxe-pager--num-btn),
+:deep(#deletedGrid .vxe-pager .vxe-pager--jump-prev),
+:deep(#deletedGrid .vxe-pager .vxe-pager--jump-next) {
+  font-size: 18px !important;
+  min-width: 40px !important;
+  height: 40px !important;
+  line-height: 40px !important;
+}
+:deep(#deletedGrid .vxe-pager .vxe-select) {
+  font-size: 18px !important;
+}
+
+
 /* 列管理按钮左移 */
 :deep(.vxe-toolbar-custom-target) {
   margin-right: 5px;
 }
 
+
 .sample-btn-card-toggle {
   display: inline-flex !important;
   align-items: center;
   gap: 5px;
-  height: 30px !important;
-  min-height: 30px !important;
-  padding: 0 14px !important;
-  font-size: 13px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  padding: 0 18px !important;
+  font-size: 18px !important;
   margin-right: 6px;
   margin-left: 9px;
   border-radius: 8px;
@@ -4583,14 +4790,14 @@ onActivated(() => {
 .sample-card-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 14px;
-  padding: 8px 12px 12px;
+  gap: 20px;
+  padding: 24px;
   align-content: start;
 }
 
 .sample-card-item {
   background: #fff;
-  border: 1px solid #eaecef;
+  border: 2px solid #e5e7eb;
   border-radius: 10px;
   overflow: hidden;
   cursor: pointer;
@@ -4618,7 +4825,7 @@ onActivated(() => {
 
 .sample-card-item.card-selected {
   border-color: #007aff;
-  box-shadow: 0 0 0 2px rgba(0,122,255,0.25);
+  box-shadow: 0 0 0 3px rgba(0,122,255,0.15);
 }
 
 .card-checkbox {
@@ -4626,8 +4833,8 @@ onActivated(() => {
   top: 6px;
   right: 6px;
   z-index: 5;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   border-radius: 4px;
   border: 2px solid rgba(255,255,255,0.7);
   background: rgba(0,0,0,0.25);
@@ -4656,54 +4863,50 @@ onActivated(() => {
 }
 
 .sample-card-no-img {
-  color: rgba(29,29,31,0.1);
+  color: #d1d5db;
 }
 
 .sample-card-body {
-  padding: 10px 12px 12px;
+  padding: 16px 18px 18px;
 }
 
 .sample-card-name {
-  font-size: 15px;
-  font-weight: 600;
-  color: #1d1d1f;
+  font-size: 32px;
+  font-weight: 700;
+  color: #111827;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 1.35;
-  margin-bottom: 4px;
+  margin-bottom: 12px;
 }
 
-.sample-card-field {
+.sample-card-fields {
   display: grid;
-  grid-template-columns: 54px 1fr 54px 1fr;
-  gap: 2px 6px;
-  align-items: baseline;
-  font-size: 13px;
-  line-height: 1.55;
-  color: rgba(29,29,31,0.72);
-}
-
-.card-label {
-  color: rgba(29,29,31,0.38);
-  text-align: right;
-  white-space: nowrap;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px 10px;
+  align-items: start;
+  margin-top: 6px;
 }
 
 .card-val {
-  color: rgba(29,29,31,0.72);
+  font-size: 30px;
+  color: #000;
+  font-family: "SimSun", "宋体", serif;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
 }
 
-.card-val-cell {
+.card-code {
+  color: #007aff;
+}
+
+.card-val-copy {
   display: flex;
   align-items: center;
-  gap: 2px;
-  min-width: 0;
-  overflow: hidden;
+  gap: 4px;
 }
 
 .card-copy-btn {
@@ -4711,32 +4914,32 @@ onActivated(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   border: none;
   border-radius: 3px;
   background: transparent;
-  color: rgba(29,29,31,0.2);
+  color: #9ca3af;
   cursor: pointer;
   padding: 0;
   transition: color 0.15s, background 0.15s;
 }
 
 .card-copy-btn:hover {
-  color: rgba(29,29,31,0.6);
-  background: rgba(29,29,31,0.06);
+  color: #007aff;
+  background: rgba(0,122,255,0.08);
 }
 
 .card-price {
-  font-size: 15px;
+  font-size: 28px;
   font-weight: 700;
-  color: #e03e2d;
+  color: #e11d48;
 }
 
 .sample-card-divider {
   height: 1px;
-  background: rgba(29,29,31,0.08);
-  margin: 4px 0;
+  background: #e5e7eb;
+  margin: 8px 0;
 }
 
 /* 厂商确认表全屏模态框 */
@@ -4805,10 +5008,10 @@ onActivated(() => {
 
 /* 模板选择列表 */
 .tpl-select-item {
-  padding: 10px 14px;
+  padding: 20px 24px;
   border: 1px solid #e0e0e0;
-  border-radius: 10px;
-  margin-bottom: 8px;
+  border-radius: 12px;
+  margin-bottom: 12px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -4821,14 +5024,14 @@ onActivated(() => {
   background: rgba(0,122,255,0.08);
 }
 .tpl-select-title {
-  font-size: 14px;
+  font-size: 22px;
   font-weight: 600;
   color: #1d1d1f;
 }
 .tpl-select-date {
-  font-size: 12px;
+  font-size: 16px;
   color: #999;
-  margin-top: 2px;
+  margin-top: 6px;
 }
 
 /* Toast */
@@ -4850,167 +5053,165 @@ onActivated(() => {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0,0,0,0.30); z-index: 99999;
   display: flex; align-items: center; justify-content: center;
-  animation: advFadeIn 0.18s ease;
 }
-@keyframes advFadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 .adv-search-panel {
-  width: 95vw; max-width: 1500px; max-height: 92vh;
-  background: #fff;
-  border: 1px solid #e0e3e8;
-  border-radius: 10px;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.18);
-  display: flex; flex-direction: column;
-  animation: advSlideIn 0.2s ease;
+  width: 90vw; max-width: 1600px; max-height: 78vh;
+  background: #fff; border-radius: 28px;
+  box-shadow: 0 32px 64px rgba(0,0,0,0.18);
+  display: flex; flex-direction: column; overflow: hidden;
 }
-@keyframes advSlideIn { from { transform: translateY(-8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
 .adv-search-body {
   flex: 1; overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px 8px;
-  padding: 24px 28px 16px;
+  gap: 28px 36px;
+  padding: 40px 48px;
 }
 
 .adv-field {
-  display: flex; flex-direction: column; gap: 5px;
+  display: flex; flex-direction: column; gap: 12px;
 }
 
-.adv-field > label {
-  font-size: 12px; font-weight: 600; color: #333;
-  white-space: nowrap; line-height: 1.2;
+.adv-field label {
+  font-size: 26px; font-weight: 600; color: #374151;
 }
 
-.adv-field > input,
-.adv-field > select {
-  height: 34px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  padding: 0 10px;
-  font-size: 13px;
-  color: #1d1d1f;
-  outline: none;
-  background: #fff;
+.adv-field input,
+.adv-field select {
+  width: 100%; height: 56px; padding: 0 18px;
+  border: 1px solid #d1d5db; border-radius: 10px;
+  font-size: 22px; outline: none; background: #fff;
+  box-sizing: border-box;
   transition: border-color 0.15s;
 }
-.adv-field > input:focus,
-.adv-field > select:focus {
-  border-color: #007aff;
-  box-shadow: 0 0 0 2px rgba(0,122,255,0.08);
-}
-.adv-field > input::placeholder { color: #bbb; }
 
-/* 范围输入（无单位） */
-.adv-field-range {
-  display: flex; flex-direction: column; gap: 2px;
+.adv-field input:focus,
+.adv-field select:focus {
+  border-color: #007aff;
+  box-shadow: 0 0 0 3px rgba(0,122,255,0.1);
 }
+
+.adv-field-range,
+.adv-field-range-unit {
+  grid-column: span 1;
+}
+
+.adv-field-checks {
+  grid-column: span 1;
+}
+
 .range-inputs {
-  display: flex; align-items: center; gap: 6px;
-}
-.range-inputs :deep(.vxe-date-picker) {
-  flex: 1;
-}
-.range-inputs > input {
-  flex: 1;
-  height: 34px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  padding: 0 8px;
-  font-size: 13px;
-  outline: none;
-  text-align: center;
-  transition: border-color 0.15s;
-}
-.range-inputs > input:focus {
-  border-color: #007aff;
-  box-shadow: 0 0 0 2px rgba(0,122,255,0.08);
-}
-.range-inputs > span {
-  color: #999; font-size: 13px; user-select: none;
+  display: flex; align-items: stretch; gap: 16px;
 }
 
-/* 带单位的范围输入 */
-.adv-field-range-unit .range-inputs {
-  display: flex; align-items: center; gap: 6px;
-}
-.adv-field-range-unit .range-inputs > input {
-  flex: 1;
-  height: 34px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  padding: 0 8px;
-  font-size: 13px;
-  outline: none;
-  text-align: center;
-  transition: border-color 0.15s;
-}
-.adv-field-range-unit .range-inputs > input:focus {
-  border-color: #007aff;
-  box-shadow: 0 0 0 2px rgba(0,122,255,0.08);
-}
-.unit {
-  font-size: 12px; color: #999; white-space: nowrap; min-width: 22px;
+.range-inputs input {
+  flex: 1; min-width: 0;
 }
 
-/* 复选框 */
-.adv-field-checks .check-group {
-  display: flex; align-items: center; gap: 16px; height: 34px;
+.range-inputs span {
+  color: #9ca3af; font-size: 22px; flex-shrink: 0; align-self: center;
 }
+
+.range-inputs .unit {
+  color: #6b7280; font-size: 20px; white-space: nowrap;
+}
+
+.check-group {
+  display: flex; gap: 20px; align-items: center; padding-top: 4px;
+}
+
 .chk-item {
-  display: flex; align-items: center; gap: 4px;
-  font-size: 13px; color: #555; cursor: pointer; user-select: none;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 22px; font-weight: 500; color: #374151; cursor: pointer;
 }
+
 .chk-item input[type="checkbox"] {
-  width: 14px; height: 14px; accent-color: #007aff; cursor: pointer;
+  width: 24px; height: 24px; cursor: pointer;
 }
 
 .adv-search-footer {
-  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
-  padding: 14px 24px;
-  border-top: 1px solid #eee;
-}
-.adv-search-footer button {
-  height: 40px;
-  padding: 0 28px;
-  font-size: 15px;
-  min-width: 100px;
+  display: flex; align-items: center; gap: 16px;
+  padding: 28px 48px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
 }
 
+.adv-search-footer .csd-btn {
+  height: 56px !important;
+  min-height: 56px !important;
+  font-size: 22px !important;
+  font-weight: 600 !important;
+  padding: 0 24px !important;
+}
+
+/* 综合查询日期选择器 */
+.adv-field-range :deep(.sdp-input) {
+  flex: 1; min-width: 0;
+  height: 56px;
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  user-select: none;
+  box-sizing: border-box;
+}
+.adv-field-range :deep(.sdp-placeholder) { color: #999; flex: 1; }
+.adv-field-range :deep(.sdp-value) { color: #007aff; flex: 1; }
+.adv-field-range :deep(.sdp-icon) {
+  width: 24px; height: 24px;
+  color: #999;
+  flex-shrink: 0;
+}
+.adv-field-range :deep(.sdp-clear) {
+  width: 22px; height: 22px;
+  color: #ccc;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.adv-field-range :deep(.sdp-clear:hover) { color: #999; }
+
 /* ========== 对照资料管理弹窗 ========== */
-.ref-modal { background: #fff; border-radius: 14px; width: 680px; max-width: 94vw; padding: 20px 24px; max-height: 86vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,.18); }
+.ref-modal { background: #fff; border-radius: 14px; width: 1200px; max-width: 96vw; padding: 28px; height:calc(86vh - 600px); max-height:calc(86vh - 600px); display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,.18); }
 .ref-modal-header { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; flex-wrap: wrap; }
-.ref-modal-header strong { font-size: 15px; font-weight: 700; flex-shrink: 0; }
+.ref-modal-header strong { font-size: 24px; font-weight: 700; flex-shrink: 0; }
 .ref-modal-body { flex: 1; overflow: hidden; min-height: 0; }
-.ref-panel { display: flex; flex-direction: column; gap: 10px; }
-.ref-panel-toolbar { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
-.ref-tabs { display: flex; gap: 3px; background: #f1f5f9; border-radius: 8px; padding: 3px; margin-left: auto; }
-.ref-tab { padding: 5px 14px; border-radius: 6px; border: none; background: transparent; font-size: 12.5px; cursor: pointer; transition: all .15s; color: #64748b; }
+.ref-panel { display: flex; flex-direction: column; gap: 16px; }
+.ref-panel-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ref-tabs { display: flex; gap: 4px; background: #f1f5f9; border-radius: 10px; padding: 5px; margin-left: auto; }
+.ref-tab { padding: 10px 22px; border-radius: 8px; border: none; background: transparent; font-size: 20px; cursor: pointer; transition: all .15s; color: #64748b; }
 .ref-tab.active { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.08); font-weight: 600; color: #1e293b; }
-.ref-search-box { display: flex; align-items: center; gap: 5px; background: #f1f5f9; border-radius: 6px; padding: 4px 10px; }
-.ref-search-box input { border: none; background: transparent; outline: none; font-size: 12px; width: 150px; }
-.ref-filter-select { border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; font-size: 12px; background: #fff; }
-.rf-tag { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 10.5px; font-weight: 500; }
+.ref-search-box { display: flex; align-items: center; gap: 6px; background: #f1f5f9; border-radius: 8px; padding: 8px 16px; }
+.ref-search-box input { border: none; background: transparent; outline: none; font-size: 22px; width: 220px; }
+.ref-filter-select { border: 1px solid #d1d5db; border-radius: 8px; padding: 8px 14px; font-size: 22px; background: #fff; }
+.rf-tag { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 14px; font-weight: 500; }
 .rf-tag-l1 { background: #dbeafe; color: #1d4ed8; }
 .rf-tag-l2 { background: #fce7f3; color: #be185d; }
-.ref-action-btn { padding: 3px 6px; border: 1px solid #e2e8f0; border-radius: 4px; background: #fff; cursor: pointer; display: inline-flex; align-items: center; transition: all .12s; }
+.ref-action-btn { padding: 14px 22px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; cursor: pointer; display: inline-flex; align-items: center; transition: all .12s; font-size: 22px; }
 .ref-action-btn:hover { background: #f1f5f9; border-color: #cbd5e1; }
 .ref-action-btn.danger:hover { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
-.ref-inline-input { width: 100%; padding: 2px 4px; border: 1px solid transparent; border-radius: 3px; font-size: 12px; background: transparent; outline: none; transition: border-color .15s; }
+.ref-inline-input { width: 100%; padding: 6px 10px; border: 1px solid transparent; border-radius: 6px; font-size: 20px; background: transparent; outline: none; transition: border-color .15s; }
 .ref-inline-input:hover { border-color: #e2e8f0; }
 .ref-inline-input:focus { border-color: #3b82f6; background: #fff; }
-.ref-form-modal { background: #fff; border-radius: 14px; width: 420px; max-width: 90vw; padding: 22px; box-shadow: 0 16px 48px rgba(0,0,0,.15); }
-.ref-form-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 11px; }
-.ref-form-row label { font-size: 12.5px; font-weight: 600; color: #374151; }
-.ref-form-row input, .ref-form-row select { border: 1px solid #d1d5db; border-radius: 7px; padding: 7px 10px; font-size: 13px; transition: border-color .15s; }
+.ref-form-modal { background: #fff; border-radius: 14px; width: 600px; max-width: 92vw; padding: 28px; box-shadow: 0 16px 48px rgba(0,0,0,.15); }
+.ref-form-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.ref-form-row label { font-size: 22px; font-weight: 600; color: #374151; }
+.ref-form-row input, .ref-form-row select { border: 1px solid #d1d5db; border-radius: 8px; padding: 10px 14px; font-size: 22px; transition: border-color .15s; }
 .ref-form-row input:focus, .ref-form-row select:focus { border-color: #007aff; outline: none; box-shadow: 0 0 0 3px rgba(0,122,255,.1); }
-.ref-modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.ref-modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .ref-required { color: #ef4444; }
 
 /* 树形表格内一级类目行加粗 */
 .ref-panel :deep(.vxe-table--body .row--level-1) { font-weight: 600; color: #1e293b; }
 .ref-panel :deep(.vxe-table--body .row--level-2) { color: #475569; }
 .ref-panel :deep(.vxe-tree-node-wrapper) { padding-left: 6px !important; }
+.ref-panel :deep(.vxe-table--body .vxe-cell) { white-space: nowrap; }
 .ref-panel :deep(.vxe-tree-cell) { white-space: nowrap; }
 
 .cursor-pointer { cursor: pointer; }
@@ -5081,20 +5282,22 @@ onActivated(() => {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
-  padding: 10px 16px;
+  gap: 14px;
+  padding: 14px 20px;
   background: #eef6ff;
   border: 1px solid #b3d8ff;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 20px;
 }
 .bm-info-label {
   font-weight: 600;
   color: #007aff;
   margin-right: 2px;
+  font-size: 22px;
 }
 .bm-info-value {
   color: #333;
+  font-size: 20px;
 }
 .bm-info-value strong {
   color: #1d1d1f;
@@ -5102,7 +5305,7 @@ onActivated(() => {
 .bm-info-hint {
   width: 100%;
   color: #999;
-  font-size: 12px;
+  font-size: 18px;
   margin-top: 2px;
 }
 
@@ -5171,5 +5374,490 @@ onActivated(() => {
 .conflict-validation-msg {
   color: #d4380d; font-size: 13px; font-weight: 600;
   margin-right: auto;
+}
+
+/* ── 大图预览滚轮缩放 ── */
+.ip-main img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.ip-zoom-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.ip-zoom-label {
+  font-size: 11px;
+  color: rgba(29,29,31,0.45);
+  min-width: 36px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.ip-zoom-btn {
+  width: 26px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.06);
+  color: rgba(29,29,31,0.55);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.ip-zoom-btn:hover {
+  background: rgba(0,0,0,0.12);
+  color: #1d1d1f;
+}
+
+/* ── 上传锁按钮 ── */
+.ip-lock-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: 14px;
+  background: #fff;
+  color: rgba(29,29,31,0.45);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+.ip-lock-btn::after {
+  content: '锁定';
+  font-weight: 500;
+}
+.ip-lock-btn:hover {
+  border-color: rgba(0,0,0,0.18);
+  background: #f5f5f7;
+  color: rgba(29,29,31,0.65);
+}
+.ip-lock-btn.locked {
+  border-color: rgba(255,59,48,0.25);
+  background: rgba(255,59,48,0.06);
+  color: #ff3b30;
+}
+.ip-lock-btn.locked::after {
+  content: '已锁';
+}
+.ip-lock-btn.locked:hover {
+  background: rgba(255,59,48,0.12);
+  border-color: rgba(255,59,48,0.35);
+}
+</style>
+
+<style>
+.image-preview-overlay {
+  background: transparent !important;
+}
+</style>
+
+<style scoped>
+/* ── sample-photo-modal 模态框样式（独立,不依赖共享 spm-*） ── */
+
+.sample-photo-modal {
+  position: fixed;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  background: #f5f6f8;
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.30), 0 4px 20px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.8);
+  font-size: 13px;
+  color: #1d1d1f;
+  user-select: none;
+  overflow: hidden !important;
+}
+
+.spm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 16px 16px 0 0;
+  background: linear-gradient(180deg, #fff, #f7f9fc);
+  border-bottom: 1px solid rgba(0,122,255,0.10);
+  cursor: move;
+  flex-shrink: 0;
+}
+.spm-header-title {
+  font-size: 24px;
+  font-weight: 720;
+  letter-spacing: -0.01em;
+}
+.spm-header-close {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: rgba(29,29,31,0.40);
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.spm-header-close:hover {
+  background: rgba(255,59,48,0.10);
+  color: #ff3b30;
+}
+
+.spm-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 1px;
+  background: #fff;
+  overflow: hidden;
+}
+.spm-body-main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 1px;
+}
+
+.spm-top-card {
+  display: flex;
+  gap: 24px;
+  padding: 20px 28px;
+  background: #fff;
+  border-bottom: 1px solid #e2e4ea;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.spm-top-card-field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.spm-top-card-field span {
+  font-size: 14px;
+  color: rgba(29,29,31,0.46);
+  font-weight: 500;
+}
+.spm-top-card-field strong {
+  font-size: 18px;
+  color: #1d1d1f;
+  font-weight: 700;
+}
+.spm-top-card-field strong.spm-price {
+  color: #e53e3e;
+}
+
+.spm-body-left {
+  width: 1280px;
+  min-width: 1280px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: #fff;
+  padding: 14px;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.spm-main-img-wrap {
+  width: 1200px;
+  height: 900px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fafafa;
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: grab;
+  position: relative;
+}
+.spm-main-img-wrap img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.spm-main-img-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,0.45);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.spm-main-img-wrap:hover .spm-main-img-nav { opacity: 1; }
+.spm-main-img-prev { left: 8px; }
+.spm-main-img-next { right: 8px; }
+
+.spm-thumb-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 3px 0;
+  flex-shrink: 0;
+}
+.spm-thumb-strip::-webkit-scrollbar { height: 4px; }
+.spm-thumb-strip::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(0,122,255,0.18);
+}
+
+.spm-thumb-item {
+  flex-shrink: 0;
+  width: 80px;
+  height: 60px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  cursor: pointer;
+  background: #eee;
+  transition: all 0.15s;
+  position: relative;
+}
+.spm-thumb-item.active {
+  border-color: #007aff;
+  box-shadow: 0 0 0 2px rgba(0,122,255,0.15);
+}
+.spm-thumb-item:hover:not(.active) {
+  border-color: rgba(0,122,255,0.35);
+}
+.spm-thumb-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.spm-body-right {
+  flex: 1;
+  min-width: 340px;
+  background: #fff;
+  padding: 80px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.spm-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.spm-field {
+  display: flex;
+  align-items: baseline;
+  gap: 30px;
+  padding: 8px 14px;
+  border-bottom: 1px solid #f0f2f5;
+  line-height: 1.4;
+}
+.spm-field:nth-child(odd) {
+  border-right: 1px solid #f0f2f5;
+}
+.spm-field.spm-field-full {
+  grid-column: 1 / -1;
+  border-right: none !important;
+}
+
+.spm-field-label {
+  width: 100px;
+  font-size: 24px;
+  color: rgba(29,29,31,0.46);
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-weight: 600;
+  text-align: left;
+}
+
+.spm-field-value {
+  font-size: 26px;
+  font-weight: 600;
+  color: #1d1d1f;
+  word-break: break-all;
+  flex: 1;
+  text-align: left;
+}
+.spm-field-value.spm-price {
+  color: #ff3b30;
+  font-weight: 750;
+}
+
+.spm-field-dim {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: #86868b;
+}
+
+.spm-section-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: rgba(29,29,31,0.55);
+  padding: 8px 10px 4px;
+  margin-top: 4px;
+  border-top: 1px dashed #e2e4ea;
+}
+
+.spm-input {
+  flex: 1;
+  height: 40px;
+  min-width: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 16px;
+  color: #1d1d1f;
+  background: #fff;
+  outline: none;
+  text-align: center;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.spm-input:focus {
+  border-color: #007aff;
+  box-shadow: 0 0 0 3px rgba(0,122,255,0.12);
+}
+.spm-input-sm {
+  width: 72px;
+  flex: none;
+  text-align: center;
+  padding: 0 6px;
+}
+.spm-input-ro {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.spm-btn-edit {
+  height: 56px;
+  padding: 0 40px;
+  border-radius: 10px;
+  border: none;
+  background: #007aff;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.spm-btn-edit:hover { background: #0066d6; }
+
+.spm-btn-save {
+  height: 56px;
+  padding: 0 36px;
+  border-radius: 10px;
+  border: none;
+  background: #007aff;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.spm-btn-save:hover { background: #0066d6; }
+
+.spm-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 22px;
+  background: linear-gradient(180deg, #f7f9fc, #f0f2f7);
+  border-top: 1px solid rgba(0,122,255,0.08);
+  border-radius: 0 0 16px 16px;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.spm-toggle-group {
+  display: flex;
+  gap: 14px;
+}
+
+.spm-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  color: rgba(29,29,31,0.55);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  font-weight: 600;
+  transition: color 0.15s;
+}
+.spm-toggle:hover { color: #ff3b30; }
+.spm-toggle input[type="checkbox"] {
+  accent-color: #ff3b30;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+}
+
+.spm-btn-close {
+  height: 56px;
+  padding: 0 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,122,255,0.15);
+  background: #fff;
+  color: rgba(29,29,31,0.65);
+  font-size: 22px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.spm-btn-close:hover {
+  background: rgba(0,122,255,0.06);
+  border-color: rgba(0,122,255,0.25);
+  color: #007aff;
+}
+
+.spm-hidden { display: none !important; }
+
+.spm-no-img {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(29,29,31,0.22);
+  letter-spacing: 0.1em;
 }
 </style>

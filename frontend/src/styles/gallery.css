@@ -1,4 +1,4 @@
-﻿/* =========================
+/* =========================
    Gallery Page / Detail Page
    与样品资料页统一风格
 ========================= */
@@ -24,15 +24,21 @@
   -webkit-backdrop-filter: blur(22px) saturate(180%);
 }
 
-/* 表单区 */
+/* 表单区 - 参考 sample 页面 */
 .gallery-form-card {
   position: relative;
-  flex: 0 0 182px;
-  height: 182px;
-  min-height: 182px;
+  flex: 0 0 158px;
+  height: 158px;
+  min-height: 158px;
   padding: 18px 20px 18px 24px;
   border-radius: 28px;
   overflow: hidden;
+}
+
+.gallery-form-card.expanded {
+  flex-basis: 276px;
+  height: 276px;
+  min-height: 276px;
 }
 
 .gallery-form-card::before {
@@ -47,10 +53,11 @@
   box-shadow: 0 0 20px rgba(0,122,255,0.36);
 }
 
+/* 表单顶部栏 */
 .gallery-form-top {
   position: relative;
   z-index: 1;
-  height: 38px;
+  height: 0px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -58,14 +65,14 @@
   margin-bottom: 14px;
 }
 
-.gallery-section-title {
+.gallery-form-title {
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
 }
 
-.gallery-section-icon {
+.gallery-form-title-icon {
   width: 34px;
   height: 34px;
   border-radius: 14px;
@@ -78,109 +85,211 @@
   box-shadow: 0 10px 20px rgba(0,122,255,0.20);
 }
 
-.gallery-section-title strong {
+.gallery-form-title strong {
   font-size: 14px;
   font-weight: 820;
   color: #1d1d1f;
   letter-spacing: -0.02em;
 }
 
-.gallery-section-title span {
+.gallery-form-title span {
   margin-left: 6px;
   font-size: 12px;
   font-weight: 600;
   color: rgba(29,29,31,0.42);
 }
 
-.gallery-form-actions,
-.gallery-toolbar-actions,
-.gallery-detail-actions {
+.gallery-form-actions {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
 }
 
-.gallery-mode-pill {
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 12px;
-  border-radius: 999px;
-  color: rgba(29,29,31,0.52);
-  font-size: 12px;
-  font-weight: 700;
-  background: rgba(0,122,255,0.07);
+/* 字段设置面板 */
+.gallery-field-settings {
+  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(0,122,255,0.04);
   border: 1px solid rgba(0,122,255,0.10);
 }
 
-.gallery-form-grid {
+.field-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.field-settings-title {
+  font-size: 13px;
+  font-weight: 760;
+  color: #1d1d1f;
+}
+
+.field-settings-close {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(29,29,31,0.48);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.field-settings-close:hover {
+  background: rgba(255,59,48,0.08);
+  color: #ff3b30;
+}
+
+.field-settings-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.field-settings-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid rgba(0,122,255,0.10);
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(29,29,31,0.68);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.field-settings-chip:hover {
+  border-color: rgba(0,122,255,0.28);
+  background: rgba(0,122,255,0.04);
+}
+
+.field-settings-chip input[type="checkbox"] {
+  accent-color: #007aff;
+  cursor: pointer;
+}
+
+/* 表单主体 */
+.gallery-form-body {
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+}
+
+.gallery-form-scroll {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.gallery-form-card.expanded .gallery-form-scroll {
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.gallery-form-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.gallery-form-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(0,122,255,0.18);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.gallery-form-grid {
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px 16px;
+  margin-top: 0;
 }
 
 .gallery-form-field {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex: 1 1 200px;
   min-width: 0;
-}
-
-.gallery-form-field.full {
-  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
 }
 
 .gallery-form-label {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1;
-  font-weight: 720;
-  color: rgba(29,29,31,0.56);
+  font-weight: normal;
+  color: #1d1d1f;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.gallery-form-input,
-.gallery-form-textarea {
+.gallery-form-input {
   width: 100%;
   height: 38px;
   padding: 0 13px;
   border-radius: 14px;
-  border: 1px solid rgba(0,122,255,0.12);
+  border: 1px solid rgba(0,0,0,0.18);
   outline: none;
-  color: #1d1d1f;
-  font-size: 13px;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.96), rgba(245,250,255,0.86));
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,1),
-    0 8px 18px rgba(0,122,255,0.04);
+  text-align: center;
+  color: #007aff;
+  font-size: 15px;
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(0,122,255,0.04);
   transition: all 0.22s ease;
 }
 
-.gallery-form-textarea {
-  height: 44px;
-  padding-top: 10px;
-  resize: none;
+.gallery-form-input::placeholder {
+  color: rgba(29,29,31,0.32);
 }
 
-.gallery-form-input:focus,
-.gallery-form-textarea:focus {
+.gallery-form-input:focus {
   transform: translateY(-1px);
   border-color: rgba(0,122,255,0.70);
   background: #fff;
+  color: #007aff;
   box-shadow:
     0 0 0 4px rgba(0,122,255,0.13),
     0 14px 28px rgba(0,122,255,0.10),
     inset 0 1px 0 rgba(255,255,255,1);
 }
 
+.gallery-form-input[readonly] {
+  cursor: default;
+  color: #1d1d1f;
+  background: #fff;
+  border-color: rgba(0,0,0,0.15);
+  box-shadow: none;
+}
+
+.gallery-form-input[readonly]:focus {
+  transform: none;
+  border-color: rgba(0,122,255,0.06);
+  background: rgba(240,243,248,0.65);
+  box-shadow: none;
+}
+
 /* 工具栏 */
 .gallery-toolbar-card {
-  flex: 0 0 104px;
-  height: 104px;
-  min-height: 104px;
-  padding: 14px 16px;
+  flex: 0 0 58px;
+  height: 58px;
+  min-height: 58px;
+  padding: 12px 16px;
   border-radius: 28px;
   display: flex;
   flex-direction: column;
@@ -195,22 +304,6 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-}
-
-.gallery-toolbar-row.search-row {
-  display: grid;
-  grid-template-columns: minmax(220px, 320px) auto auto auto auto 1fr;
-  align-items: center;
-}
-
-.gallery-toolbar-row.action-row {
-  overflow-x: auto;
-  overflow-y: hidden;
-  white-space: nowrap;
-}
-
-.gallery-toolbar-row.action-row::-webkit-scrollbar {
-  height: 0;
 }
 
 .gallery-search {
@@ -264,12 +357,12 @@
   height: 36px;
   min-height: 36px;
   border: 0;
-  border-radius: 14px;
-  padding: 0 13px;
+  border-radius: 12px;
+  padding: 0 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 5px;
   cursor: pointer;
   white-space: nowrap;
   font-size: 13px;
@@ -337,89 +430,43 @@
 .gallery-table-wrap {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  min-width: 0;
+  overflow: hidden;
   border-radius: 28px 28px 0 0;
 }
 
-.gallery-table-wrap::-webkit-scrollbar,
-.gallery-detail-scroll::-webkit-scrollbar {
+.gallery-table-wrap::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 
-.gallery-table-wrap::-webkit-scrollbar-thumb,
-.gallery-detail-scroll::-webkit-scrollbar-thumb {
+.gallery-table-wrap::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background: rgba(0,122,255,0.18);
   border: 3px solid transparent;
   background-clip: content-box;
 }
 
-.gallery-data-table {
-  width: 100%;
-  min-width: 920px;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 13px;
+/* VXE 表头样式 */
+.vxe-header--column {
+  border-right: 1px solid #d0d5dd !important;
+  border-bottom: 2px solid #b0b8c4 !important;
 }
 
-.gallery-data-table th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  height: 42px;
-  padding: 0 14px;
-  text-align: center;
-  color: rgba(29,29,31,0.54);
-  font-size: 11px;
-  font-weight: 820;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.98), rgba(238,247,255,0.94));
-  border-bottom: 1px solid rgba(0,122,255,0.12);
-  border-right: 1px solid rgba(0,122,255,0.08);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+.vxe-header--column .vxe-cell {
+  white-space: nowrap !important;
 }
 
-.gallery-data-table td {
-  height: 44px;
-  padding: 0 14px;
-  text-align: center;
-  color: rgba(29,29,31,0.74);
-  font-weight: 560;
-  white-space: nowrap;
-  background: rgba(255,255,255,0.58);
-  border-bottom: 1px solid rgba(0,122,255,0.08);
-  border-right: 1px solid rgba(0,122,255,0.06);
-  transition: all 0.18s ease;
+.vxe-body--column .vxe-cell {
+  font-size: 18px;
 }
 
-.gallery-data-table td:last-child,
-.gallery-data-table th:last-child {
-  border-right: none;
+.vxe-header--column:last-child {
+  border-right: none !important;
 }
 
-.gallery-data-table tbody tr:hover td {
-  background: rgba(235,247,255,0.82);
-  color: #1d1d1f;
-}
-
-.gallery-data-table tbody tr.selected td {
-  background: rgba(0,122,255,0.13) !important;
-  color: #005ecb;
-}
-
-.gallery-code-link {
-  color: var(--blue);
-  font-weight: 820;
-  text-decoration: none;
-}
-
-.gallery-code-link:hover {
-  text-decoration: underline;
+.vxe-table .vxe-header--row .vxe-header--column {
+  background: #ffffff !important;
 }
 
 .gallery-statusbar {
@@ -443,17 +490,62 @@
   white-space: nowrap;
 }
 
-.gallery-page-size {
-  height: 34px;
-  min-width: 88px;
-  padding: 0 28px 0 12px;
-  border-radius: 13px;
-  border: 1px solid rgba(0,122,255,0.12);
-  outline: none;
+.gallery-status-info strong {
+  color: #1d1d1f;
+}
+
+.gallery-pagination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.gallery-page-text {
   color: rgba(29,29,31,0.58);
   font-size: 12px;
   font-weight: 700;
-  background: rgba(255,255,255,0.72);
+  white-space: nowrap;
+}
+
+.gallery-page-size-label {
+  font-size: 11px;
+  color: rgba(29,29,31,0.45);
+  white-space: nowrap;
+}
+
+.gallery-page-size-select {
+  height: 26px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1d1d1f;
+  background: #fff;
+  border: 1px solid rgba(0,122,255,0.2);
+  border-radius: 5px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.gallery-page-size-select:focus {
+  border-color: #007aff;
+  box-shadow: 0 0 0 2px rgba(0,122,255,0.1);
+}
+
+/* 工具栏按钮尺寸 */
+.gallery-toolbar-card .gallery-btn {
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 14px !important;
+  font-size: 13px !important;
+}
+
+.gallery-statusbar .gallery-btn {
+  height: 34px !important;
+  min-height: 34px !important;
+  font-size: 12px;
+  padding: 0 11px;
 }
 
 /* =========================
@@ -738,20 +830,8 @@
 }
 
 @media (max-width: 1280px) {
-  .gallery-form-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
   .gallery-info-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .gallery-toolbar-row.search-row {
-    grid-template-columns: minmax(180px, 1fr) auto auto auto auto;
-  }
-
-  .gallery-toolbar-row.search-row > div:last-child {
-    display: none;
   }
 }
 
@@ -779,16 +859,12 @@
     min-height: 0;
   }
 
-  .gallery-toolbar-row.search-row,
+  .gallery-toolbar-row,
   .gallery-detail-top,
   .gallery-detail-left,
   .gallery-detail-right {
     display: flex !important;
     flex-wrap: wrap;
-  }
-
-  .gallery-form-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .gallery-info-grid {
@@ -798,102 +874,6 @@
   .gallery-table-card,
   .gallery-image-table-card {
     min-height: 480px;
-  }
-}
-
-/* =========================
-   Gallery Form Fix
-   修复择样图库表单区被裁切
-========================= */
-
-.gallery-form-card {
-  flex: 0 0 224px !important;
-  height: 224px !important;
-  min-height: 224px !important;
-  max-height: 224px !important;
-  overflow: hidden !important;
-}
-
-/* 表单标题区保持固定 */
-.gallery-form-top {
-  height: 38px;
-  min-height: 38px;
-  margin-bottom: 14px;
-}
-
-/* 表单网格压缩一点，让两行完整显示 */
-.gallery-form-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px 16px;
-}
-
-/* 单个字段高度统一 */
-.gallery-form-field {
-  min-height: 56px;
-}
-
-/* 输入框高度统一 */
-.gallery-form-input {
-  height: 38px !important;
-  min-height: 38px !important;
-}
-
-/* 备注改成单行高度，不要撑开 */
-.gallery-form-textarea {
-  height: 38px !important;
-  min-height: 38px !important;
-  max-height: 38px !important;
-  line-height: 18px;
-  padding-top: 9px !important;
-  resize: none;
-}
-
-/* 备注占整行 */
-.gallery-form-field.full {
-  grid-column: 1 / -1;
-}
-
-/* 中等屏幕下也不裁 */
-@media (max-width: 1280px) {
-  .gallery-form-card {
-    flex-basis: 238px !important;
-    height: 238px !important;
-    min-height: 238px !important;
-    max-height: 238px !important;
-  }
-
-  .gallery-form-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-/* 小屏允许自然高度 */
-@media (max-width: 980px) {
-  .gallery-form-card {
-    flex-basis: auto !important;
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    overflow: visible !important;
-  }
-
-  .gallery-form-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .gallery-form-field.full {
-    grid-column: 1 / -1;
-  }
-
-  .gallery-form-textarea {
-    height: 46px !important;
-    max-height: none !important;
-  }
-}
-
-@media (max-width: 560px) {
-  .gallery-form-grid {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -916,31 +896,7 @@
   overflow: hidden !important;
 }
 
-/* 查询行：严格对齐 */
-.gallery-toolbar-row.search-row {
-  height: 38px !important;
-  min-height: 38px !important;
-  display: grid !important;
-  grid-template-columns: 430px 190px 24px 190px auto 1fr;
-  align-items: center;
-  gap: 10px;
-}
 
-/* 操作行：只放全局操作按钮 */
-.gallery-toolbar-row.action-row {
-  height: 38px !important;
-  min-height: 38px !important;
-  display: flex !important;
-  align-items: center;
-  gap: 10px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  white-space: nowrap;
-}
-
-.gallery-toolbar-row.action-row::-webkit-scrollbar {
-  height: 0;
-}
 
 /* 搜索框 */
 .gallery-search {
@@ -1135,7 +1091,7 @@
     overflow: visible !important;
   }
 
-  .gallery-toolbar-row.search-row {
+  .gallery-toolbar-row {
     height: auto !important;
     display: flex !important;
     flex-wrap: wrap;
@@ -1148,10 +1104,6 @@
 
   .gallery-date-input {
     width: 160px;
-  }
-
-  .gallery-toolbar-row.action-row {
-    height: auto !important;
   }
 }
 

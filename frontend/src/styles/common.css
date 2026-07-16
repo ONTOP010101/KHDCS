@@ -10,9 +10,6 @@
   display: none;
   align-items: center;
   justify-content: center;
-  background: rgba(15,23,42,0.36);
-  backdrop-filter: blur(12px) saturate(160%);
-  -webkit-backdrop-filter: blur(12px) saturate(160%);
 }
 
 .app-dialog-mask.show {
@@ -20,8 +17,8 @@
 }
 
 .app-dialog-box {
-  width: min(480px, calc(100vw - 40px));
-  border-radius: 28px;
+  width: min(900px, calc(100vw - 32px));
+  border-radius: 32px;
   overflow: hidden;
   background:
     linear-gradient(155deg, rgba(255,255,255,0.99), rgba(242,248,255,0.96));
@@ -46,22 +43,22 @@
 }
 
 .app-dialog-head {
-  min-height: 68px;
-  padding: 20px 22px 12px;
+  min-height: 90px;
+  padding: 28px 30px 14px;
   display: flex;
   align-items: center;
-  gap: 13px;
+  gap: 16px;
 }
 
 .app-dialog-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 17px;
+  width: 60px;
+  height: 60px;
+  border-radius: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-size: 20px;
+  font-size: 32px;
   flex-shrink: 0;
   background: linear-gradient(135deg, #0a84ff, #5ac8fa);
   box-shadow:
@@ -99,36 +96,38 @@
 
 .app-dialog-title {
   color: #1d1d1f;
-  font-size: 16px;
+  font-size: 30px;
   font-weight: 900;
   letter-spacing: -0.02em;
 }
 
 .app-dialog-body {
-  padding: 4px 24px 22px 79px;
+  padding: 4px 32px 28px 106px;
   color: rgba(29,29,31,0.60);
-  font-size: 13px;
+  font-size: 26px;
   font-weight: 650;
   line-height: 1.72;
   word-break: break-word;
+  max-height: 60vh;
+  overflow-y: auto;
 }
 
 .app-dialog-foot {
-  min-height: 64px;
-  padding: 12px 20px 20px;
+  min-height: 80px;
+  padding: 18px 28px 28px;
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 14px;
 }
 
 .app-dialog-btn {
-  height: 40px;
-  min-width: 92px;
+  height: 56px;
+  min-width: 120px;
   border: 0;
-  border-radius: 15px;
-  padding: 0 18px;
+  border-radius: 18px;
+  padding: 0 28px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 26px;
   font-weight: 800;
   display: inline-flex;
   align-items: center;
@@ -235,6 +234,24 @@
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   animation: appToastIn 0.28s cubic-bezier(.22,1,.36,1);
+}
+
+.app-toast-lg {
+  max-width: min(520px, calc(100vw - 30px));
+  padding: 18px 28px;
+  font-size: 26px;
+  animation: appToastInLg 0.28s cubic-bezier(.22,1,.36,1);
+}
+
+@keyframes appToastInLg {
+  from {
+    opacity: 0;
+    transform: scale(0.88) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 @keyframes appToastIn {
