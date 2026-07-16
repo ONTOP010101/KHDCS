@@ -1,7 +1,0 @@
-D:\PZXT\photo-management
-D:\PZXT\photo-management\images
-D:\PZXT\photo-management\thumbnails
-C:\Redis
-C:\nginx\nginx-1.26.3
-C:\Program Files\MySQL\MySQL Server 8.0
-C:\Program Files\PostgreSQL\16
