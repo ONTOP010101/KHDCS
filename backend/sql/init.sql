@@ -1,4 +1,4 @@
-CREATE DATABASE IF NOT EXISTS photo_management
+﻿CREATE DATABASE IF NOT EXISTS photo_management
     DEFAULT CHARACTER SET utf8mb4
     DEFAULT COLLATE utf8mb4_unicode_ci;
 

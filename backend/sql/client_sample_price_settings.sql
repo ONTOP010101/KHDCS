@@ -1,0 +1,28 @@
+-- 客户择样报价设置表
+CREATE TABLE IF NOT EXISTS `client_sample_price_settings` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `code_name` VARCHAR(20) NOT NULL COMMENT '本次代号 (关联client_samples.code_name)',
+  `template` VARCHAR(20) DEFAULT '除法' COMMENT '报价模板: 除法/乘法',
+  `method` VARCHAR(20) DEFAULT '除法' COMMENT '报价方式: 除法/乘法/自定义',
+  `profit_rate` DECIMAL(10,4) DEFAULT '0' COMMENT '利润率(%)',
+  `total_cost` DECIMAL(10,2) DEFAULT '0' COMMENT '总费用',
+  `currency_type` VARCHAR(10) DEFAULT 'RMB' COMMENT '货币种类',
+  `currency_symbol` VARCHAR(10) DEFAULT '¥' COMMENT '货币符号',
+  `currency_name` VARCHAR(20) DEFAULT '人民币' COMMENT '货币名称',
+  `exchange_rate` DECIMAL(10,4) DEFAULT '1' COMMENT '汇率',
+  `carton_size` INT DEFAULT 68 COMMENT '每车尺码',
+  `use_cubic_m` TINYINT DEFAULT 0 COMMENT '使用立方米: 0=否,1=是',
+  `markup` DECIMAL(10,4) DEFAULT '0' COMMENT '报价加价',
+  `formula_type` VARCHAR(20) DEFAULT 'divide' COMMENT '公式类型: multiply/divide/custom',
+  `round_mode` VARCHAR(20) DEFAULT '四舍五入' COMMENT '取舍方式',
+  `decimals` INT DEFAULT 2 COMMENT '小数位数',
+  `price_less_than` DECIMAL(10,4) DEFAULT '0' COMMENT '价格小于阈值',
+  `round_mode2` VARCHAR(20) DEFAULT '四舍五入' COMMENT '二级取舍方式',
+  `price_decimals` INT DEFAULT 2 COMMENT '价格小数位数',
+  `custom_formula` TEXT DEFAULT NULL COMMENT '自定义公式',
+  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` TINYINT DEFAULT 0 COMMENT '逻辑删除 (0=正常,1=已删除)',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_code_name` (`code_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户择样报价设置表';

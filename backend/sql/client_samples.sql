@@ -1,0 +1,27 @@
+-- 客户择样表
+CREATE TABLE IF NOT EXISTS `client_samples` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `code_name` VARCHAR(20) NOT NULL COMMENT '本次代号 (如100100Y)',
+  `selection_id` VARCHAR(30) NOT NULL COMMENT '择样编号 (如20260624-100100Y)',
+  `client_code` VARCHAR(50) DEFAULT NULL COMMENT '客户编号',
+  `client_name` VARCHAR(100) DEFAULT NULL COMMENT '客户名称',
+  `selection_date` VARCHAR(50) DEFAULT NULL COMMENT '择样日期',
+  `order_phone` VARCHAR(20) DEFAULT NULL COMMENT '下单人手机',
+  `recorder` VARCHAR(50) DEFAULT NULL COMMENT '录单人员',
+  `record_date` VARCHAR(50) DEFAULT NULL COMMENT '录单日期',
+  `modifier` VARCHAR(50) DEFAULT NULL COMMENT '修改人员',
+  `modify_date` VARCHAR(50) DEFAULT NULL COMMENT '修改日期',
+  `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+  `discount` VARCHAR(20) DEFAULT '100' COMMENT '折扣',
+  `create_by` BIGINT DEFAULT NULL COMMENT '创建人ID',
+  `update_by` BIGINT DEFAULT NULL COMMENT '修改人ID',
+  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` TINYINT DEFAULT 0 COMMENT '逻辑删除 (0=正常,1=已删除)',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_code_name` (`code_name`),
+  KEY `idx_selection_id` (`selection_id`),
+  KEY `idx_client_code` (`client_code`),
+  KEY `idx_client_name` (`client_name`),
+  KEY `idx_deleted` (`deleted`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户择样表';
