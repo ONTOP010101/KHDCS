@@ -2,9 +2,7 @@ package com.app.service;
 
 import cn.hutool.core.io.FileUtil;
 import com.app.common.BusinessException;
-import com.app.entity.Sample;
 import com.app.entity.Video;
-import com.app.mapper.SampleMapper;
 import com.app.mapper.VideoMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,9 +37,6 @@ public class VideoService {
     @Autowired
     private VideoMapper videoMapper;
 
-    @Autowired
-    private SampleMapper sampleMapper;
-
     @Transactional
     public Video upload(MultipartFile file, Long sampleId) {
         if (file.isEmpty()) throw new BusinessException(400, "文件不能为空");
@@ -55,20 +50,17 @@ public class VideoService {
         }
 
         try {
-            Sample sample = sampleMapper.selectById(sampleId);
-            String code = (sample != null && sample.getSampleCode() != null && !sample.getSampleCode().isEmpty())
-                ? sample.getSampleCode() : sampleId.toString();
-
             String shard = String.format("%02d/%02d", sampleId % 100, (sampleId / 100) % 100);
-            String fileName = code + "." + ext;
+            String fileName = originalName;
             String relPath = shard + "/" + sampleId + "/" + fileName;
             Path fullPath = Paths.get(videoPath, relPath);
             fullPath.getParent().toFile().mkdirs();
 
             if (Files.exists(fullPath)) {
                 int suffix = 1;
+                String baseName = originalName.substring(0, originalName.lastIndexOf('.'));
                 do {
-                    String newName = code + "(" + suffix + ")." + ext;
+                    String newName = baseName + "(" + suffix + ")." + ext;
                     relPath = shard + "/" + sampleId + "/" + newName;
                     fullPath = Paths.get(videoPath, relPath);
                     suffix++;
@@ -116,24 +108,22 @@ public class VideoService {
         }
 
         final String finalExt = ext;
+        final String originalName = file.getOriginalFilename();
         final Long userId = com.app.util.UserContext.getUserId();
         new Thread(() -> {
             for (Long sampleId : sampleIds) {
                 try {
-                    Sample sample = sampleMapper.selectById(sampleId);
-                    String code = (sample != null && sample.getSampleCode() != null && !sample.getSampleCode().isEmpty())
-                        ? sample.getSampleCode() : sampleId.toString();
-
                     String shard = String.format("%02d/%02d", sampleId % 100, (sampleId / 100) % 100);
-                    String fileName = code + "." + finalExt;
+                    String fileName = originalName;
                     String relPath = shard + "/" + sampleId + "/" + fileName;
                     Path fullPath = Paths.get(videoPath, relPath);
                     fullPath.getParent().toFile().mkdirs();
 
                     if (Files.exists(fullPath)) {
                         int suffix = 1;
+                        String baseName = originalName.substring(0, originalName.lastIndexOf('.'));
                         do {
-                            String newName = code + "(" + suffix + ")." + finalExt;
+                            String newName = baseName + "(" + suffix + ")." + finalExt;
                             relPath = shard + "/" + sampleId + "/" + newName;
                             fullPath = Paths.get(videoPath, relPath);
                             suffix++;

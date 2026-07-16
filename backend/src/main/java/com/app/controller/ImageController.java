@@ -173,6 +173,11 @@ public class ImageController {
         return Result.success(imageService.findFirstImageIdAndThumbBySampleIds(ids));
     }
 
+    @PostMapping("/export-info")
+    public Result<java.util.Map<Long, java.util.List<java.util.Map<String, Object>>>> exportImageInfo(@RequestBody java.util.List<Long> sampleIds) {
+        return Result.success(imageService.getAllImagesBySampleIds(sampleIds));
+    }
+
     @PostMapping("/batch-delete")
     public Result<Void> deleteBatch(@RequestBody List<Map<String, Object>> items) {
         imageService.deleteBatch(items);

@@ -32,6 +32,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/roles/**",
                         "/samples/**",
                         "/gallery/**",
+                        "/manufacturers/**",
+                        "/customers/**",
+                        "/client-samples/**",
                         "/friends/**",
                         "/chat/**",
                         "/logs/**",
@@ -45,9 +48,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/auth/register",
                         "/images/view/**",
                         "/images/thumbnail/**",
+                        "/customers/*/certificate/image",
                         "/photos/**",
                         "/samples/template",
                         "/samples/export",
+                        "/samples/sync-to-es",
                         "/samples/vendor-confirm-report",
                         "/samples/vendor-confirm-session"
                 );
@@ -61,7 +66,6 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addResourceLocations(new FileSystemResource(imagePath + "/"));
         registry.addResourceHandler("/thumbnails/**")
                 .addResourceLocations(new FileSystemResource(thumbnailPath + "/"));
-        registry.addResourceHandler("/videos/**")
-                .addResourceLocations(new FileSystemResource(videoPath + "/"));
+        // 视频通过 VideoController 提供，不需要静态资源映射
     }
 }

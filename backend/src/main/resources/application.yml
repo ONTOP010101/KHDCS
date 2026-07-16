@@ -1,10 +1,16 @@
 server:
   port: 8080
+  error:
+    include-message: always
+    include-exception: true
   compression:
     enabled: true
     mime-types: application/json,application/xml,text/html,text/plain,text/css,application/javascript,image/webp
     min-response-size: 1024
   undertow:
+    max-http-post-size: -1
+    idle-timeout: 300000
+    no-request-timeout: 300000
     mime-mappings:
       webp: image/webp
   servlet:
@@ -20,9 +26,9 @@ spring:
     username: root
     password: 123456
     hikari:
-      maximum-pool-size: 10
-      minimum-idle: 2
-      connection-timeout: 30000
+      maximum-pool-size: 200
+      minimum-idle: 20
+      connection-timeout: 10000
       idle-timeout: 300000
       max-lifetime: 600000
       leak-detection-threshold: 30000
@@ -53,6 +59,10 @@ spring:
     redis:
       time-to-live: 600000
       cache-null-values: false
+  elasticsearch:
+    uris: http://localhost:9208
+    connection-timeout: 2s
+    socket-timeout: 5s
 
 mybatis-plus:
   mapper-locations: classpath:mapper/**/*.xml
@@ -90,6 +100,37 @@ pgvector:
     username: postgres
     password: 123456
 
+elasticsearch:
+  enabled: true
+  fallback-enabled: true
+  timeout: 2000
+  index:
+    name: samples
+
+sms:
+  lianlu:
+    api-base: https://apis.shlianlu.com
+    mch-id: "1066919"
+    version: "1.2.0"
+    sign-type: MD5
+    notify:
+      app-id: "10011752649944698"
+      app-key: "f09e50fc096f48f3a16e39811f1ee716"
+    market:
+      app-id: "10021752649944783"
+      app-key: "c467e1efac264b57897678485d8b1003"
+
+wework:
+  corpid: ww495d69a058868f65
+  agentid: 1000002
+  secret: v_UZ3xPG0TiICP1ZSD_1IWHSPPdVAGLTmdFtaaZEJUE
+  customer-contact-secret:
+  api-base: https://qyapi.weixin.qq.com
+  token: MyWeworkToken2026
+  encoding-aes-key: svnkMRspGWvpT4jVbeR0tEF4nT2OX85XMTG4U2bjptF
+
 logging:
   level:
     com.app.service.PgVectorService: DEBUG
+    com.app.es: DEBUG
+    com.app.service.SmsService: DEBUG

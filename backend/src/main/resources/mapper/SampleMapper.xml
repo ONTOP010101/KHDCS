@@ -7,22 +7,22 @@
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
             AND (
-                MATCH(sample_name) AGAINST(#{keyword} IN BOOLEAN MODE)
+                sample_name LIKE CONCAT('%', #{keywordRaw}, '%')
                 OR sample_code LIKE CONCAT('%', #{keywordRaw}, '%')
             )
         </if>
         <if test="category != null and category != '' and category != 'all'">
             AND category = #{category}
         </if>
-        <if test="supplier != null and supplier != ''">
-            AND supplier LIKE CONCAT('%', #{supplier}, '%')
+        <if test="name != null and name != ''">
+            AND name LIKE CONCAT('%', #{name}, '%')
         </if>
         ORDER BY
         <choose>
             <when test="sortField == 'recent'">GREATEST(COALESCE(update_time,'1970-01-01'), COALESCE(create_time,'1970-01-01'))</when>
             <when test="sortField == 'sample_name'">sample_name</when>
             <when test="sortField == 'category'">category</when>
-            <when test="sortField == 'supplier'">supplier</when>
+            <when test="sortField == 'name'">name</when>
             <when test="sortField == 'create_time'">create_time</when>
             <when test="sortField == 'update_time'">update_time</when>
             <otherwise>create_time</otherwise>
@@ -35,18 +35,22 @@
 
     <select id="searchByKeyword" resultType="com.app.entity.Sample">
         SELECT * FROM samples WHERE deleted = 0
-        <!-- FULLTEXT ngram: 多字词(>=2字符)用全文索引快速过滤 -->
+        <!-- 用 LIKE 搜索（ES 不可用时降级使用，虽然慢但稳定） -->
         <if test="ftTerms != null and ftTerms.size() > 0">
-            AND MATCH(sample_name, sample_code, factory_code, manufacturer_code,
-                      supplier, packaging_cn, category)
-                AGAINST(
-                <foreach collection="ftTerms" item="t" separator=" ">
-                    +#{t}
-                </foreach>
-                IN BOOLEAN MODE
+            AND (
+            <foreach collection="ftTerms" item="t" separator=" AND ">
+                (
+                    sample_name LIKE CONCAT('%', #{t}, '%')
+                    OR sample_code LIKE CONCAT('%', #{t}, '%')
+                    OR factory_code LIKE CONCAT('%', #{t}, '%')
+                    OR manufacturer_code LIKE CONCAT('%', #{t}, '%')
+                    OR name LIKE CONCAT('%', #{t}, '%')
+                    OR packaging_cn LIKE CONCAT('%', #{t}, '%')
+                    OR category LIKE CONCAT('%', #{t}, '%')
                 )
+            </foreach>
+            )
         </if>
-        <!-- LIKE: 单字词和冒号变体精确补充过滤 -->
         <if test="likeTerms != null and likeTerms.size() > 0">
             AND (
             <foreach collection="likeTerms" item="t" separator=" AND ">
@@ -55,7 +59,7 @@
                     OR sample_code LIKE CONCAT('%', #{t}, '%')
                     OR factory_code LIKE CONCAT('%', #{t}, '%')
                     OR manufacturer_code LIKE CONCAT('%', #{t}, '%')
-                    OR supplier LIKE CONCAT('%', #{t}, '%')
+                    OR name LIKE CONCAT('%', #{t}, '%')
                     OR packaging_cn LIKE CONCAT('%', #{t}, '%')
                     OR category LIKE CONCAT('%', #{t}, '%')
                 )
@@ -70,7 +74,7 @@
         <choose>
             <when test="sortField == 'sample_name'">sample_name</when>
             <when test="sortField == 'category'">category</when>
-            <when test="sortField == 'supplier'">supplier</when>
+            <when test="sortField == 'name'">name</when>
             <when test="sortField == 'create_time'">create_time</when>
             <when test="sortField == 'update_time'">update_time</when>
             <otherwise>create_time</otherwise>
@@ -92,5 +96,78 @@
         </foreach>
         AND deleted = 1
     </update>
+
+    <select id="getFactoryStats" resultType="map">
+        SELECT manufacturer_code, COUNT(*) as sampleCount
+        FROM samples
+        WHERE deleted = 0 AND manufacturer_code IS NOT NULL AND manufacturer_code != ''
+        GROUP BY manufacturer_code
+        HAVING COUNT(*) >= #{minCount}
+        ORDER BY sampleCount DESC
+    </select>
+
+    <select id="getSampleIdsBySupplier" resultType="long">
+        SELECT id FROM samples
+        WHERE deleted = 0 AND manufacturer_code = #{manufacturerCode}
+        ORDER BY COALESCE(update_time, create_time) DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="searchIdsByKeyword" resultType="long">
+        SELECT id FROM samples WHERE deleted = 0
+        <if test="ftTerms != null and ftTerms.size() > 0">
+            AND (
+            <foreach collection="ftTerms" item="t" separator=" AND ">
+                (
+                    sample_name LIKE CONCAT('%', #{t}, '%')
+                    OR sample_code LIKE CONCAT('%', #{t}, '%')
+                    OR factory_code LIKE CONCAT('%', #{t}, '%')
+                    OR manufacturer_code LIKE CONCAT('%', #{t}, '%')
+                    OR name LIKE CONCAT('%', #{t}, '%')
+                    OR packaging_cn LIKE CONCAT('%', #{t}, '%')
+                    OR category LIKE CONCAT('%', #{t}, '%')
+                )
+            </foreach>
+            )
+        </if>
+        <if test="likeTerms != null and likeTerms.size() > 0">
+            AND (
+            <foreach collection="likeTerms" item="t" separator=" AND ">
+                (
+                    sample_name LIKE CONCAT('%', #{t}, '%')
+                    OR sample_code LIKE CONCAT('%', #{t}, '%')
+                    OR factory_code LIKE CONCAT('%', #{t}, '%')
+                    OR manufacturer_code LIKE CONCAT('%', #{t}, '%')
+                    OR name LIKE CONCAT('%', #{t}, '%')
+                    OR packaging_cn LIKE CONCAT('%', #{t}, '%')
+                    OR category LIKE CONCAT('%', #{t}, '%')
+                )
+            </foreach>
+            )
+        </if>
+        ORDER BY COALESCE(update_time, create_time) DESC
+    </select>
+
+    <select id="getFactoryStatsByIds" resultType="java.util.HashMap">
+        SELECT manufacturer_code, COUNT(1) as cnt
+        FROM samples
+        WHERE deleted = 0 AND id IN
+        <foreach collection="ids" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+        GROUP BY manufacturer_code
+        ORDER BY cnt DESC
+    </select>
+
+    <select id="getSampleIdsBySupplierFiltered" resultType="long">
+        SELECT id FROM samples
+        WHERE deleted = 0 AND manufacturer_code = #{manufacturerCode}
+        AND id IN
+        <foreach collection="ids" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+        ORDER BY COALESCE(update_time, create_time) DESC
+        LIMIT #{limit}
+    </select>
 
 </mapper>

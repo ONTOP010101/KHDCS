@@ -1,19 +1,6 @@
 package com.app.util;
 
-import ai.djl.inference.Predictor;
-import ai.djl.modality.cv.Image;
-import ai.djl.modality.cv.ImageFactory;
-import ai.djl.modality.cv.transform.Normalize;
-import ai.djl.modality.cv.transform.Resize;
-import ai.djl.modality.cv.transform.ToTensor;
-import ai.djl.ndarray.NDArray;
-import ai.djl.ndarray.NDList;
-import ai.djl.ndarray.NDManager;
-import ai.djl.repository.zoo.Criteria;
-import ai.djl.repository.zoo.ZooModel;
-import ai.djl.translate.Pipeline;
-import ai.djl.translate.Translator;
-import ai.djl.translate.TranslatorContext;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -23,10 +10,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
+import java.util.Map;
 
 @Component("deepFeatureExtractor")
 public class DeepFeatureExtractor {
@@ -34,66 +26,49 @@ public class DeepFeatureExtractor {
     private static final Logger log = LoggerFactory.getLogger(DeepFeatureExtractor.class);
 
     private static volatile DeepFeatureExtractor INSTANCE;
-
     public static volatile boolean isAvailable = false;
 
-    private volatile ZooModel<Image, float[]> model;
-    private volatile Predictor<Image, float[]> predictor;
-    private volatile boolean loadFailed = false;
+    private volatile Process pythonProcess;
+    private volatile BufferedWriter stdin;
+    private volatile BufferedReader stdout;
     private volatile int featureDim = 1280;
+    private volatile boolean loadFailed = false;
 
     @Value("${search.image.siamese-model-path:}")
     private String customModelPath;
 
-    // MobileNetV2 ImageNet normalization
-    private static final float[] MOBILENET_MEAN = {0.485f, 0.456f, 0.406f};
-    private static final float[] MOBILENET_STD = {0.229f, 0.224f, 0.225f};
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @PostConstruct
     public void init() {
         INSTANCE = this;
         if (loadFailed) {
-            log.warn("DeepFeatureExtractor previously failed to load, skipping init");
+            log.warn("DeepFeatureExtractor previously failed, skipping init");
             return;
         }
-        try {
-            loadMobileNetModel();
-            if (!isAvailable) {
-                log.warn("MobileNetV2 model failed, system will run without deep features");
+        // Init in background thread to avoid blocking Spring Boot startup
+        // when CUDA model loading fails or hangs
+        new Thread(() -> {
+            try {
+                Path modelPath = findModelPath();
+                if (modelPath == null) {
+                    log.warn("MobileNetV2 model not found");
+                    return;
+                }
+                Path scriptPath = extractScriptFromClasspath();
+                if (scriptPath == null) {
+                    log.warn("Python extract script not found in classpath");
+                    return;
+                }
+                startPythonProcess(scriptPath.toString(), modelPath.toString());
+                isAvailable = true;
+                log.info("DeepFeatureExtractor initialized via Python GPU process. Feature dim: {}", featureDim);
+            } catch (Exception e) {
+                log.error("Failed to init DeepFeatureExtractor: {}", e.getMessage());
+                loadFailed = true;
+                isAvailable = false;
             }
-        } catch (Exception e) {
-            log.error("Failed to initialize DeepFeatureExtractor: {}", e.getMessage(), e);
-            loadFailed = true;
-            isAvailable = false;
-        }
-    }
-
-    private void loadMobileNetModel() {
-        try {
-            Path modelPath = findModelPath();
-            if (modelPath == null) {
-                log.warn("MobileNetV2 model not found in any search path");
-                return;
-            }
-            log.info("Loading MobileNetV2 from: {}", modelPath);
-
-            Criteria<Image, float[]> criteria = Criteria.builder()
-                    .setTypes(Image.class, float[].class)
-                    .optEngine("PyTorch")
-                    .optModelPath(modelPath)
-                    .optTranslator(new MobileNetTranslator())
-                    .optOption("mapLocation", "true")
-                    .build();
-
-            this.model = criteria.loadModel();
-            this.predictor = model.newPredictor(new MobileNetTranslator());
-            this.featureDim = 1280;
-            isAvailable = true;
-            log.info("MobileNetV2 loaded successfully. Feature dimension: {}", featureDim);
-        } catch (Exception e) {
-            log.error("Failed to load MobileNetV2 model: {}", e.getMessage(), e);
-            isAvailable = false;
-        }
+        }, "deep-feat-init").start();
     }
 
     private Path findModelPath() {
@@ -106,7 +81,7 @@ public class DeepFeatureExtractor {
                 "d:/客户端测试/backend/models/mobilenet_v2_feat/mobilenet_v2_feat.pt"
         };
         for (String sp : searchPaths) {
-            if (sp == null) continue;
+            if (sp == null || sp.isEmpty()) continue;
             try {
                 Path p = Paths.get(sp);
                 if (Files.exists(p)) {
@@ -117,24 +92,120 @@ public class DeepFeatureExtractor {
         return null;
     }
 
+    private Path extractScriptFromClasspath() {
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream("python/extract_features.py")) {
+            if (is == null) {
+                log.warn("extract_features.py not found in classpath resources");
+                return null;
+            }
+            Path tempDir = Files.createTempDirectory("djl-feat-ext");
+            tempDir.toFile().deleteOnExit();
+            Path scriptFile = tempDir.resolve("extract_features.py");
+            Files.copy(is, scriptFile);
+            scriptFile.toFile().deleteOnExit();
+            log.info("Extracted Python script to: {}", scriptFile);
+            return scriptFile;
+        } catch (IOException e) {
+            log.error("Failed to extract Python script: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    private void startPythonProcess(String scriptPath, String modelPath) throws IOException {
+        String pythonExe = findPython();
+        log.info("Starting Python process: {} {} {}", pythonExe, scriptPath, modelPath);
+
+        ProcessBuilder pb = new ProcessBuilder(
+                pythonExe, scriptPath, modelPath
+        );
+        pb.directory(Paths.get(scriptPath).getParent().toFile());
+        pb.redirectErrorStream(false);
+
+        this.pythonProcess = pb.start();
+        this.stdin = new BufferedWriter(new OutputStreamWriter(pythonProcess.getOutputStream(), StandardCharsets.UTF_8));
+        this.stdout = new BufferedReader(new InputStreamReader(pythonProcess.getInputStream(), StandardCharsets.UTF_8));
+
+        // Start stderr reader thread (for debug logs from Python)
+        Thread stderrReader = new Thread(() -> {
+            try (BufferedReader errReader = new BufferedReader(
+                    new InputStreamReader(pythonProcess.getErrorStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = errReader.readLine()) != null) {
+                    log.info("[python] {}", line);
+                }
+            } catch (IOException ignored) {}
+        }, "python-stderr-reader");
+        stderrReader.setDaemon(true);
+        stderrReader.start();
+
+        log.info("Python feature extractor process started (PID: {})", pythonProcess.pid());
+    }
+
+    private String findPython() {
+        String[] candidates = {"python", "python3", "py"};
+        for (String cmd : candidates) {
+            try {
+                ProcessBuilder pb = new ProcessBuilder(cmd, "--version");
+                pb.redirectErrorStream(true);
+                Process p = pb.start();
+                String output = new String(p.getInputStream().readAllBytes()).trim();
+                p.waitFor();
+                if (p.exitValue() == 0 && output.contains("Python")) {
+                    log.info("Found Python: {} -> {}", cmd, output);
+                    return cmd;
+                }
+            } catch (Exception ignored) {}
+        }
+        return "python";
+    }
+
     public float[] extract(BufferedImage sourceImage) {
-        if (!isAvailable || predictor == null) {
+        if (!isAvailable || pythonProcess == null || !pythonProcess.isAlive()) {
             throw new RuntimeException("DeepFeatureExtractor not available");
         }
+        Path tempFile = null;
         try {
-            Image img = ImageFactory.getInstance().fromImage(sourceImage);
-            float[] result = predictor.predict(img);
-            log.debug("MobileNetV2 extract: dim={}, first5=[{},{},{},{},{}]",
-                    result.length,
-                    result.length > 0 ? result[0] : 0,
-                    result.length > 1 ? result[1] : 0,
-                    result.length > 2 ? result[2] : 0,
-                    result.length > 3 ? result[3] : 0,
-                    result.length > 4 ? result[4] : 0);
-            return result;
+            // Save image to temp PNG file
+            tempFile = Files.createTempFile("feat_", ".png");
+            ImageIO.write(sourceImage, "png", tempFile.toFile());
+
+            // Send path to Python process
+            synchronized (this) {
+                stdin.write(tempFile.toString());
+                stdin.newLine();
+                stdin.flush();
+
+                // Read JSON result
+                String jsonLine = stdout.readLine();
+                if (jsonLine == null) {
+                    throw new RuntimeException("Python process closed stdout unexpectedly");
+                }
+
+                // Read DONE marker
+                String doneLine = stdout.readLine();
+
+                @SuppressWarnings("unchecked")
+                Map<String, Object> result = MAPPER.readValue(jsonLine, Map.class);
+
+                if (result.containsKey("error")) {
+                    throw new RuntimeException("Python extract error: " + result.get("error"));
+                }
+
+                @SuppressWarnings("unchecked")
+                List<Number> featList = (List<Number>) result.get("features");
+                float[] features = new float[featList.size()];
+                for (int i = 0; i < featList.size(); i++) {
+                    features[i] = featList.get(i).floatValue();
+                }
+                return features;
+            }
         } catch (Exception e) {
             log.error("Feature extraction failed: {}", e.getMessage(), e);
             throw new RuntimeException("Feature extraction failed", e);
+        } finally {
+            if (tempFile != null) {
+                try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
+            }
         }
     }
 
@@ -142,7 +213,7 @@ public class DeepFeatureExtractor {
         return featureDim;
     }
 
-    // ---- Static convenience methods ----
+    // ---- Static convenience methods (same signatures as before) ----
 
     public static boolean isAvailable() {
         return isAvailable;
@@ -207,59 +278,18 @@ public class DeepFeatureExtractor {
 
     @PreDestroy
     public void destroy() {
-        if (predictor != null) { try { predictor.close(); } catch (Exception e) {} predictor = null; }
-        if (model != null) { try { model.close(); } catch (Exception e) {} model = null; }
         isAvailable = false;
-    }
-
-    /**
-     * MobileNetV2 Translator with standard ImageNet preprocessing.
-     * Pipeline: BufferedImage -> NDArray -> Resize 224x224 -> ToTensor /255 -> Normalize
-     */
-    public static class MobileNetTranslator implements Translator<Image, float[]> {
-
-        @Override
-        public NDList processInput(TranslatorContext ctx, Image input) {
-            NDManager manager = ctx.getNDManager();
-            NDArray arr = input.toNDArray(manager);
-
-            // Drop alpha channel if present (RGBA -> RGB)
-            if (arr.getShape().size() == 4 && arr.getShape().get(2) == 4) {
-                arr = arr.get(":,:,:,0:3");
+        if (pythonProcess != null && pythonProcess.isAlive()) {
+            try { stdin.close(); } catch (Exception ignored) {}
+            try { stdout.close(); } catch (Exception ignored) {}
+            pythonProcess.destroy();
+            try { pythonProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS); } catch (Exception e) {
+                pythonProcess.destroyForcibly();
             }
-
-            // Handle unexpected batch dimension from toNDArray()
-            if (arr.getShape().size() == 4 && arr.getShape().get(0) == 1) {
-                arr = arr.squeeze(0);
-            }
-
-            Pipeline pipeline = new Pipeline();
-            pipeline.add(new Resize(224, 224));
-            pipeline.add(new ToTensor());
-            pipeline.add(new Normalize(MOBILENET_MEAN, MOBILENET_STD));
-
-            NDList transformed = pipeline.transform(new NDList(arr));
-            NDArray result = transformed.get(0);
-
-            // Ensure [1, C, H, W] for model input
-            if (result.getShape().size() == 3) {
-                result = result.expandDims(0);
-            } else if (result.getShape().size() == 5) {
-                result = result.squeeze(0).squeeze(0).expandDims(0);
-            }
-
-            return new NDList(result);
+            log.info("Python feature extractor process stopped");
         }
-
-        @Override
-        public float[] processOutput(TranslatorContext ctx, NDList list) {
-            NDArray output = list.get(0);
-            if (output.getShape().size() > 1) {
-                output = output.squeeze(0);
-            }
-            float[] result = output.toFloatArray();
-            output.close();
-            return result;
-        }
+        pythonProcess = null;
+        stdin = null;
+        stdout = null;
     }
 }

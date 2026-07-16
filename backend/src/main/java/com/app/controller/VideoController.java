@@ -89,6 +89,12 @@ public class VideoController {
             String[] ranges = rangeHeader.substring(6).split("-");
             long start = Long.parseLong(ranges[0]);
             long end = ranges.length > 1 && !ranges[1].isEmpty() ? Long.parseLong(ranges[1]) : fileSize - 1;
+            if (start >= fileSize) {
+                response.setStatus(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE);
+                response.setHeader("Content-Range", "bytes */" + fileSize);
+                return;
+            }
+            if (end >= fileSize) end = fileSize - 1;
             long contentLength = end - start + 1;
 
             response.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT);

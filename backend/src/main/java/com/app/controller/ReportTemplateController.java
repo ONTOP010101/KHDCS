@@ -19,13 +19,14 @@ public class ReportTemplateController {
     public Result<?> list(
             @RequestParam(defaultValue = "1") long current,
             @RequestParam(defaultValue = "10") long size,
-            @RequestParam(required = false) String keyword) {
-        return Result.success(reportTemplateService.list(current, size, keyword));
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String type) {
+        return Result.success(reportTemplateService.list(current, size, keyword, type));
     }
 
     @GetMapping("/all")
-    public Result<List<ReportTemplate>> listAll() {
-        return Result.success(reportTemplateService.listAll());
+    public Result<List<ReportTemplate>> listAll(@RequestParam(required = false) String type) {
+        return Result.success(reportTemplateService.listAll(type));
     }
 
     @GetMapping("/{id}")

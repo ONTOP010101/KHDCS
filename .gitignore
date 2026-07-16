@@ -72,3 +72,49 @@ backend/META-INF/
 
 # Temp files
 *.fixed
+
+# Java compiled files
+*.class
+
+# Elasticsearch data and logs
+es-data/
+es-logs/
+*.ndjson
+
+# Redis dump
+dump.rdb
+
+# Config templates (duplicates)
+Fapplication.yml
+Xapplication.yml
+
+# ES test files
+es-*.json
+
+# Sync scripts (temp)
+sync-es.bat
+sync-es.ps1
+sync-es2.ps1
+
+# Uniapp project (separate repo)
+warehouse-uniapp/
+
+# SQL batch files
+sql_batch/
+
+# Temporary text files
+template_data.txt
+tmp_bindings.txt
+bind.html
+test-export-perf.html
+test-export-perf.js
+
+# ZIP archives
+*.zip
+
+# Python resources (if generated)
+backend/src/main/resources/python/__pycache__/
+
+# Server copies (duplicates)
+服务器的application.yml
+服务器的pom.xml

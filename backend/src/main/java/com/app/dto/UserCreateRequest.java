@@ -10,7 +10,7 @@ public class UserCreateRequest {
     private String username;
 
     @NotBlank(message = "密码不能为空")
-    @Size(min = 6, max = 100)
+    @Size(min = 3, max = 100)
     private String password;
 
     @NotBlank(message = "姓名不能为空")

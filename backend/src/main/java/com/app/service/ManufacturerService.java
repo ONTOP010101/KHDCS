@@ -43,6 +43,9 @@ public class ManufacturerService {
     private ManufacturerMapper manufacturerMapper;
 
     @Autowired
+    private WeworkService weworkService;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @Value("${app.upload.image-path}")
@@ -223,6 +226,12 @@ public class ManufacturerService {
         return manufacturerMapper.selectById(id);
     }
 
+    public List<String> getCodesWithSamples() {
+        return jdbcTemplate.queryForList(
+            "SELECT DISTINCT manufacturer_code FROM samples WHERE manufacturer_code IS NOT NULL AND manufacturer_code != '' AND deleted = 0",
+            String.class);
+    }
+
     public Manufacturer create(Manufacturer manufacturer) {
         Long userId = UserContext.getUserId();
         manufacturer.setCreateBy(userId);
@@ -237,14 +246,59 @@ public class ManufacturerService {
     public void update(Long id, Manufacturer manufacturer) {
         manufacturer.setId(id);
         manufacturer.setUpdateBy(UserContext.getUserId());
+
+        // 先查出现有记录以获取 manufacturerCode（用于级联同步 samples 表）和手机号快照（用于同步 wework 绑定）
+        Manufacturer existing = manufacturerMapper.selectById(id);
+
         manufacturerMapper.updateById(manufacturer);
+
+        // 级联同步冗余字段到 samples 表（保持样品中的厂商联系信息与厂商表一致）
+        if (existing != null && StringUtils.hasText(existing.getManufacturerCode())) {
+            syncManufacturerFieldsToSamples(existing.getManufacturerCode(), manufacturer);
+        }
+
+        // 同步 wework 绑定（手机号变更时自动解绑、超限清理）
+        if (existing != null) {
+            List<String> warnings = weworkService.syncBindingAfterUpdate(id, existing, manufacturer);
+            if (!warnings.isEmpty()) {
+                log.warn("厂商 [{}] 更新后 wework 绑定同步警告: {}", existing.getManufacturerCode(), warnings);
+            }
+        }
+    }
+
+    private void syncManufacturerFieldsToSamples(String manufacturerCode, Manufacturer m) {
+        List<Object> params = new ArrayList<>();
+        StringBuilder sql = new StringBuilder("UPDATE samples SET ");
+
+        if (m.getName() != null) { sql.append("name = ?, "); params.add(m.getName()); }
+        if (m.getBoothNo() != null) { sql.append("booth_no = ?, "); params.add(m.getBoothNo()); }
+        if (m.getPhone1() != null) { sql.append("phone1 = ?, "); params.add(m.getPhone1()); }
+        if (m.getMobile1() != null) { sql.append("mobile1 = ?, "); params.add(m.getMobile1()); }
+        if (m.getContact1() != null) { sql.append("contact1 = ?, "); params.add(m.getContact1()); }
+        if (m.getSmsNumber() != null) { sql.append("sms_number = ?, "); params.add(m.getSmsNumber()); }
+        if (m.getVisitorMobile() != null) { sql.append("visitor_mobile = ?, "); params.add(m.getVisitorMobile()); }
+
+        if (params.isEmpty()) return;
+
+        // 去掉末尾多余的 ", "
+        sql.setLength(sql.length() - 2);
+        sql.append(" WHERE manufacturer_code = ? AND deleted = 0");
+        params.add(manufacturerCode);
+
+        jdbcTemplate.update(sql.toString(), params.toArray());
     }
 
     public void delete(Long id) {
+        // 先清理 wework 绑定记录，避免孤儿数据
+        weworkService.deleteAllBindingsForManufacturer(id);
         manufacturerMapper.deleteById(id);
     }
 
     public void deleteBatch(Long[] ids) {
+        // 先清理 wework 绑定记录
+        for (Long id : ids) {
+            weworkService.deleteAllBindingsForManufacturer(id);
+        }
         manufacturerMapper.deleteBatchIds(Arrays.asList(ids));
     }
 
@@ -336,6 +390,8 @@ public class ManufacturerService {
                                 m.setCreateBy(existing.getCreateBy());
                                 m.setCreateTime(existing.getCreateTime());
                                 manufacturerMapper.updateById(m);
+                                // 同步 wework 绑定（手机号变更时自动解绑、超限清理）
+                                weworkService.syncBindingAfterUpdate(existing.getId(), existing, m);
                                 updatedCount++;
                                 continue;
                             }

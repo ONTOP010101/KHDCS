@@ -38,6 +38,7 @@ public class Manufacturer extends BaseEntity {
     private String canInvoice;
     private Long createBy;
     private Long updateBy;
+    private String weworkExternalUserid;
 
     public String getManufacturerCode() { return manufacturerCode; }
     public void setManufacturerCode(String manufacturerCode) { this.manufacturerCode = manufacturerCode; }
@@ -105,4 +106,6 @@ public class Manufacturer extends BaseEntity {
     public void setCreateBy(Long createBy) { this.createBy = createBy; }
     public Long getUpdateBy() { return updateBy; }
     public void setUpdateBy(Long updateBy) { this.updateBy = updateBy; }
+    public String getWeworkExternalUserid() { return weworkExternalUserid; }
+    public void setWeworkExternalUserid(String weworkExternalUserid) { this.weworkExternalUserid = weworkExternalUserid; }
 }

@@ -128,7 +128,9 @@ public class PgVectorService {
             return Collections.emptyList();
         }
         try {
-            pgJdbcTemplate.execute("SET hnsw.ef_search = 200");
+            pgJdbcTemplate.execute("SET LOCAL ivfflat.probes = 20");
+            // ef_search 越大召回越准，400 在 1280 维大数据集上平衡精度和速度
+            pgJdbcTemplate.execute("SET hnsw.ef_search = 400");
             PGvector vec = new PGvector(queryEmbedding);
             return pgJdbcTemplate.query(
                     "SELECT image_id, 1.0 - (embedding <=> ?) AS similarity " +

@@ -12,6 +12,7 @@ public class ReportTemplate extends BaseEntity {
     private String title;
     private String description;
     private String templateData;
+    private String type;
     private Long createBy;
     private Long updateBy;
 
@@ -26,6 +27,9 @@ public class ReportTemplate extends BaseEntity {
 
     public String getTemplateData() { return templateData; }
     public void setTemplateData(String templateData) { this.templateData = templateData; }
+
+    public String getType() { return type; }
+    public void setType(String type) { this.type = type; }
 
     public Long getCreateBy() { return createBy; }
     public void setCreateBy(Long createBy) { this.createBy = createBy; }

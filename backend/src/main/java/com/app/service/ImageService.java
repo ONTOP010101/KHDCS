@@ -51,10 +51,12 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
 import java.util.HashSet;
 import java.util.Set;
@@ -107,8 +109,12 @@ public class ImageService {
         return s.getSampleCode();
     }
 
-    private final ExecutorService searchExecutor = Executors.newFixedThreadPool(
-            Runtime.getRuntime().availableProcessors());
+    private final ExecutorService searchExecutor = new java.util.concurrent.ThreadPoolExecutor(
+            16,
+            32,
+            60L, java.util.concurrent.TimeUnit.SECONDS,
+            new java.util.concurrent.LinkedBlockingQueue<>(512),
+            new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
 
     @PreDestroy
     public void shutdown() {
@@ -533,23 +539,27 @@ public class ImageService {
                 searchImage = FeatureExtractor.autoCropScreenshot(image);
                 searchImage = ScreenshotPreprocessor.preprocess(searchImage);
             }
-            List<Map<String, Object>> deepResults;
-            if (isScreenshot) {
-                deepResults = searchByDeepFeatureMultiCrop(searchImage);
-            } else {
-                deepResults = searchByDeepFeature(searchImage);
-            }
-            log.info("searchByImage: deep search returned {} results, isScreenshot={}", deepResults.size(), isScreenshot);
 
-            boolean needLegacy = isScreenshot || deepResults.size() < 10;
-            if (needLegacy) {
-                log.info("searchByImage: falling back to legacy to supplement results (isScreenshot={}, deepCount={})",
-                        isScreenshot, deepResults.size());
-                List<Map<String, Object>> legacyResults = searchByLegacy(image, fileBytes, maxDistance);
-                deepResults = mergeResults(deepResults, legacyResults);
-                log.info("searchByImage: after merging legacy, total={}", deepResults.size());
+            // 优先走 PgVector 快速通道
+            boolean pgAvailable = pgVectorService != null && pgVectorService.isAvailable() && pgVectorService.count() > 0;
+            if (pgAvailable) {
+                float[] queryFeature = DeepFeatureExtractor.extractSafe(searchImage);
+                if (queryFeature != null && queryFeature.length > 0) {
+                    List<Map<String, Object>> pgResults = searchByPgVector(queryFeature);
+                    log.info("searchByImage: PgVector returned {} results, isScreenshot={}", pgResults.size(), isScreenshot);
+                    if (pgResults.size() >= 10) {
+                        return mergeExactMatch(pgResults, exactMatch);
+                    }
+                    // PgVector 结果不够，合并 legacy 兜底
+                    List<Map<String, Object>> legacyResults = searchByLegacy(image, fileBytes, maxDistance);
+                    Map<String, Object> legacyExact = findByHash(DigestUtil.sha256Hex(fileBytes));
+                    legacyResults = mergeExactMatch(legacyResults, legacyExact);
+                    return mergeExactMatch(mergeResults(pgResults, legacyResults), exactMatch);
+                }
             }
 
+            // PgVector 不可用，走 legacy
+            List<Map<String, Object>> deepResults = searchByLegacy(image, fileBytes, maxDistance);
             return mergeExactMatch(deepResults, exactMatch);
         }
 
@@ -726,9 +736,7 @@ public class ImageService {
         item.put("fileName", img.getFileName());
         item.put("distance", 0);
         item.put("similarity", 1.0);
-        item.put("sampleCode", s.getSampleCode());
-        item.put("sampleName", s.getSampleName());
-        item.put("category", s.getCategory());
+        addSampleFieldsToResult(item, s);
         item.put("_exactMatch", true);
         return item;
     }
@@ -761,7 +769,7 @@ public class ImageService {
         int[] buckets = ImageHashUtil.computeBuckets(queryDHash);
         String bucketWhere = ImageHashUtil.buildBucketWhereClause(buckets);
 
-        double dhashWeight = isScreenshot ? 0.05 : 0.1;
+        double dhashWeight = isScreenshot ? 0.05 : 0.15;
         double featureWeight = 1.0 - dhashWeight;
 
         allTasks.add(() -> {
@@ -769,11 +777,16 @@ public class ImageService {
             wrapper.isNotNull(Image::getDhash)
                     .isNotNull(Image::getFeatureVector)
                     .apply(bucketWhere)
+                    .apply("BIT_COUNT(dhash ^ {0}) <= {1}", queryDHash, maxDistance)
+                    .last("LIMIT 8000")
                     .select(Image::getId, Image::getSampleId, Image::getFilePath,
                             Image::getThumbnailPath, Image::getFileName,
                             Image::getDhash, Image::getFeatureVector);
             List<Image> images = imageMapper.selectList(wrapper);
             log.debug("Bucket search in images: found {} candidates", images.size());
+
+            // 先收集匹配结果，暂不查Sample
+            List<Map<String, Object>> matchedItems = new ArrayList<>();
             for (Image img : images) {
                 byte[] fvBytes = img.getFeatureVector();
                 if (fvBytes == null || fvBytes.length == 0) continue;
@@ -803,20 +816,14 @@ public class ImageService {
                 item.put("distance", dDist);
                 item.put("similarity", score);
 
-                if (img.getSampleId() != null) {
-                    Sample s = sampleMapper.selectById(img.getSampleId());
-                    if (s != null) {
-                        item.put("sampleCode", s.getSampleCode());
-                        item.put("sampleName", s.getSampleName());
-                        item.put("category", s.getCategory());
-                    } else {
-                        continue;
-                    }
-                } else {
-                    continue;
-                }
+                matchedItems.add(item);
+            }
 
-                merged.put(mergeKey, item);
+            // 批量查询 Sample
+            batchFillSampleFields(matchedItems);
+
+            for (Map<String, Object> item : matchedItems) {
+                merged.put(String.valueOf(item.get("imageId")), item);
             }
             return null;
         });
@@ -830,11 +837,19 @@ public class ImageService {
 
         allTasks.add(() -> {
             LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
-            wrapper.select(Image::getId, Image::getSampleId, Image::getFilePath,
+            wrapper.isNotNull(Image::getFeatureVector)
+                    .last("LIMIT 12000")
+                    .select(Image::getId, Image::getSampleId, Image::getFilePath,
                             Image::getThumbnailPath, Image::getFileName,
                             Image::getDhash, Image::getFeatureVector);
             List<Image> images = imageMapper.selectList(wrapper);
+
+            // 先收集匹配结果，暂不查Sample
+            List<Map<String, Object>> matchedItems = new ArrayList<>();
             for (Image img : images) {
+                String mergeKey = String.valueOf(img.getId());
+                if (merged.containsKey(mergeKey)) continue;
+
                 byte[] fvBytes = img.getFeatureVector();
                 if (fvBytes == null || fvBytes.length == 0) {
                     java.awt.image.BufferedImage imgFile = null;
@@ -864,15 +879,8 @@ public class ImageService {
                 }
                 double score = sim * 0.95 + dhashScore * 0.05;
 
-                Long imgId = img.getId();
-                String mergeKey = String.valueOf(imgId);
-                Map<String, Object> existing = merged.get(mergeKey);
-                if (existing != null && ((Number) existing.getOrDefault("similarity", 0.0)).doubleValue() >= score) {
-                    continue;
-                }
-
                 Map<String, Object> item = new LinkedHashMap<>();
-                item.put("imageId", imgId);
+                item.put("imageId", img.getId());
                 item.put("sampleId", img.getSampleId());
                 item.put("thumbnailPath", img.getThumbnailPath());
                 item.put("filePath", img.getFilePath());
@@ -880,20 +888,14 @@ public class ImageService {
                 item.put("distance", dDist);
                 item.put("similarity", score);
 
-                if (img.getSampleId() != null) {
-                    Sample s = sampleMapper.selectById(img.getSampleId());
-                    if (s != null) {
-                        item.put("sampleCode", s.getSampleCode());
-                        item.put("sampleName", s.getSampleName());
-                        item.put("category", s.getCategory());
-                    } else {
-                        continue;
-                    }
-                } else {
-                    continue;
-                }
+                matchedItems.add(item);
+            }
 
-                merged.put(mergeKey, item);
+            // 批量查询 Sample
+            batchFillSampleFields(matchedItems);
+
+            for (Map<String, Object> item : matchedItems) {
+                merged.put(String.valueOf(item.get("imageId")), item);
             }
             return null;
         });
@@ -922,7 +924,8 @@ public class ImageService {
     }
 
     private List<Map<String, Object>> searchByPgVector(float[] queryFeature) {
-        List<Map<String, Object>> candidates = pgVectorService.searchSimilar(queryFeature, 500, 0.5);
+        // 放宽 minSimilarity 让 pgvector 返回更多候选，后续用精确余弦二次精排
+        List<Map<String, Object>> candidates = pgVectorService.searchSimilar(queryFeature, 500, 0.15);
         log.info("PgVector search returned {} candidates", candidates.size());
         if (candidates.isEmpty()) return new ArrayList<>();
 
@@ -940,7 +943,7 @@ public class ImageService {
         }
         log.info("Extracted {} unique imageIds from pgvector results", imageIdToImgId.size());
 
-        // Batch load images from single table
+        // Batch load images (need deep_feature_vector for exact re-ranking)
         Map<Long, Image> imageMap = new LinkedHashMap<>();
         if (!imageIdToImgId.isEmpty()) {
             List<Image> foundImages = imageMapper.selectBatchIds(imageIdToImgId.keySet());
@@ -948,27 +951,42 @@ public class ImageService {
                 imageMap.put(img.getId(), img);
             }
         }
-        log.info("Batch loaded {} images from single table", imageMap.size());
+        log.info("Batch loaded {} images", imageMap.size());
 
-        // Collect unique sampleIds and batch load
-        Map<Long, Sample> sampleMap = new LinkedHashMap<>();
+        // Batch load samples
+        java.util.Set<Long> sampleIds = new java.util.LinkedHashSet<>();
         for (Image img : imageMap.values()) {
-            if (img.getSampleId() != null && !sampleMap.containsKey(img.getSampleId())) {
-                Sample s = sampleMapper.selectById(img.getSampleId());
-                if (s != null) {
-                    sampleMap.put(img.getSampleId(), s);
-                }
+            if (img.getSampleId() != null) sampleIds.add(img.getSampleId());
+        }
+        java.util.Map<Long, Sample> sampleMap = new java.util.HashMap<>();
+        if (!sampleIds.isEmpty()) {
+            List<Sample> samples = sampleMapper.selectBatchIds(sampleIds);
+            for (Sample s : samples) {
+                sampleMap.put(s.getId(), s);
             }
         }
-        log.info("Loaded {} unique samples", sampleMap.size());
+        log.info("Batch loaded {} samples", sampleMap.size());
 
+        // 二次精确余弦精排：用 deep_feature_vector 逐条算精确余弦相似度
         Map<String, Map<String, Object>> results = new LinkedHashMap<>();
         for (Image img : imageMap.values()) {
             if (img.getSampleId() == null) continue;
             Sample s = sampleMap.get(img.getSampleId());
             if (s == null) continue;
 
-            Double sim = pgSimilarityMap.getOrDefault(img.getId(), 0.0);
+            // 优先用精确余弦重算相似度，HNSW 近似排序不够准
+            double sim;
+            byte[] deepBytes = img.getDeepFeatureVector();
+            if (deepBytes != null && deepBytes.length > 0) {
+                try {
+                    float[] dbFeature = DeepFeatureExtractor.fromBytes(deepBytes);
+                    sim = DeepFeatureExtractor.cosineSimilarity(queryFeature, dbFeature);
+                } catch (Exception e) {
+                    sim = pgSimilarityMap.getOrDefault(img.getId(), 0.0);
+                }
+            } else {
+                sim = pgSimilarityMap.getOrDefault(img.getId(), 0.0);
+            }
 
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("imageId", img.getId());
@@ -978,9 +996,7 @@ public class ImageService {
             item.put("fileName", img.getFileName());
             item.put("distance", 0);
             item.put("similarity", sim);
-            item.put("sampleCode", s.getSampleCode());
-            item.put("sampleName", s.getSampleName());
-            item.put("category", s.getCategory());
+            addSampleFieldsToResult(item, s);
 
             results.put(String.valueOf(img.getId()), item);
         }
@@ -1003,7 +1019,7 @@ public class ImageService {
         int total = 0, updated = 0, skipped = 0, errors = 0;
 
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT id, file_path FROM images WHERE dhash IS NULL");
+                "SELECT id, file_path FROM images WHERE dhash IS NULL OR dhash = 0");
         for (Map<String, Object> row : rows) {
             total++;
             try {
@@ -1275,16 +1291,53 @@ public class ImageService {
 
         // 直接查 sample_thumbnail 索引表
         List<SampleThumbnail> thumbnails = sampleThumbnailMapper.selectBatchIds(sampleIds);
+        Map<Long, String> filePathMap = new HashMap<>();
+        if (!thumbnails.isEmpty()) {
+            List<Long> imageIds = thumbnails.stream().map(SampleThumbnail::getImageId).filter(Objects::nonNull).collect(Collectors.toList());
+            if (!imageIds.isEmpty()) {
+                List<Image> images = imageMapper.selectBatchIds(imageIds);
+                if (images != null) {
+                    for (Image img : images) {
+                        String fp = img.getFilePath();
+                        if (fp != null) filePathMap.put(img.getId(), fp);
+                    }
+                }
+            }
+        }
         for (SampleThumbnail st : thumbnails) {
             Map<String, Object> info = new HashMap<>();
             info.put("id", st.getImageId());
             info.put("thumbnailPath", st.getThumbnail());
             info.put("hash", st.getHash());
             info.put("fileName", st.getFileName());
+            info.put("filePath", filePathMap.getOrDefault(st.getImageId(), ""));
             result.put(st.getSampleId(), info);
         }
         for (Long sid : sampleIds) {
             result.putIfAbsent(sid, null);
+        }
+        return result;
+    }
+
+    public Map<Long, List<Map<String, Object>>> getAllImagesBySampleIds(List<Long> sampleIds) {
+        Map<Long, List<Map<String, Object>>> result = new LinkedHashMap<>();
+        if (sampleIds == null || sampleIds.isEmpty()) return result;
+
+        LambdaQueryWrapper<Image> wrapper = new LambdaQueryWrapper<>();
+        wrapper.in(Image::getSampleId, sampleIds)
+               .orderByAsc(Image::getSortOrder)
+               .orderByDesc(Image::getCreateTime);
+        List<Image> images = imageMapper.selectList(wrapper);
+
+        for (Image img : images) {
+            Map<String, Object> info = new HashMap<>();
+            info.put("fileName", img.getFileName());
+            info.put("hash", img.getHash());
+            info.put("filePath", img.getFilePath());
+            result.computeIfAbsent(img.getSampleId(), k -> new ArrayList<>()).add(info);
+        }
+        for (Long sid : sampleIds) {
+            result.putIfAbsent(sid, new ArrayList<>());
         }
         return result;
     }
@@ -1746,5 +1799,65 @@ public class ImageService {
         result.put("elapsedMs", elapsed);
         log.info("[REGEN] 完成 total={} success={} skipped={} failed={} elapsed={}ms", total, success, skipped, failed, elapsed);
         return result;
+    }
+
+    /**
+     * 将 Sample 的详细字段填充到搜索结果 Map 中（供前端卡片模式展示）
+     */
+    private void addSampleFieldsToResult(java.util.Map<String, Object> item, Sample s) {
+        item.put("sampleCode", s.getSampleCode());
+        item.put("sampleName", s.getSampleName());
+        item.put("category", s.getCategory());
+        item.put("factoryCode", s.getFactoryCode());
+        item.put("factoryPrice", s.getFactoryPrice());
+        item.put("name", s.getName());
+        item.put("boothNo", s.getBoothNo());
+        item.put("innerBoxCount", s.getInnerBoxCount());
+        item.put("cartonCapacity", s.getCartonCapacity());
+        item.put("cartonGrossWeight", s.getCartonGrossWeight());
+        item.put("cartonNetWeight", s.getCartonNetWeight());
+        item.put("cartonMaterialVolume", s.getCartonMaterialVolume());
+        item.put("cartonVolume", s.getCartonVolume());
+        item.put("mobile1", s.getMobile1());
+        if (s.getCreateTime() != null) item.put("createTime", s.getCreateTime());
+        if (s.getUpdateTime() != null) item.put("updateTime", s.getUpdateTime());
+    }
+
+    /**
+     * 批量填充 Sample 信息到结果列表，只在 batch 内部检查对应 sampleId 的 Sample 是否存在，跳过无效项
+     */
+    private void batchFillSampleFields(java.util.List<java.util.Map<String, Object>> items) {
+        if (items.isEmpty()) return;
+        // 收集所有需要的 sampleId
+        java.util.Set<Long> sampleIds = new java.util.LinkedHashSet<>();
+        for (java.util.Map<String, Object> item : items) {
+            Object sid = item.get("sampleId");
+            if (sid instanceof Long && (Long) sid > 0) {
+                sampleIds.add((Long) sid);
+            }
+        }
+        if (sampleIds.isEmpty()) return;
+        // 批量查询
+        java.util.List<Sample> samples = sampleMapper.selectBatchIds(sampleIds);
+        java.util.Map<Long, Sample> sampleMap = new java.util.HashMap<>();
+        for (Sample s : samples) {
+            sampleMap.put(s.getId(), s);
+        }
+        // 填充并过滤无效项
+        java.util.Iterator<java.util.Map<String, Object>> iter = items.iterator();
+        while (iter.hasNext()) {
+            java.util.Map<String, Object> item = iter.next();
+            Object sid = item.get("sampleId");
+            if (sid instanceof Long) {
+                Sample s = sampleMap.get((Long) sid);
+                if (s != null) {
+                    addSampleFieldsToResult(item, s);
+                } else {
+                    iter.remove();
+                }
+            } else {
+                iter.remove();
+            }
+        }
     }
 }

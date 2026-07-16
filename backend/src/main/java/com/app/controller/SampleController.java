@@ -46,11 +46,12 @@ public class SampleController {
             @RequestParam(defaultValue = "10") long size,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String category,
-            @RequestParam(required = false) String supplier,
+            @RequestParam(required = false) String name,
             @RequestParam(required = false) String manufacturerCode,
+            @RequestParam(required = false) String sampleCode,
             @RequestParam(required = false) String sortField,
             @RequestParam(required = false) String sortOrder) {
-        return Result.success(sampleService.list(current, size, keyword, category, supplier, manufacturerCode, sortField, sortOrder));
+        return Result.success(sampleService.list(current, size, keyword, category, name, manufacturerCode, sampleCode, sortField, sortOrder));
     }
 
     @PostMapping("/search")
@@ -73,8 +74,9 @@ public class SampleController {
                 conditions.add(sc);
             }
         }
+        String logic = (String) body.get("logic");
         return Result.success(sampleService.advancedSearch(current, size,
-            conditions, sortField, sortOrder));
+            conditions, sortField, sortOrder, logic));
     }
 
     @GetMapping("/{id}")
@@ -171,10 +173,10 @@ public class SampleController {
     public void exportExcel(HttpServletResponse response,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String category,
-            @RequestParam(required = false) String supplier) throws Exception {
+            @RequestParam(required = false) String name) throws Exception {
         response.setContentType("text/csv; charset=UTF-8");
         response.setHeader("Content-Disposition", "attachment; filename=samples.csv");
-        PageResult<Sample> result = sampleService.list(1, 100000, keyword, category, supplier, null, null, null);
+        PageResult<Sample> result = sampleService.list(1L, 100000L, keyword, category, name, null, null, null, null);
         List<Sample> list = result.getRecords();
         String[] headers = {"ID","公司编号","出厂货号","厂商编号","种类名称","样品名称","英文名称",
             "出厂价","报出价","包装规格","包装规格(英)","包装单位","内盒数","装箱量",
@@ -211,7 +213,7 @@ public class SampleController {
             for (Integer id : idsRaw) ids.add(id.longValue());
             list = sampleService.listByIds(ids);
         } else {
-            PageResult<Sample> result = sampleService.list(1, 100000, null, null, null, null, null, null);
+            PageResult<Sample> result = sampleService.list(1L, 100000L, null, null, null, null, null, null, null);
             list = result.getRecords();
         }
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -454,10 +456,10 @@ public class SampleController {
         m.put("cartonVolume", "体积");
         m.put("cartonMaterialVolume", "材积");
         m.put("boothNo", "摊位号");
-        m.put("supplier", "厂商名称");
-        m.put("contactPerson", "联系人");
-        m.put("contactPhone", "联系电话");
-        m.put("mobile", "手机");
+        m.put("name", "厂商名称");
+        m.put("contact1", "联系人");
+        m.put("phone1", "联系电话");
+        m.put("mobile1", "手机");
         m.put("fax", "传真");
         m.put("qq", "QQ");
         m.put("color", "颜色");
@@ -509,10 +511,10 @@ public class SampleController {
             case "cartonVolume": return n(s.getCartonVolume());
             case "cartonMaterialVolume": return n(s.getCartonMaterialVolume());
             case "boothNo": return n(s.getBoothNo());
-            case "supplier": return n(s.getSupplier());
-            case "contactPerson": return n(s.getContactPerson());
-            case "contactPhone": return n(s.getContactPhone());
-            case "mobile": return n(s.getMobile());
+            case "name": return n(s.getName());
+            case "contact1": return n(s.getContact1());
+            case "phone1": return n(s.getPhone1());
+            case "mobile1": return n(s.getMobile1());
             case "fax": return n(s.getFax());
             case "qq": return n(s.getQq());
             case "color": return n(s.getColor());
@@ -602,7 +604,7 @@ public class SampleController {
             s.getSampleLength(), s.getSampleWidth(), s.getSampleHeight(),
             s.getSampleGrossWeight(), s.getSampleNetWeight(),
             s.getCartonVolume(), s.getCartonMaterialVolume(),
-            s.getBoothNo(), s.getSupplier(), s.getContactPerson(), s.getContactPhone(), s.getMobile(), s.getFax(), s.getQq(),
+            s.getBoothNo(), s.getName(), s.getContact1(), s.getPhone1(), s.getMobile1(), s.getFax(), s.getQq(),
             s.getColor(), s.getColorEn(), s.getSize(), s.getOrigin(),
             s.getSampleUnit(), s.getSampleUnitEn(), s.getCertification(), s.getCertificationCount(),
             s.getBatteryInfo(), s.getInfringement(), s.getRemark(), s.getRemarkEn()};
@@ -612,5 +614,12 @@ public class SampleController {
             sb.append(csvEscape(vals[i] == null ? "" : String.valueOf(vals[i])));
         }
         return sb.toString();
+    }
+
+    // ========== ES 同步 ==========
+
+    @PostMapping("/sync-to-es")
+    public Result<java.util.Map<String, Object>> syncToES() {
+        return Result.success(sampleService.syncAllToES());
     }
 }

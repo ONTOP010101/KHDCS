@@ -74,6 +74,11 @@ public class ManufacturerController {
         return Result.success(manufacturerService.advancedSearch(current, size, conditions, sortField, sortOrder));
     }
 
+    @GetMapping("/codes-with-samples")
+    public Result<List<String>> getCodesWithSamples() {
+        return Result.success(manufacturerService.getCodesWithSamples());
+    }
+
     @GetMapping("/{id}")
     public Result<Manufacturer> getById(@PathVariable Long id) {
         return Result.success(manufacturerService.getById(id));

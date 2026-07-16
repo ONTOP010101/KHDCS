@@ -2,7 +2,10 @@ package com.app.entity;
 
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.math.BigDecimal;
+import java.util.Date;
 
 @TableName("samples")
 public class Sample extends BaseEntity {
@@ -23,13 +26,15 @@ public class Sample extends BaseEntity {
     private String colorEn;
     private String size;
     private String origin;
-    private String supplier;
+    private String name;
     private String boothNo;
-    private String contactPerson;
-    private String contactPhone;
-    private String mobile;
+    private String contact1;
+    private String phone1;
+    private String mobile1;
     private String fax;
     private String qq;
+    private String visitorMobile;
+    private String smsNumber;
     private BigDecimal factoryPrice;
     private BigDecimal taxPrice;
     private BigDecimal sampleLength;
@@ -54,11 +59,13 @@ public class Sample extends BaseEntity {
     private Integer certificationCount;
     private String remark;
     private String remarkEn;
+    private String otherRemark;
     private String registrant;
     private String modifier;
     private Integer status;
     private String infringement;
     private String batteryInfo;
+    private String boxCount;
     private String hideFromXzx;
     private Long createBy;
     private Long updateBy;
@@ -72,12 +79,55 @@ public class Sample extends BaseEntity {
     @TableField(exist = false)
     private String firstImageHash;
 
+    @TableField(exist = false)
+    private java.math.BigDecimal calculatedPrice;
+
+    @TableField(exist = false)
+    @JsonIgnore
+    private java.math.BigDecimal calculatedPrice2;
+
+    @TableField(exist = false)
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    private Date addDate;
+
+    @TableField(exist = false)
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    private Date modifyDate;
+
+    @TableField(exist = false)
+    private Long itemId;
+
+    @TableField(exist = false)
+    private Integer showroomReplenished;
+
+    @TableField(exist = false)
+    private Integer borrowedSample;
+
+    @TableField(exist = false)
+    private String sampleStatus;
+
+    @TableField(exist = false)
+    private Integer checked;
+
+    @TableField(exist = false)
+    private Integer submitted;
+
+    @TableField(exist = false)
+    private String codeName;
+
+    @TableField(exist = false)
+    private Boolean hasVideo;
+
     public String getThumbnail() { return thumbnail; }
     public void setThumbnail(String thumbnail) { this.thumbnail = thumbnail; }
     public Long getFirstImageId() { return firstImageId; }
     public void setFirstImageId(Long firstImageId) { this.firstImageId = firstImageId; }
     public String getFirstImageHash() { return firstImageHash; }
     public void setFirstImageHash(String firstImageHash) { this.firstImageHash = firstImageHash; }
+    public java.math.BigDecimal getCalculatedPrice() { return calculatedPrice; }
+    public void setCalculatedPrice(java.math.BigDecimal calculatedPrice) { this.calculatedPrice = calculatedPrice; }
+    public java.math.BigDecimal getCalculatedPrice2() { return calculatedPrice2; }
+    public void setCalculatedPrice2(java.math.BigDecimal calculatedPrice2) { this.calculatedPrice2 = calculatedPrice2; }
 
     public String getSampleCode() { return sampleCode; }
     public void setSampleCode(String sampleCode) { this.sampleCode = sampleCode; }
@@ -111,24 +161,44 @@ public class Sample extends BaseEntity {
     public void setSize(String size) { this.size = size; }
     public String getOrigin() { return origin; }
     public void setOrigin(String origin) { this.origin = origin; }
-    public String getSupplier() { return supplier; }
-    public void setSupplier(String supplier) { this.supplier = supplier; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public String getSupplier() { return name; }
+    public void setSupplier(String supplier) { this.name = supplier; }
     public String getBoothNo() { return boothNo; }
     public void setBoothNo(String boothNo) { this.boothNo = boothNo; }
-    public String getContactPerson() { return contactPerson; }
-    public void setContactPerson(String contactPerson) { this.contactPerson = contactPerson; }
-    public String getContactPhone() { return contactPhone; }
-    public void setContactPhone(String contactPhone) { this.contactPhone = contactPhone; }
-    public String getMobile() { return mobile; }
-    public void setMobile(String mobile) { this.mobile = mobile; }
+    public String getContact1() { return contact1; }
+    public void setContact1(String contact1) { this.contact1 = contact1; }
+    public String getPhone1() { return phone1; }
+    public void setPhone1(String phone1) { this.phone1 = phone1; }
+    public String getMobile1() { return mobile1; }
+    public void setMobile1(String mobile1) { this.mobile1 = mobile1; }
+    public String getContactPerson() { return contact1; }
+    public void setContactPerson(String contactPerson) { this.contact1 = contactPerson; }
+    public String getContactPhone() { return phone1; }
+    public void setContactPhone(String contactPhone) { this.phone1 = contactPhone; }
+    public String getMobile() { return mobile1; }
+    public void setMobile(String mobile) { this.mobile1 = mobile; }
     public String getFax() { return fax; }
     public void setFax(String fax) { this.fax = fax; }
     public String getQq() { return qq; }
     public void setQq(String qq) { this.qq = qq; }
+    public String getVisitorMobile() { return visitorMobile; }
+    public void setVisitorMobile(String visitorMobile) { this.visitorMobile = visitorMobile; }
+    public String getSmsNumber() { return smsNumber; }
+    public void setSmsNumber(String smsNumber) { this.smsNumber = smsNumber; }
     public BigDecimal getFactoryPrice() { return factoryPrice; }
     public void setFactoryPrice(BigDecimal factoryPrice) { this.factoryPrice = factoryPrice; }
     public BigDecimal getTaxPrice() { return taxPrice; }
     public void setTaxPrice(BigDecimal taxPrice) { this.taxPrice = taxPrice; }
+    // 报出价2 映射到 calculatedPrice2（从 client_sample_items 关联查询）
+    public BigDecimal getTaxPrice2() { return calculatedPrice2; }
+    public void setTaxPrice2(BigDecimal v) { this.calculatedPrice2 = v; }
+    // 添加日期（从 client_sample_items.create_time 关联查询）
+    public Date getAddDate() { return addDate; }
+    public void setAddDate(Date addDate) { this.addDate = addDate; }
+    public Date getModifyDate() { return modifyDate; }
+    public void setModifyDate(Date modifyDate) { this.modifyDate = modifyDate; }
     public BigDecimal getSampleLength() { return sampleLength; }
     public void setSampleLength(BigDecimal sampleLength) { this.sampleLength = sampleLength; }
     public BigDecimal getSampleWidth() { return sampleWidth; }
@@ -173,6 +243,8 @@ public class Sample extends BaseEntity {
     public void setRemark(String remark) { this.remark = remark; }
     public String getRemarkEn() { return remarkEn; }
     public void setRemarkEn(String remarkEn) { this.remarkEn = remarkEn; }
+    public String getOtherRemark() { return otherRemark; }
+    public void setOtherRemark(String otherRemark) { this.otherRemark = otherRemark; }
     public String getRegistrant() { return registrant; }
     public void setRegistrant(String registrant) { this.registrant = registrant; }
     public String getModifier() { return modifier; }
@@ -183,10 +255,35 @@ public class Sample extends BaseEntity {
     public void setInfringement(String infringement) { this.infringement = infringement; }
     public String getBatteryInfo() { return batteryInfo; }
     public void setBatteryInfo(String batteryInfo) { this.batteryInfo = batteryInfo; }
+    public String getBoxCount() { return boxCount; }
+    public void setBoxCount(String boxCount) { this.boxCount = boxCount; }
     public String getHideFromXzx() { return hideFromXzx; }
     public void setHideFromXzx(String hideFromXzx) { this.hideFromXzx = hideFromXzx; }
     public Long getCreateBy() { return createBy; }
     public void setCreateBy(Long createBy) { this.createBy = createBy; }
     public Long getUpdateBy() { return updateBy; }
     public void setUpdateBy(Long updateBy) { this.updateBy = updateBy; }
+    public Long getItemId() { return itemId; }
+    public void setItemId(Long itemId) { this.itemId = itemId; }
+    public Integer getShowroomReplenished() { return showroomReplenished; }
+    public void setShowroomReplenished(Integer showroomReplenished) { this.showroomReplenished = showroomReplenished; }
+    public Integer getBorrowedSample() { return borrowedSample; }
+    public void setBorrowedSample(Integer borrowedSample) { this.borrowedSample = borrowedSample; }
+    public Integer getChecked() { return checked; }
+    public void setChecked(Integer checked) { this.checked = checked; }
+
+    public String getSampleStatus() {
+        if (sampleStatus != null) return sampleStatus;
+        if (borrowedSample != null && borrowedSample == 1) return "借样";
+        if (showroomReplenished != null && showroomReplenished == 1) return "展厅已补";
+        return "不允许带走";
+    }
+    public void setSampleStatus(String sampleStatus) { this.sampleStatus = sampleStatus; }
+
+    public Integer getSubmitted() { return submitted; }
+    public void setSubmitted(Integer submitted) { this.submitted = submitted; }
+    public String getCodeName() { return codeName; }
+    public void setCodeName(String codeName) { this.codeName = codeName; }
+    public Boolean getHasVideo() { return hasVideo; }
+    public void setHasVideo(Boolean hasVideo) { this.hasVideo = hasVideo; }
 }

@@ -25,10 +25,13 @@ public class ReportTemplateService {
     private UserMapper userMapper;
 
     /** 分页查询模板列表 */
-    public PageResult<ReportTemplate> list(long current, long size, String keyword) {
+    public PageResult<ReportTemplate> list(long current, long size, String keyword, String type) {
         LambdaQueryWrapper<ReportTemplate> wrapper = new LambdaQueryWrapper<>();
         if (keyword != null && !keyword.isBlank()) {
             wrapper.like(ReportTemplate::getTitle, keyword);
+        }
+        if (type != null && !type.isBlank()) {
+            wrapper.eq(ReportTemplate::getType, type);
         }
         wrapper.orderByDesc(ReportTemplate::getUpdateTime);
 
@@ -47,8 +50,11 @@ public class ReportTemplateService {
     }
 
     /** 获取所有模板（不分页，供选择器使用） */
-    public List<ReportTemplate> listAll() {
+    public List<ReportTemplate> listAll(String type) {
         LambdaQueryWrapper<ReportTemplate> wrapper = new LambdaQueryWrapper<>();
+        if (type != null && !type.isBlank()) {
+            wrapper.eq(ReportTemplate::getType, type);
+        }
         wrapper.orderByDesc(ReportTemplate::getUpdateTime);
         List<ReportTemplate> list = reportTemplateMapper.selectList(wrapper);
         fillUpdateByName(list);

@@ -7,6 +7,9 @@ import com.app.dto.SearchCondition;
 import com.app.entity.Manufacturer;
 import com.app.entity.Sample;
 import com.app.entity.SampleThumbnail;
+import com.app.es.entity.SampleES;
+import com.app.es.repository.SampleESRepository;
+import com.app.es.service.SampleESService;
 import com.app.mapper.ManufacturerMapper;
 import com.app.mapper.SampleMapper;
 import com.app.mapper.SampleThumbnailMapper;
@@ -63,16 +66,23 @@ public class SampleService {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired(required = false)
+    private SampleESService sampleESService;
+
+    @Autowired(required = false)
+    private SampleESRepository sampleESRepository;
+
     private static final Map<String, SFunction<Sample, ?>> SORT_FIELD_MAP = new LinkedHashMap<>();
 
     // 前端字段名 → 数据库列名
     private static final Map<String, String> FIELD_COL_MAP = new LinkedHashMap<>();
     static {
         FIELD_COL_MAP.put("manufacturerCode", "manufacturer_code");
-        FIELD_COL_MAP.put("supplier", "supplier");
-        FIELD_COL_MAP.put("contactPerson", "contact_person");
-        FIELD_COL_MAP.put("contactPhone", "contact_phone");
-        FIELD_COL_MAP.put("mobile", "mobile");
+        FIELD_COL_MAP.put("name", "name");
+        FIELD_COL_MAP.put("contact1", "contact1");
+        FIELD_COL_MAP.put("phone1", "phone1");
+        FIELD_COL_MAP.put("mobile1", "mobile1");
+        FIELD_COL_MAP.put("smsNumber", "sms_number");
         FIELD_COL_MAP.put("sampleName", "sample_name");
         FIELD_COL_MAP.put("sampleCode", "sample_code");
         FIELD_COL_MAP.put("factoryCode", "factory_code");
@@ -141,11 +151,11 @@ public class SampleService {
         SORT_FIELD_MAP.put("colorEn", Sample::getColorEn);
         SORT_FIELD_MAP.put("remark", Sample::getRemark);
         SORT_FIELD_MAP.put("remarkEn", Sample::getRemarkEn);
-        SORT_FIELD_MAP.put("supplier", Sample::getSupplier);
+        SORT_FIELD_MAP.put("name", Sample::getName);
         SORT_FIELD_MAP.put("boothNo", Sample::getBoothNo);
-        SORT_FIELD_MAP.put("contactPerson", Sample::getContactPerson);
-        SORT_FIELD_MAP.put("contactPhone", Sample::getContactPhone);
-        SORT_FIELD_MAP.put("mobile", Sample::getMobile);
+        SORT_FIELD_MAP.put("contact1", Sample::getContact1);
+        SORT_FIELD_MAP.put("phone1", Sample::getPhone1);
+        SORT_FIELD_MAP.put("mobile1", Sample::getMobile1);
         SORT_FIELD_MAP.put("fax", Sample::getFax);
         SORT_FIELD_MAP.put("qq", Sample::getQq);
         SORT_FIELD_MAP.put("registrant", Sample::getRegistrant);
@@ -216,11 +226,11 @@ public class SampleService {
         HEADER_TO_FIELD.put("英文颜色", "colorEn");
         HEADER_TO_FIELD.put("备注", "remark");
         HEADER_TO_FIELD.put("英文备注", "remarkEn");
-        HEADER_TO_FIELD.put("厂商名称", "supplier");
+        HEADER_TO_FIELD.put("厂商名称", "name");
         HEADER_TO_FIELD.put("摊位号", "boothNo");
-        HEADER_TO_FIELD.put("联系人", "contactPerson");
-        HEADER_TO_FIELD.put("电话", "contactPhone");
-        HEADER_TO_FIELD.put("手机", "mobile");
+        HEADER_TO_FIELD.put("联系人", "contact1");
+        HEADER_TO_FIELD.put("电话", "phone1");
+        HEADER_TO_FIELD.put("手机", "mobile1");
         HEADER_TO_FIELD.put("传真", "fax");
         HEADER_TO_FIELD.put("QQ", "qq");
         HEADER_TO_FIELD.put("登记人", "registrant");
@@ -272,53 +282,70 @@ public class SampleService {
             "createTime", "updateTime"
     ));
 
-    public PageResult<Sample> list(long current, long size, String keyword, String category, String supplier,
-                                   String manufacturerCode, String sortField, String sortOrder) {
-        StringBuilder sql = new StringBuilder("SELECT * FROM samples WHERE deleted = 0");
-        List<Object> params = new ArrayList<>();
+    public PageResult<Sample> list(long current, long size, String keyword, String category, String name,
+                                   String manufacturerCode, String sampleCode, String sortField, String sortOrder) {
+        StringBuilder where = new StringBuilder(" WHERE deleted = 0");
+        List<Object> whereParams = new ArrayList<>();
 
+        if (StringUtils.hasText(sampleCode)) {
+            where.append(" AND sample_code = ?");
+            whereParams.add(sampleCode);
+        }
         if (StringUtils.hasText(keyword)) {
-            sql.append(" AND (sample_code LIKE ? OR sample_name LIKE ? OR manufacturer_code LIKE ? OR factory_code LIKE ?)");
-            String kw = "%" + escapeLike(keyword) + "%";
-            params.add(kw);
-            params.add(kw);
-            params.add(kw);
-            params.add(kw);
+            log.info("[MYSQL_LIST] keyword='{}'", keyword.trim());
+            String trimmed = keyword.trim();
+            if (trimmed.length() <= 2) {
+                // 短关键词走 LIKE（全文索引最小词长默认 3）
+                where.append(" AND (sample_code LIKE ? OR sample_name LIKE ? OR manufacturer_code LIKE ? OR factory_code LIKE ?)");
+                String kw = "%" + escapeLike(trimmed) + "%";
+                for (int i = 0; i < 4; i++) whereParams.add(kw);
+            } else {
+                // 关键词搜索用 LIKE（ES 不可用时降级，虽慢但稳定）
+                String kw = "%" + escapeLike(trimmed) + "%";
+                where.append(" AND (sample_name LIKE ? OR sample_code LIKE ? OR manufacturer_code LIKE ? OR factory_code LIKE ?)");
+                for (int i = 0; i < 4; i++) whereParams.add(kw);
+            }
         }
         if (StringUtils.hasText(category) && !"all".equals(category)) {
-            sql.append(" AND category = ?");
-            params.add(category);
+            where.append(" AND category = ?");
+            whereParams.add(category);
         }
-        if (StringUtils.hasText(supplier)) {
-            sql.append(" AND supplier LIKE ?");
-            params.add("%" + escapeLike(supplier) + "%");
+        if (StringUtils.hasText(name)) {
+            where.append(" AND name LIKE ?");
+            whereParams.add("%" + escapeLike(name) + "%");
         }
         if (StringUtils.hasText(manufacturerCode)) {
-            sql.append(" AND manufacturer_code = ?");
-            params.add(manufacturerCode);
+            where.append(" AND manufacturer_code = ?");
+            whereParams.add(manufacturerCode);
         }
 
-        // Count query
-        String countSql = sql.toString().replaceFirst("SELECT \\*", "SELECT COUNT(1)");
-        Long total = jdbcTemplate.queryForObject(countSql, Long.class, params.toArray());
+        // Count
+        Long total = jdbcTemplate.queryForObject(
+            "SELECT COUNT(1) FROM samples" + where, Long.class, whereParams.toArray());
 
         // Sort
         boolean asc = !"desc".equalsIgnoreCase(sortOrder);
+        StringBuilder orderClause = new StringBuilder();
         if ("hasThumbnail".equals(sortField)) {
-            sql.append(" ORDER BY (SELECT COUNT(1) FROM sample_thumbnail WHERE sample_id = samples.id) ").append(asc ? "ASC" : "DESC");
+            orderClause.append(" ORDER BY (SELECT COUNT(1) FROM sample_thumbnail WHERE sample_id = s.id) ")
+                       .append(asc ? "ASC" : "DESC");
         } else if ("recent".equals(sortField)) {
-            sql.append(" ORDER BY GREATEST(COALESCE(update_time,'1970-01-01'), COALESCE(create_time,'1970-01-01')) ").append(asc ? "ASC" : "DESC");
+            orderClause.append(" ORDER BY GREATEST(COALESCE(update_time,'1970-01-01'), COALESCE(create_time,'1970-01-01')) ")
+                       .append(asc ? "ASC" : "DESC");
         } else {
             String dbSortField = FIELD_COL_MAP.getOrDefault(sortField, "create_time");
-            sql.append(" ORDER BY ").append(dbSortField).append(" ").append(asc ? "ASC" : "DESC");
+            orderClause.append(" ORDER BY ").append(dbSortField).append(" ").append(asc ? "ASC" : "DESC");
         }
 
-        // Page
-        sql.append(" LIMIT ? OFFSET ?");
+        // 延迟关联：内层只扫 id，避免 OFFSET 大时扫描整行数据
+        String innerSql = "SELECT id FROM samples s" + where + orderClause + " LIMIT ? OFFSET ?";
+        List<Object> params = new ArrayList<>(whereParams);
         params.add(size);
         params.add((current - 1) * size);
 
-        List<Sample> records = jdbcTemplate.query(sql.toString(), new BeanPropertyRowMapper<>(Sample.class), params.toArray());
+        String dataSql = "SELECT s.* FROM samples s INNER JOIN (" + innerSql + ") t ON s.id = t.id" + orderClause;
+
+        List<Sample> records = jdbcTemplate.query(dataSql, new BeanPropertyRowMapper<>(Sample.class), params.toArray());
         PageResult<Sample> result = new PageResult<>(records, total != null ? total : 0, current, size);
         fillThumbnails(result.getRecords());
         return result;
@@ -330,13 +357,41 @@ public class SampleService {
         return list != null ? list : new ArrayList<>();
     }
 
-    public PageResult<Sample> advancedSearch(long current, long size, List<SearchCondition> conditions, String sortField, String sortOrder) {
+    public List<Sample> listByIdsWithThumbnails(List<Long> ids) {
+        List<Sample> list = listByIds(ids);
+        fillThumbnails(list);
+        return list;
+    }
+
+    /**
+     * 根据 ID 列表加载样品，保持 ES 返回的顺序
+     */
+    private List<Sample> loadByIds(List<Long> ids, String sortField, String sortOrder) {
+        if (ids == null || ids.isEmpty()) return new ArrayList<>();
+        List<Sample> list = sampleMapper.selectBatchIds(ids);
+        if (list == null) list = new ArrayList<>();
+        // 按 ids 顺序排列
+        Map<Long, Sample> map = new java.util.LinkedHashMap<>();
+        for (Sample s : list) {
+            map.put(s.getId(), s);
+        }
+        List<Sample> ordered = new ArrayList<>(ids.size());
+        for (Long id : ids) {
+            Sample s = map.get(id);
+            if (s != null) ordered.add(s);
+        }
+        return ordered;
+    }
+
+    public PageResult<Sample> advancedSearch(long current, long size, List<SearchCondition> conditions, String sortField, String sortOrder, String logic) {
         // 1. 构建缓存key
         String cacheKey = buildSearchCacheKey(current, size, conditions, sortField, sortOrder);
         CacheEntry<PageResult<Sample>> cached = searchCache.get(cacheKey);
         if (cached != null && !cached.expired()) {
             return cached.data;
         }
+
+        long startTime = System.currentTimeMillis();
 
         // 2. 分离 keyword 条件与其他条件
         String keyword = null;
@@ -351,10 +406,34 @@ public class SampleService {
             }
         }
 
-        // 3. 关键词搜索：FULLTEXT ngram（多字纯中文/字母数字）+ LIKE（单字词和含特殊字符词）
+        log.info("[ADV_SEARCH] keyword='{}' otherConditions={}", keyword, otherConditions.size());
+
+        // 3. 关键词搜索：优先使用 ES，降级到 MySQL FULLTEXT
+        // 如果包含 video 条件，跳过 ES 关键词搜索
+        boolean hasVideoFilter = otherConditions != null && otherConditions.stream()
+                .anyMatch(c -> "video".equals(c.getField()));
         if (keyword != null && !keyword.trim().isEmpty()) {
-            List<String> ftTerms = new ArrayList<>();   // FULLTEXT（>=2字符的纯中文/ASCII/数字，无特殊符号）
-            List<String> likeTerms = new ArrayList<>();  // LIKE（单字词、冒号变体、含特殊符号词）
+            // 尝试 ES 关键词搜索（video 条件 ES 不支持，跳过）
+            List<Long> esIds = null;
+            if (sampleESService != null && !hasVideoFilter) {
+                try {
+                    esIds = sampleESService.searchByKeyword(keyword, sortField, sortOrder, current, size);
+                } catch (Exception e) {
+                    log.warn("ES 关键词搜索异常，降级到 MySQL: {}", e.getMessage());
+                }
+            }
+            if (esIds != null) {
+                long total = sampleESService.count(keyword);
+                log.info("[ES_KEYWORD] keyword='{}' total={} took={}ms", keyword, total, System.currentTimeMillis() - startTime);
+                List<Sample> records = esIds.isEmpty() ? List.of() : loadByIds(esIds, sortField, sortOrder);
+                PageResult<Sample> result = new PageResult<>(records, Math.max(total, 0), current, size);
+                fillThumbnails(result.getRecords());
+                return result;
+            }
+
+            // MySQL 降级：FULLTEXT ngram + LIKE
+            List<String> ftTerms = new ArrayList<>();
+            List<String> likeTerms = new ArrayList<>();
             for (String t : keyword.trim().split("\\s+")) {
                 String tt = t.trim();
                 if (tt.isEmpty()) continue;
@@ -364,7 +443,6 @@ public class SampleService {
                 } else {
                     if (!likeTerms.contains(tt)) likeTerms.add(tt);
                 }
-                // 冒号变体（全角⇔半角）
                 if (tt.indexOf(':') >= 0) {
                     String fw = tt.replace(':', '：');
                     if (!likeTerms.contains(fw)) likeTerms.add(fw);
@@ -373,12 +451,11 @@ public class SampleService {
                     if (!likeTerms.contains(hw)) likeTerms.add(hw);
                 }
             }
-            log.info("[ADV_SEARCH] keyword='{}' ftTerms={} likeTerms={}", keyword, ftTerms, likeTerms);
+            log.info("[MYSQL_KEYWORD] keyword='{}' ftTerms={} likeTerms={}", keyword, ftTerms, likeTerms);
             IPage<Sample> page = sampleMapper.searchByKeyword(
                     new Page<>(current, size), ftTerms, likeTerms, sortField, sortOrder);
             PageResult<Sample> result = new PageResult<>(page.getRecords(), page.getTotal(), current, size);
             fillThumbnails(result.getRecords());
-            // 缓存
             if (searchCache.size() >= CACHE_MAX_SIZE) {
                 searchCache.entrySet().removeIf(e -> e.getValue().expired());
             }
@@ -388,22 +465,50 @@ public class SampleService {
             return result;
         }
 
-        // 4. 非关键词条件：使用原有 JdbcTemplate 方式
+        // 4. 非关键词条件：优先使用 ES，降级到 MySQL JdbcTemplate
+        List<Long> esResultIds = null;
+        long esTotal = -1;
+        boolean esAvailable = sampleESService != null && sampleESService.isAvailable();
+        if (hasVideoFilter) esAvailable = false; // video 条件强制走 MySQL
+        log.info("[ES_CHECK] sampleESService={} esAvailable={} hasVideoFilter={} otherConditions={}",
+                sampleESService != null, esAvailable, hasVideoFilter, otherConditions != null ? otherConditions.size() : 0);
+        if (sampleESService != null && otherConditions != null && !otherConditions.isEmpty() && esAvailable) {
+            try {
+                esResultIds = sampleESService.search(otherConditions, logic, sortField, sortOrder, current, size);
+                if (esResultIds != null) {
+                    esTotal = sampleESService.count(otherConditions, logic);
+                }
+            } catch (Exception e) {
+                log.warn("ES 综合查询异常，降级到 MySQL: {}", e.getMessage());
+            }
+        }
+        if (esResultIds != null) {
+            log.info("[ES_COND] conditions={} total={} took={}ms", otherConditions.size(), esTotal, System.currentTimeMillis() - startTime);
+            List<Sample> records = esResultIds.isEmpty() ? List.of() : loadByIds(esResultIds, sortField, sortOrder);
+            PageResult<Sample> result = new PageResult<>(records, Math.max(esTotal, 0), current, size);
+            result.setElapsed(System.currentTimeMillis() - startTime);
+            fillThumbnails(result.getRecords());
+            return result;
+        }
+
+        // MySQL 降级：JdbcTemplate 动态拼接
+        log.info("[MYSQL_COND] otherConditions={}", otherConditions != null ? otherConditions.size() : 0);
         StringBuilder where = new StringBuilder();
         List<Object> params = new ArrayList<>();
+        String joinOp = "or".equalsIgnoreCase(logic) ? " OR " : " AND ";
 
         if (otherConditions != null) {
             for (SearchCondition cond : otherConditions) {
                 if (!cond.isValid()) continue;
 
                 if ("image".equals(cond.getField())) {
-                    if (where.length() > 0) where.append(" AND ");
+                    if (where.length() > 0) where.append(joinOp);
                     where.append("EXISTS (SELECT 1 FROM sample_thumbnail WHERE sample_id = samples.id)");
                     continue;
                 }
 
                 if ("video".equals(cond.getField())) {
-                    if (where.length() > 0) where.append(" AND ");
+                    if (where.length() > 0) where.append(joinOp);
                     where.append("EXISTS (SELECT 1 FROM videos WHERE sample_id = samples.id)");
                     continue;
                 }
@@ -414,7 +519,7 @@ public class SampleService {
                 String op = cond.getOperator();
                 String val = cond.getValue();
 
-                if (where.length() > 0) where.append(" AND ");
+                if (where.length() > 0) where.append(joinOp);
                 switch (op) {
                     case "eq":
                         where.append(col).append(" = ?");
@@ -445,6 +550,14 @@ public class SampleService {
                                 }
                             }
                             where.append(")");
+                        } else if ("sample_code".equals(col)) {
+                            // 公司编号：完整搜索走精确匹配，利用唯一索引
+                            where.append(col).append(" = ?");
+                            params.add(val.trim());
+                        } else if ("sample_name".equals(col)) {
+                            // 样品名称：走 ngram 全文索引，模糊搜索毫秒级
+                            where.append("MATCH(sample_name) AGAINST(? IN BOOLEAN MODE)");
+                            params.add("+" + val.trim());
                         } else {
                             where.append(col).append(" LIKE CONCAT('%',?,'%')");
                             params.add(val.trim());
@@ -476,6 +589,14 @@ public class SampleService {
                                 }
                             }
                             where.append(")");
+                        } else if ("sample_code".equals(col)) {
+                            // 公司编号：完整搜索走精确匹配，利用唯一索引
+                            where.append(col).append(" = ?");
+                            params.add(val.trim());
+                        } else if ("sample_name".equals(col)) {
+                            // 样品名称：走 ngram 全文索引，模糊搜索毫秒级
+                            where.append("MATCH(sample_name) AGAINST(? IN BOOLEAN MODE)");
+                            params.add("+" + val.trim());
                         } else {
                             where.append(col).append(" LIKE CONCAT('%',?,'%')");
                             params.add(val.trim());
@@ -521,6 +642,7 @@ public class SampleService {
         List<Sample> records = jdbcTemplate.query(sql, new BeanPropertyRowMapper<>(Sample.class), params.toArray());
 
         PageResult<Sample> result = new PageResult<>(records, total != null ? total : 0L, current, size);
+        result.setElapsed(System.currentTimeMillis() - startTime);
         fillThumbnails(result.getRecords());
 
         // 6. 缓存
@@ -532,6 +654,158 @@ public class SampleService {
         }
 
         return result;
+    }
+
+    /**
+     * 根据搜索条件获取所有匹配的样品ID（不分页），用于工厂选品等批量操作
+     */
+    public List<Long> getFilteredSampleIds(String keyword, List<SearchCondition> conditions, String logic) {
+        // 从 conditions 中提取 keyword（综合查询会把keyword作为条件传递）
+        if (keyword == null && conditions != null) {
+            for (SearchCondition cond : conditions) {
+                if ("keyword".equals(cond.getField()) && cond.isValid()) {
+                    keyword = cond.getValue();
+                    break;
+                }
+            }
+        }
+
+        // 1. 关键词搜索：优先 ES
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            // 尝试 ES
+            if (sampleESService != null) {
+                try {
+                    List<Long> esIds = sampleESService.searchByKeyword(keyword, null, null, 1, 10000);
+                    if (esIds != null) return esIds;
+                } catch (Exception e) {
+                    log.warn("ES getFilteredSampleIds keyword 失败: {}", e.getMessage());
+                }
+            }
+            // MySQL 降级
+            List<String> ftTerms = new ArrayList<>();
+            List<String> likeTerms = new ArrayList<>();
+            for (String t : keyword.trim().split("\\s+")) {
+                String tt = t.trim();
+                if (tt.isEmpty()) continue;
+                boolean hasSpecial = tt.matches(".*[:：\\-/,.\\(\\)\\[\\]\"'@#$%^&*+=~`|\\\\].*");
+                if (tt.length() >= 2 && !hasSpecial) {
+                    if (!ftTerms.contains(tt)) ftTerms.add(tt);
+                } else {
+                    if (!likeTerms.contains(tt)) likeTerms.add(tt);
+                }
+                if (tt.indexOf(':') >= 0) {
+                    String fw = tt.replace(':', '：');
+                    if (!likeTerms.contains(fw)) likeTerms.add(fw);
+                } else if (tt.indexOf('：') >= 0) {
+                    String hw = tt.replace('：', ':');
+                    if (!likeTerms.contains(hw)) likeTerms.add(hw);
+                }
+            }
+            if (!ftTerms.isEmpty() || !likeTerms.isEmpty()) {
+                return sampleMapper.searchIdsByKeyword(ftTerms, likeTerms);
+            }
+            return null;
+        }
+
+        // 2. 非关键词条件：优先 ES
+        if (conditions != null && !conditions.isEmpty()) {
+            if (sampleESService != null) {
+                try {
+                    List<Long> esIds = sampleESService.search(conditions, logic, null, null, 1, 10000);
+                    if (esIds != null) return esIds;
+                } catch (Exception e) {
+                    log.warn("ES getFilteredSampleIds 失败: {}", e.getMessage());
+                }
+            }
+        }
+
+        StringBuilder where = new StringBuilder();
+        List<Object> params = new ArrayList<>();
+        String joinOp = "or".equalsIgnoreCase(logic) ? " OR " : " AND ";
+
+        if (conditions == null) {
+            return null;
+        }
+
+        for (SearchCondition cond : conditions) {
+            if (!cond.isValid()) continue;
+
+            if ("keyword".equals(cond.getField())) continue; // skip keyword (handled above)
+
+            if ("image".equals(cond.getField())) {
+                if (where.length() > 0) where.append(joinOp);
+                where.append("EXISTS (SELECT 1 FROM sample_thumbnail WHERE sample_id = samples.id)");
+                continue;
+            }
+
+            if ("video".equals(cond.getField())) {
+                if (where.length() > 0) where.append(joinOp);
+                where.append("EXISTS (SELECT 1 FROM videos WHERE sample_id = samples.id)");
+                continue;
+            }
+
+            String col = FIELD_COL_MAP.get(cond.getField());
+            if (col == null) continue;
+            String op = cond.getOperator();
+            String val = cond.getValue();
+
+            if (where.length() > 0) where.append(joinOp);
+            switch (op) {
+                case "eq":
+                    where.append(col).append(" = ?");
+                    params.add(val);
+                    break;
+                case "ne":
+                    where.append(col).append(" <> ?");
+                    params.add(val);
+                    break;
+                case "like":
+                    String[] words = val.trim().split("\\s+");
+                    if (words.length > 1) {
+                        where.append("(");
+                        for (int i = 0; i < words.length; i++) {
+                            String w = words[i].trim();
+                            if (w.isEmpty()) continue;
+                            if (i > 0) where.append(" AND ");
+                            where.append(col).append(" LIKE CONCAT('%',?,'%')");
+                            params.add(w);
+                        }
+                        where.append(")");
+                    } else {
+                        where.append(col).append(" LIKE CONCAT('%',?,'%')");
+                        params.add(val.trim());
+                    }
+                    break;
+                case "gt": case "ge": case "lt": case "le":
+                    String sqlOp2 = "gt".equals(op) ? ">" : "ge".equals(op) ? ">=" : "lt".equals(op) ? "<" : "<=";
+                    where.append(col).append(" ").append(sqlOp2).append(" ?");
+                    try { params.add(new BigDecimal(val)); }
+                    catch (NumberFormatException ignored) { params.add(val); }
+                    break;
+                default:
+                    String[] defWords = val.trim().split("\\s+");
+                    if (defWords.length > 1) {
+                        where.append("(");
+                        for (int i = 0; i < defWords.length; i++) {
+                            String w = defWords[i].trim();
+                            if (w.isEmpty()) continue;
+                            if (i > 0) where.append(" AND ");
+                            where.append(col).append(" LIKE CONCAT('%',?,'%')");
+                            params.add(w);
+                        }
+                        where.append(")");
+                    } else {
+                        where.append(col).append(" LIKE CONCAT('%',?,'%')");
+                        params.add(val.trim());
+                    }
+            }
+        }
+
+        if (where.length() == 0) return null; // no valid conditions
+
+        String whereClause = " WHERE deleted = 0 AND " + where.toString();
+        String sql = "SELECT id FROM samples" + whereClause;
+        return jdbcTemplate.queryForList(sql, Long.class, params.toArray());
     }
 
     /** 构建搜索缓存key */
@@ -571,6 +845,7 @@ public class SampleService {
             sample.setRegistrant(UserContext.getRealName());
         }
         sampleMapper.insert(sample);
+        syncToES(sample);
         return sample;
     }
 
@@ -582,8 +857,11 @@ public class SampleService {
         }
         sample.setId(id);
         sample.setUpdateBy(UserContext.getUserId());
-        sample.setUpdateTime(null); // 清空后由MyBatis-Plus自动填充当前时间
+        sample.setUpdateTime(null);
         sampleMapper.updateById(sample);
+        // 重新加载完整数据同步到 ES
+        Sample updated = sampleMapper.selectById(id);
+        if (updated != null) syncToES(updated);
     }
 
     @Transactional
@@ -593,13 +871,203 @@ public class SampleService {
             throw new BusinessException(404, "样品不存在");
         }
         sampleMapper.deleteById(id);
+        deleteFromES(id);
     }
 
     @Transactional
     public void deleteBatch(Long[] ids) {
         for (Long id : ids) {
             sampleMapper.deleteById(id);
+            deleteFromES(id);
         }
+    }
+
+    // ========== ES 数据同步 ==========
+
+    /**
+     * 同步样品到 ES
+     */
+    private void syncToES(Sample sample) {
+        if (sample == null || sampleESRepository == null) return;
+        try {
+            SampleES es = SampleES.builder()
+                    .id(sample.getId())
+                    .sampleCode(sample.getSampleCode())
+                    .manufacturerCode(sample.getManufacturerCode())
+                    .sampleName(sample.getSampleName())
+                    .englishName(sample.getEnglishName())
+                    .category(sample.getCategory())
+                    .categoryCode(sample.getCategoryCode())
+                    .factoryCode(sample.getFactoryCode())
+                    .name(sample.getName())
+                    .boothNo(sample.getBoothNo())
+                    .contact1(sample.getContact1())
+                    .phone1(sample.getPhone1())
+                    .mobile1(sample.getMobile1())
+                    .smsNumber(sample.getSmsNumber())
+                    .factoryPrice(sample.getFactoryPrice())
+                    .sampleLength(sample.getSampleLength())
+                    .sampleWidth(sample.getSampleWidth())
+                    .sampleHeight(sample.getSampleHeight())
+                    .packagingCn(sample.getPackagingCn())
+                    .packageCode(sample.getPackageCode())
+                    .certification(sample.getCertification())
+                    .infringement(sample.getInfringement())
+                    .batteryInfo(sample.getBatteryInfo())
+                    .hideFromXzx(sample.getHideFromXzx())
+                    .cartonCapacity(sample.getCartonCapacity())
+                    .innerBoxCount(sample.getInnerBoxCount())
+                    .packageLength(sample.getPackageLength())
+                    .packageWidth(sample.getPackageWidth())
+                    .packageHeight(sample.getPackageHeight())
+                    .cartonLength(sample.getCartonLength())
+                    .cartonWidth(sample.getCartonWidth())
+                    .cartonHeight(sample.getCartonHeight())
+                    .registrant(sample.getRegistrant())
+                    .modifier(sample.getModifier())
+                    .createTime(sample.getCreateTime())
+                    .updateTime(sample.getUpdateTime())
+                    .remark(sample.getRemark())
+                    .deleted(sample.getDeleted())
+                    .firstImageId(sample.getFirstImageId())
+                    .build();
+            sampleESRepository.save(es);
+            log.debug("ES 同步成功: id={}", sample.getId());
+        } catch (Exception e) {
+            log.warn("ES 同步失败 id={}: {}", sample.getId(), e.getMessage());
+        }
+    }
+
+    /**
+     * 从 ES 删除样品
+     */
+    private void deleteFromES(Long id) {
+        if (id == null || sampleESRepository == null) return;
+        try {
+            sampleESRepository.deleteById(id);
+            log.debug("ES 删除成功: id={}", id);
+        } catch (Exception e) {
+            log.warn("ES 删除失败 id={}: {}", id, e.getMessage());
+        }
+    }
+
+    /**
+     * 全量同步所有样品到 ES
+     */
+    public Map<String, Object> syncAllToES() {
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        if (sampleESRepository == null || sampleESService == null) {
+            result.put("success", false);
+            result.put("message", "ES 未启用，无法同步");
+            return result;
+        }
+
+        if (!sampleESService.isAvailable()) {
+            result.put("success", false);
+            result.put("message", "ES 不可用，请检查连接和索引");
+            return result;
+        }
+
+        long startTime = System.currentTimeMillis();
+        int total = 0;
+        int batchSize = 500;
+        long lastId = 0;
+        int errors = 0;
+
+        try {
+            while (true) {
+                List<Sample> batch = sampleMapper.selectList(
+                    new LambdaQueryWrapper<Sample>()
+                        .gt(Sample::getId, lastId)
+                        .last("LIMIT " + batchSize)
+                        .orderByAsc(Sample::getId)
+                );
+
+                if (batch == null || batch.isEmpty()) break;
+
+                // 批量加载缩略图获取 firstImageId
+                List<Long> batchIds = batch.stream().map(Sample::getId).collect(Collectors.toList());
+                Map<Long, Long> imageIdMap = new HashMap<>();
+                if (!batchIds.isEmpty()) {
+                    List<SampleThumbnail> thumbs = sampleThumbnailMapper.selectBatchIds(batchIds);
+                    for (SampleThumbnail t : thumbs) {
+                        imageIdMap.put(t.getSampleId(), t.getImageId());
+                    }
+                }
+
+                List<SampleES> esBatch = new ArrayList<>(batch.size());
+                for (Sample s : batch) {
+                    s.setFirstImageId(imageIdMap.get(s.getId()));
+                    esBatch.add(SampleES.builder()
+                            .id(s.getId())
+                            .sampleCode(s.getSampleCode())
+                            .manufacturerCode(s.getManufacturerCode())
+                            .sampleName(s.getSampleName())
+                            .englishName(s.getEnglishName())
+                            .category(s.getCategory())
+                            .categoryCode(s.getCategoryCode())
+                            .factoryCode(s.getFactoryCode())
+                            .name(s.getName())
+                            .boothNo(s.getBoothNo())
+                            .contact1(s.getContact1())
+                            .phone1(s.getPhone1())
+                            .mobile1(s.getMobile1())
+                            .smsNumber(s.getSmsNumber())
+                            .factoryPrice(s.getFactoryPrice())
+                            .sampleLength(s.getSampleLength())
+                            .sampleWidth(s.getSampleWidth())
+                            .sampleHeight(s.getSampleHeight())
+                            .packagingCn(s.getPackagingCn())
+                            .packageCode(s.getPackageCode())
+                            .certification(s.getCertification())
+                            .infringement(s.getInfringement())
+                            .batteryInfo(s.getBatteryInfo())
+                            .hideFromXzx(s.getHideFromXzx())
+                            .cartonCapacity(s.getCartonCapacity())
+                            .innerBoxCount(s.getInnerBoxCount())
+                            .packageLength(s.getPackageLength())
+                            .packageWidth(s.getPackageWidth())
+                            .packageHeight(s.getPackageHeight())
+                            .cartonLength(s.getCartonLength())
+                            .cartonWidth(s.getCartonWidth())
+                            .cartonHeight(s.getCartonHeight())
+                            .registrant(s.getRegistrant())
+                            .modifier(s.getModifier())
+                            .createTime(s.getCreateTime())
+                            .updateTime(s.getUpdateTime())
+                            .remark(s.getRemark())
+                            .deleted(s.getDeleted())
+                            .firstImageId(s.getFirstImageId())
+                            .build());
+                    lastId = s.getId();
+                }
+
+                try {
+                    sampleESRepository.saveAll(esBatch);
+                    total += esBatch.size();
+                    log.info("ES 全量同步进度: {} 条", total);
+                } catch (Exception e) {
+                    log.error("ES 批量同步失败: lastId={}, error={}", lastId, e.getMessage());
+                    errors += esBatch.size();
+                }
+            }
+
+            long elapsed = System.currentTimeMillis() - startTime;
+            result.put("success", true);
+            result.put("total", total);
+            result.put("errors", errors);
+            result.put("elapsedMs", elapsed);
+            result.put("message", String.format("同步完成: %d 条成功, %d 条失败, 耗时 %.1f 秒",
+                    total, errors, elapsed / 1000.0));
+            log.info("ES 全量同步完成: {} 条成功, {} 条失败, 耗时 {}ms", total, errors, elapsed);
+        } catch (Exception e) {
+            log.error("ES 全量同步异常: {}", e.getMessage(), e);
+            result.put("success", false);
+            result.put("message", "同步异常: " + e.getMessage());
+            result.put("total", total);
+        }
+
+        return result;
     }
 
     private LocalDateTime parseDateTime(String value) {
@@ -778,6 +1246,8 @@ public class SampleService {
 
                 if (!StringUtils.hasText(sample.getSampleCode()) && !StringUtils.hasText(sample.getSampleName())) {
                     rowErrors.append("公司编号和样品名称均为空; ");
+                } else if (!StringUtils.hasText(sample.getSampleName())) {
+                    rowErrors.append("样品名称为空; ");
                 }
 
                 if (StringUtils.hasText(sample.getSampleCode())) {
@@ -839,7 +1309,7 @@ public class SampleService {
                 sampleMapper.insert(sample);
                 successCount++;
             } catch (Exception e) {
-                log.warn("导入第{}行失败", i + 1, e.getMessage());
+                log.warn("导入第{}行失败: {}", i + 1, e.getMessage());
                 Map<String, String> failRow = new LinkedHashMap<>();
                 failRow.put("row", String.valueOf(i + 1));
                 for (int j = 0; j < headers.size(); j++) {
@@ -989,7 +1459,7 @@ public class SampleService {
 
                 successCount++;
             } catch (Exception e) {
-                log.warn("批量导入第{}条失败", i + 1, e.getMessage());
+                log.warn("批量导入第{}条失败: {}", i + 1, e.getMessage());
                 Map<String, String> failRow = new LinkedHashMap<>();
                 failRow.put("row", String.valueOf(i + 1));
                 failRow.put("公司编号", sample.getSampleCode() != null ? sample.getSampleCode() : "");
@@ -1065,8 +1535,8 @@ public class SampleService {
     private void truncateFields(Sample sample, int rowIndex, List<Map<String, String>> failedRows) {
         int maxLen;
         maxLen = 20; if (sample.getQq() != null && sample.getQq().length() > maxLen) { sample.setQq(sample.getQq().substring(0, maxLen)); }
-        maxLen = 20; if (sample.getMobile() != null && sample.getMobile().length() > maxLen) { sample.setMobile(sample.getMobile().substring(0, maxLen)); }
-        maxLen = 20; if (sample.getContactPhone() != null && sample.getContactPhone().length() > maxLen) { sample.setContactPhone(sample.getContactPhone().substring(0, maxLen)); }
+        maxLen = 20; if (sample.getMobile1() != null && sample.getMobile1().length() > maxLen) { sample.setMobile1(sample.getMobile1().substring(0, maxLen)); }
+        maxLen = 20; if (sample.getPhone1() != null && sample.getPhone1().length() > maxLen) { sample.setPhone1(sample.getPhone1().substring(0, maxLen)); }
         maxLen = 20; if (sample.getFax() != null && sample.getFax().length() > maxLen) { sample.setFax(sample.getFax().substring(0, maxLen)); }
         maxLen = 20; if (sample.getSampleUnit() != null && sample.getSampleUnit().length() > maxLen) { sample.setSampleUnit(sample.getSampleUnit().substring(0, maxLen)); }
         maxLen = 20; if (sample.getPackingUnit() != null && sample.getPackingUnit().length() > maxLen) { sample.setPackingUnit(sample.getPackingUnit().substring(0, maxLen)); }
@@ -1077,7 +1547,7 @@ public class SampleService {
         maxLen = 50; if (sample.getRegistrant() != null && sample.getRegistrant().length() > maxLen) { sample.setRegistrant(sample.getRegistrant().substring(0, maxLen)); }
         maxLen = 50; if (sample.getModifier() != null && sample.getModifier().length() > maxLen) { sample.setModifier(sample.getModifier().substring(0, maxLen)); }
         maxLen = 50; if (sample.getSampleUnitEn() != null && sample.getSampleUnitEn().length() > maxLen) { sample.setSampleUnitEn(sample.getSampleUnitEn().substring(0, maxLen)); }
-        maxLen = 50; if (sample.getContactPerson() != null && sample.getContactPerson().length() > maxLen) { sample.setContactPerson(sample.getContactPerson().substring(0, maxLen)); }
+        maxLen = 50; if (sample.getContact1() != null && sample.getContact1().length() > maxLen) { sample.setContact1(sample.getContact1().substring(0, maxLen)); }
         maxLen = 50; if (sample.getColor() != null && sample.getColor().length() > maxLen) { sample.setColor(sample.getColor().substring(0, maxLen)); }
         maxLen = 100; if (sample.getCategory() != null && sample.getCategory().length() > maxLen) { sample.setCategory(sample.getCategory().substring(0, maxLen)); }
         maxLen = 100; if (sample.getSize() != null && sample.getSize().length() > maxLen) { sample.setSize(sample.getSize().substring(0, maxLen)); }
@@ -1089,7 +1559,7 @@ public class SampleService {
         maxLen = 100; if (sample.getInfringement() != null && sample.getInfringement().length() > maxLen) { sample.setInfringement(sample.getInfringement().substring(0, maxLen)); }
         maxLen = 200; if (sample.getSampleName() != null && sample.getSampleName().length() > maxLen) { sample.setSampleName(sample.getSampleName().substring(0, maxLen)); }
         maxLen = 200; if (sample.getEnglishName() != null && sample.getEnglishName().length() > maxLen) { sample.setEnglishName(sample.getEnglishName().substring(0, maxLen)); }
-        maxLen = 200; if (sample.getSupplier() != null && sample.getSupplier().length() > maxLen) { sample.setSupplier(sample.getSupplier().substring(0, maxLen)); }
+        maxLen = 200; if (sample.getName() != null && sample.getName().length() > maxLen) { sample.setName(sample.getName().substring(0, maxLen)); }
         maxLen = 200; if (sample.getCertification() != null && sample.getCertification().length() > maxLen) { sample.setCertification(sample.getCertification().substring(0, maxLen)); }
         maxLen = 200; if (sample.getBatteryInfo() != null && sample.getBatteryInfo().length() > maxLen) { sample.setBatteryInfo(sample.getBatteryInfo().substring(0, maxLen)); }
     }
@@ -1254,17 +1724,17 @@ public class SampleService {
         if (!StringUtils.hasText(sample.getBoothNo()) && StringUtils.hasText(mfr.getBoothNo())) {
             sample.setBoothNo(mfr.getBoothNo());
         }
-        if (!StringUtils.hasText(sample.getSupplier()) && StringUtils.hasText(mfr.getName())) {
-            sample.setSupplier(mfr.getName());
+        if (!StringUtils.hasText(sample.getName()) && StringUtils.hasText(mfr.getName())) {
+            sample.setName(mfr.getName());
         }
-        if (!StringUtils.hasText(sample.getContactPerson()) && StringUtils.hasText(mfr.getContact1())) {
-            sample.setContactPerson(mfr.getContact1());
+        if (!StringUtils.hasText(sample.getContact1()) && StringUtils.hasText(mfr.getContact1())) {
+            sample.setContact1(mfr.getContact1());
         }
-        if (!StringUtils.hasText(sample.getContactPhone()) && StringUtils.hasText(mfr.getPhone1())) {
-            sample.setContactPhone(mfr.getPhone1());
+        if (!StringUtils.hasText(sample.getPhone1()) && StringUtils.hasText(mfr.getPhone1())) {
+            sample.setPhone1(mfr.getPhone1());
         }
-        if (!StringUtils.hasText(sample.getMobile()) && StringUtils.hasText(mfr.getMobile1())) {
-            sample.setMobile(mfr.getMobile1());
+        if (!StringUtils.hasText(sample.getMobile1()) && StringUtils.hasText(mfr.getMobile1())) {
+            sample.setMobile1(mfr.getMobile1());
         }
         if (!StringUtils.hasText(sample.getQq()) && StringUtils.hasText(mfr.getQq())) {
             sample.setQq(mfr.getQq());
@@ -1358,7 +1828,7 @@ public class SampleService {
                 + "s.hide_from_xzx AS hideFromXzx, "
                 + "s.infringement AS infringement, "
                 + "s.remark AS remarkCn, s.remark_en AS remarkEn, "
-                + "CONCAT('http://localhost:8080/thumbnails/', st.thumbnail) AS imagePath, "
+                + "CONCAT('/thumbnails/', st.thumbnail) AS imagePath, "
                 + "st.thumbnail AS thumbnail, "
                 + "NOW() AS printTime "
                 + "FROM manufacturers m "

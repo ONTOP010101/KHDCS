@@ -6,11 +6,15 @@ import com.app.dto.PasswordRequest;
 import com.app.dto.RoleAssignRequest;
 import com.app.dto.UserCreateRequest;
 import com.app.dto.UserUpdateRequest;
+import com.app.entity.UserPreference;
+import com.app.mapper.UserPreferenceMapper;
 import com.app.service.UserService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -20,6 +24,9 @@ public class UserController {
 
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private UserPreferenceMapper userPreferenceMapper;
 
     @GetMapping
     public Result<PageResult<Map<String, Object>>> list(
@@ -76,5 +83,36 @@ public class UserController {
     public Result<Void> assignRole(@PathVariable Long id, @RequestBody RoleAssignRequest request) {
         userService.assignRole(id, request.getRoleId());
         return Result.ok("角色分配成功");
+    }
+
+    /** 获取当前用户的页面偏好 */
+    @GetMapping("/preferences/{pageKey}")
+    public Result<Map<String, Object>> getPreference(HttpServletRequest request, @PathVariable String pageKey) {
+        Long userId = (Long) request.getAttribute("userId");
+        if (userId == null) return Result.success(null);
+        UserPreference pref = userPreferenceMapper.findByUserAndPage(userId, pageKey);
+        return Result.success(pref != null ? Map.of("preferenceJson", pref.getPreferenceJson()) : null);
+    }
+
+    /** 保存当前用户的页面偏好 */
+    @PostMapping("/preferences/{pageKey}")
+    public Result<Void> savePreference(HttpServletRequest request, @PathVariable String pageKey, @RequestBody Map<String, String> body) {
+        Long userId = (Long) request.getAttribute("userId");
+        if (userId == null) return Result.error("未登录");
+        String json = body.get("preferenceJson");
+        UserPreference existing = userPreferenceMapper.findByUserAndPage(userId, pageKey);
+        if (existing != null) {
+            existing.setPreferenceJson(json);
+            existing.setUpdatedAt(LocalDateTime.now());
+            userPreferenceMapper.updateById(existing);
+        } else {
+            UserPreference pref = new UserPreference();
+            pref.setUserId(userId);
+            pref.setPageKey(pageKey);
+            pref.setPreferenceJson(json);
+            pref.setUpdatedAt(LocalDateTime.now());
+            userPreferenceMapper.insert(pref);
+        }
+        return Result.ok("保存成功");
     }
 }

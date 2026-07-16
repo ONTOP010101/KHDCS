@@ -9,6 +9,7 @@ public class PageResult<T> {
     private long current;
     private long size;
     private long pages;
+    private long elapsed;
 
     public PageResult() {}
 
@@ -30,4 +31,6 @@ public class PageResult<T> {
     public void setSize(long size) { this.size = size; }
     public long getPages() { return pages; }
     public void setPages(long pages) { this.pages = pages; }
+    public long getElapsed() { return elapsed; }
+    public void setElapsed(long elapsed) { this.elapsed = elapsed; }
 }

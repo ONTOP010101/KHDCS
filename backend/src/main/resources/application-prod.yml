@@ -12,10 +12,10 @@ mybatis-plus:
 
 app:
   upload:
-    path: D:/PZXT/photo-management/uploads
-    image-path: D:/PZXT/photo-management/images
-    thumbnail-path: D:/PZXT/photo-management/thumbnails
-    video-path: D:/PZXT/photo-management/videos
+    path: d:/客户端测试/photo-management/uploads
+    image-path: d:/客户端测试/photo-management/images
+    thumbnail-path: d:/客户端测试/photo-management/thumbnails
+    video-path: d:/客户端测试/photo-management/videos
     ffmpeg-path: ffmpeg
 
 search:
